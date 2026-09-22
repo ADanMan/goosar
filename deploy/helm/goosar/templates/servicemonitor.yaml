@@ -1,0 +1,36 @@
+{{- if and .Values.monitoring.enabled .Values.monitoring.serviceMonitor.enabled }}
+# Prometheus Operator scrape target for the backend metrics port (#396).
+# API reference: https://prometheus-operator.dev/docs/api-reference/api/
+#
+# The Operator's `serviceMonitorSelector` decides whether this object is picked
+# up at all. kube-prometheus-stack ships a selector on `release: <name>`;
+# set monitoring.serviceMonitor.additionalLabels accordingly, or run the
+# Operator with serviceMonitorSelectorNilUsesHelmValues=false.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "goosar.backend.fullname" . }}
+  labels:
+    {{- include "goosar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+    {{- with .Values.monitoring.serviceMonitor.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: goosar
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: backend
+  endpoints:
+    # By port NAME, not number: the port is configurable via monitoring.port
+    # and the Service exposes it under this fixed name.
+    - port: metrics
+      path: /metrics
+      scheme: http
+      interval: {{ .Values.monitoring.serviceMonitor.interval | quote }}
+      scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout | quote }}
+{{- end }}

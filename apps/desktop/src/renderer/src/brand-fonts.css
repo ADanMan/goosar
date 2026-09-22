@@ -1,0 +1,24 @@
+/* Brand fonts — self-hosted TTF (same files as the web app:
+   apps/web/public/fonts). Montserrat = body face, Comfortaa = headings.
+   Loaded via Vite-bundled @font-face so the renderer works fully offline. */
+@font-face {
+  font-family: 'Montserrat Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('../fonts/Montserrat.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Montserrat Variable';
+  font-style: italic;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('../fonts/Montserrat-Italic.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Comfortaa Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300 700;
+  src: url('../fonts/Comfortaa.ttf') format('truetype');
+}

@@ -1,0 +1,80 @@
+{
+  "nav": {
+    "inbox": "インボックス",
+    "chat": "チャット",
+    "my_issues": "マイイシュー",
+    "issues": "イシュー",
+    "projects": "プロジェクト",
+    "autopilots": "オートパイロット",
+    "agents": "エージェント",
+    "squads": "スクワッド",
+    "usage": "使用量",
+    "runtimes": "ランタイム",
+    "skills": "スキル",
+    "settings": "設定",
+    "capabilities": "できること",
+    "go_back": "戻る",
+    "go_forward": "進む"
+  },
+  "tab": {
+    "issue": "イシュー",
+    "project": "プロジェクト",
+    "autopilot": "オートパイロット",
+    "agent": "エージェント",
+    "member": "メンバー",
+    "squad": "スクワッド",
+    "skill": "スキル",
+    "machine": "マシン",
+    "runtime": "ランタイム",
+    "attachment": "添付ファイル",
+    "create_agent": "エージェントを作成",
+    "unknown": "不明なページ"
+  },
+  "help": {
+    "trigger": "ヘルプ",
+    "docs": "ドキュメント",
+    "feedback": "フィードバック",
+    "replay_onboarding": "オンボーディングをやり直す",
+    "server_version": "サーバーバージョン {{version}}",
+    "capabilities": "ここでできること"
+  },
+  "realtime": {
+    "degraded": {
+      "title": "更新が遅れています",
+      "detail": "アプリは定期的な再取得に切り替えました。エージェントやメンバーの変更はいつもより遅れて表示され、接続が途絶えている間はまったく表示されません。",
+      "cause": "リアルタイム接続が通っていません。多くの場合はネットワーク経路が許可していないことが原因です。サーバー障害もここからは同じように見えます。"
+    }
+  },
+  "workspace_loader": {
+    "loading_workspace": "ワークスペースを読み込み中…",
+    "loading_named_prefix": "読み込み中"
+  },
+  "sidebar": {
+    "unpin_tooltip": "ピン留めを解除",
+    "workspaces_label": "ワークスペース",
+    "create_workspace": "ワークスペースを作成",
+    "pending_invitations_label": "保留中の招待",
+    "invitation_workspace_fallback": "ワークスペース",
+    "invitation_join": "参加",
+    "invitation_decline": "辞退",
+    "log_out": "ログアウト",
+    "new_issue": "新規イシュー",
+    "new_issue_shortcut": "C",
+    "pinned_label": "ピン留め済み",
+    "workspace_group": "ワークスペース",
+    "configure_group": "設定",
+    "unread_overflow": "99+"
+  },
+  "issue_window": {
+    "unavailable_title": "Issue を表示できません",
+    "unavailable_description": "このワークスペースはアカウントで利用できなくなりました。",
+    "close_window": "ウィンドウを閉じる",
+    "error_title": "問題が発生しました",
+    "unknown_error": "不明なルートエラー",
+    "reload": "再読み込み"
+  },
+  "config_error": {
+    "title": "デスクトップ設定エラー",
+    "description": "Goosar Desktop は ~/.goosar/desktop.json を読み込めませんでした。ファイルを修正または削除してからアプリを再起動してください。"
+  }
+}

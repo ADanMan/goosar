@@ -1,0 +1,635 @@
+# Neutral runtime registry. This is the one place in the codebase where real
+# vendor CLI/model names are allowed to live (grep-zero gate exception by
+# design) — see docs/superpowers/plans/2026-09-18-neutral-runtime-codes.md.
+#
+# `code` is the neutral runtime code used everywhere else in product
+# code/DB/API ("runtime-a".."runtime-r") and is what pkg/agent.SupportedTypes
+# exposes. `cliName` is the real external tool's own *binary* name as it is
+# invoked on PATH — note several differ from the tool's product name (agy,
+# cursor-agent, kiro-cli, qodercli), and pkg/agent uses this value as the
+# ExecutablePath fallback, so it must stay exec-accurate. `displayName`
+# MUST be generic ("Runtime <Letter>") — never a real vendor/CLI name.
+#
+# Each model's `id` is the neutral form `rt-<letter>/<suffix>` (e.g.
+# `rt-c/sonnet-5`); `realId` is the literal value the underlying CLI accepts
+# and is copied verbatim from pkg/agent/models.go's static catalogs. Only the
+# six backends with a static catalog today (claude, codex, cursor, copilot,
+# grok, codebuddy) have non-empty `models` lists; every other backend
+# discovers its catalog dynamically via ACP/CLI enumeration in models.go and
+# intentionally keeps `models: []` here.
+#
+# `homeEnvVar`/`homeDefaultSubpath`, `skillsHomeSubpath`, `skillsCanDisable`,
+# `mcpConfig` and `pluginRegistry` describe each external tool's REAL on-disk
+# conventions — the home directory it reads, where its user-level skills live,
+# where it keeps its own MCP server config, and (for the single runtime that has
+# one) its plugin registry. They live here for the same reason cliName does:
+# server/internal/daemon must discover those locations without any Go file
+# naming a real tool. Most runtimes only need skillsHomeSubpath; mcpConfig is
+# populated for the seven whose local MCP layout the daemon actually knows, and
+# the other eleven intentionally omit it so the daemon keeps reporting those as
+# unenforceable rather than guessing.
+#
+# Pricing fields are best-effort, copied from server/internal/metrics/pricing.go
+# where a model maps cleanly onto one of its price-table keys. pricing.go
+# prices by provider+model tier, not by every exact static-catalog ID, so
+# several entries below have no clean match (gpt-5.2, gpt-5-mini, gpt-4.1,
+# grok-composer-2.5-fast, deepseek-v3-2-volc-ioa, cursor's "auto") and are left
+# at 0. Task 3 (pricing/billing rework) is expected to revisit this file.
+runtimes:
+  - code: runtime-a
+    cliName: agy
+    displayName: "Runtime A"
+    skillsHomeSubpath: .gemini/antigravity-cli/skills
+    skillsWorkdirSubpath: .agents/skills
+    skillsAutoDiscovered: true
+    contextFilename: AGENTS.md
+    models: []
+
+
+  - code: runtime-c
+    cliName: claude
+    displayName: "Runtime C"
+    skillsHomeSubpath: .claude/skills
+    skillsCanDisable: true
+    skillsWorkdirSubpath: .claude/skills
+    skillsAutoDiscovered: true
+    contextFilename: CLAUDE.md
+    mcpConfig:
+      subpath: .claude.json
+      format: json
+      key: mcpServers
+    pluginRegistry:
+      settingsSubpath: .claude/settings.json
+      settingsEnabledKey: enabledPlugins
+      installedRegistrySubpath: .claude/plugins/installed_plugins.json
+      manifestSubpath: .claude-plugin/plugin.json
+      defaultSkillsSubpath: skills
+      defaultMcpConfigSubpath: .mcp.json
+      # runtime-d's real CLI is a fork that reads this same user-level config
+      # for MCP servers, but ships its own skills directory — the inheritance
+      # is MCP-only on purpose.
+      extendsToCode: runtime-d
+    models:
+      - id: rt-c/sonnet-5
+        realId: claude-sonnet-5
+        label: "Claude Sonnet 5"
+        default: false
+        pricingInputPerMTok: 2.00
+        pricingOutputPerMTok: 10.00
+      - id: rt-c/sonnet-4-6
+        realId: claude-sonnet-4-6
+        label: "Claude Sonnet 4.6"
+        default: true
+        pricingInputPerMTok: 3.00
+        pricingOutputPerMTok: 15.00
+      - id: rt-c/fable-5
+        realId: claude-fable-5
+        label: "Claude Fable 5"
+        default: false
+        pricingInputPerMTok: 10.00
+        pricingOutputPerMTok: 50.00
+      - id: rt-c/opus-5
+        realId: claude-opus-5
+        label: "Claude Opus 5"
+        default: false
+        pricingInputPerMTok: 5.00
+        pricingOutputPerMTok: 25.00
+      - id: rt-c/opus-4-8
+        realId: claude-opus-4-8
+        label: "Claude Opus 4.8"
+        default: false
+        pricingInputPerMTok: 5.00
+        pricingOutputPerMTok: 25.00
+      - id: rt-c/opus-4-7
+        realId: claude-opus-4-7
+        label: "Claude Opus 4.7"
+        default: false
+        pricingInputPerMTok: 5.00
+        pricingOutputPerMTok: 25.00
+      - id: rt-c/haiku-4-5-20251001
+        realId: claude-haiku-4-5-20251001
+        label: "Claude Haiku 4.5"
+        default: false
+        pricingInputPerMTok: 1.00
+        pricingOutputPerMTok: 5.00
+      - id: rt-c/opus-4-6
+        realId: claude-opus-4-6
+        label: "Claude Opus 4.6"
+        default: false
+        pricingInputPerMTok: 5.00
+        pricingOutputPerMTok: 25.00
+      - id: rt-c/sonnet-4-5
+        realId: claude-sonnet-4-5
+        label: "Claude Sonnet 4.5"
+        default: false
+        pricingInputPerMTok: 3.00
+        pricingOutputPerMTok: 15.00
+
+  - code: runtime-d
+    cliName: codebuddy
+    displayName: "Runtime D"
+    # This runtime's real CLI is a fork of runtime-c's but ships its own native
+    # directories throughout: it does NOT read the other tool's skills or
+    # memory file unless the user symlinks them in by hand. Only the user-level
+    # MCP config above is shared.
+    skillsHomeSubpath: .codebuddy/skills
+    skillsWorkdirSubpath: .codebuddy/skills
+    skillsAutoDiscovered: true
+    contextFilename: CODEBUDDY.md
+    mcpConfig:
+      subpath: .claude.json
+      format: json
+      key: mcpServers
+    models:
+      - id: rt-d/claude-sonnet-4.6
+        realId: claude-sonnet-4.6
+        label: "Claude Sonnet 4.6"
+        default: true
+        pricingInputPerMTok: 3.00
+        pricingOutputPerMTok: 15.00
+      - id: rt-d/claude-opus-4.7
+        realId: claude-opus-4.7
+        label: "Claude Opus 4.7"
+        default: false
+        pricingInputPerMTok: 5.00
+        pricingOutputPerMTok: 25.00
+      - id: rt-d/gemini-3.1-pro
+        realId: gemini-3.1-pro
+        label: "Gemini 3.1 Pro"
+        default: false
+        pricingInputPerMTok: 2.00
+        pricingOutputPerMTok: 12.00
+      - id: rt-d/gpt-5.5
+        realId: gpt-5.5
+        label: "GPT 5.5"
+        default: false
+        pricingInputPerMTok: 5.00
+        pricingOutputPerMTok: 30.00
+      - id: rt-d/deepseek-v3-2-volc-ioa
+        realId: deepseek-v3-2-volc-ioa
+        label: "Deepseek V3 2 Volc IOA"
+        default: false
+        pricingInputPerMTok: 0
+        pricingOutputPerMTok: 0
+
+  - code: runtime-e
+    cliName: codex
+    displayName: "Runtime E"
+    homeEnvVar: CODEX_HOME
+    homeDefaultSubpath: .codex
+    # This tool's desktop application bundles the CLI instead of installing it
+    # onto PATH, and the vendor moved the bundle once. System installs are
+    # listed before per-user ones, and within each location the current bundle
+    # name precedes the superseded one.
+    bundledExecutablePaths:
+      - /Applications/ChatGPT.app/Contents/Resources/codex
+      - /Applications/Codex.app/Contents/Resources/codex
+      - Applications/ChatGPT.app/Contents/Resources/codex
+      - Applications/Codex.app/Contents/Resources/codex
+    skillsHomeSubpath: skills
+    skillsCanDisable: true
+    # No workdir-native skills location: the daemon materialises this runtime's
+    # task skills into its per-task home instead.
+    skillsAutoDiscovered: true
+    contextFilename: AGENTS.md
+    mcpConfig:
+      subpath: config.toml
+      format: toml
+      key: mcp_servers
+    models:
+      - id: rt-e/gpt-5.6-sol
+        realId: gpt-5.6-sol
+        label: "GPT-5.6-Sol"
+        default: true
+        pricingInputPerMTok: 5.00
+        pricingOutputPerMTok: 30.00
+        thinking:
+          defaultLevel: low
+          supportedLevels:
+            - value: low
+              label: "Low"
+              description: "Fast responses with lighter reasoning"
+            - value: medium
+              label: "Medium"
+              description: "Balances speed and reasoning depth for everyday tasks"
+            - value: high
+              label: "High"
+              description: "Greater reasoning depth for complex problems"
+            - value: xhigh
+              label: "Extra high"
+              description: "Extra high reasoning depth for complex problems"
+            - value: max
+              label: "Max"
+              description: "Maximum reasoning depth for the hardest problems"
+            - value: ultra
+              label: "Ultra"
+              description: "Maximum reasoning with automatic task delegation"
+      - id: rt-e/gpt-5.6-terra
+        realId: gpt-5.6-terra
+        label: "GPT-5.6-Terra"
+        default: false
+        pricingInputPerMTok: 2.50
+        pricingOutputPerMTok: 15.00
+        thinking:
+          defaultLevel: medium
+          supportedLevels:
+            - value: low
+              label: "Low"
+              description: "Fast responses with lighter reasoning"
+            - value: medium
+              label: "Medium"
+              description: "Balances speed and reasoning depth for everyday tasks"
+            - value: high
+              label: "High"
+              description: "Greater reasoning depth for complex problems"
+            - value: xhigh
+              label: "Extra high"
+              description: "Extra high reasoning depth for complex problems"
+            - value: max
+              label: "Max"
+              description: "Maximum reasoning depth for the hardest problems"
+            - value: ultra
+              label: "Ultra"
+              description: "Maximum reasoning with automatic task delegation"
+      - id: rt-e/gpt-5.6-luna
+        realId: gpt-5.6-luna
+        label: "GPT-5.6-Luna"
+        default: false
+        pricingInputPerMTok: 1.00
+        pricingOutputPerMTok: 6.00
+        thinking:
+          defaultLevel: medium
+          supportedLevels:
+            - value: low
+              label: "Low"
+              description: "Fast responses with lighter reasoning"
+            - value: medium
+              label: "Medium"
+              description: "Balances speed and reasoning depth for everyday tasks"
+            - value: high
+              label: "High"
+              description: "Greater reasoning depth for complex problems"
+            - value: xhigh
+              label: "Extra high"
+              description: "Extra high reasoning depth for complex problems"
+            - value: max
+              label: "Max"
+              description: "Maximum reasoning depth for the hardest problems"
+      - id: rt-e/gpt-5.5
+        realId: gpt-5.5
+        label: "GPT-5.5"
+        default: false
+        pricingInputPerMTok: 5.00
+        pricingOutputPerMTok: 30.00
+        thinking:
+          defaultLevel: medium
+          supportedLevels:
+            - value: low
+              label: "Low"
+              description: "Fast responses with lighter reasoning"
+            - value: medium
+              label: "Medium"
+              description: "Balances speed and reasoning depth for everyday tasks"
+            - value: high
+              label: "High"
+              description: "Greater reasoning depth for complex problems"
+            - value: xhigh
+              label: "Extra high"
+              description: "Extra high reasoning depth for complex problems"
+      - id: rt-e/gpt-5.4
+        realId: gpt-5.4
+        label: "GPT-5.4"
+        default: false
+        pricingInputPerMTok: 2.50
+        pricingOutputPerMTok: 15.00
+        thinking:
+          defaultLevel: medium
+          supportedLevels:
+            - value: low
+              label: "Low"
+              description: "Fast responses with lighter reasoning"
+            - value: medium
+              label: "Medium"
+              description: "Balances speed and reasoning depth for everyday tasks"
+            - value: high
+              label: "High"
+              description: "Greater reasoning depth for complex problems"
+            - value: xhigh
+              label: "Extra high"
+              description: "Extra high reasoning depth for complex problems"
+      - id: rt-e/gpt-5.4-mini
+        realId: gpt-5.4-mini
+        label: "GPT-5.4-Mini"
+        default: false
+        pricingInputPerMTok: 0.75
+        pricingOutputPerMTok: 4.50
+        thinking:
+          defaultLevel: medium
+          supportedLevels:
+            - value: low
+              label: "Low"
+              description: "Fast responses with lighter reasoning"
+            - value: medium
+              label: "Medium"
+              description: "Balances speed and reasoning depth for everyday tasks"
+            - value: high
+              label: "High"
+              description: "Greater reasoning depth for complex problems"
+            - value: xhigh
+              label: "Extra high"
+              description: "Extra high reasoning depth for complex problems"
+      - id: rt-e/gpt-5.3-codex
+        realId: gpt-5.3-codex
+        label: "GPT-5.3-Codex"
+        default: false
+        pricingInputPerMTok: 1.75
+        pricingOutputPerMTok: 14.00
+        thinking:
+          defaultLevel: medium
+          supportedLevels:
+            - value: low
+              label: "Low"
+              description: "Fast responses with lighter reasoning"
+            - value: medium
+              label: "Medium"
+              description: "Balances speed and reasoning depth for everyday tasks"
+            - value: high
+              label: "High"
+              description: "Greater reasoning depth for complex problems"
+            - value: xhigh
+              label: "Extra high"
+              description: "Extra high reasoning depth for complex problems"
+      - id: rt-e/gpt-5.2
+        realId: gpt-5.2
+        label: "GPT-5.2"
+        default: false
+        pricingInputPerMTok: 0
+        pricingOutputPerMTok: 0
+        thinking:
+          defaultLevel: medium
+          supportedLevels:
+            - value: low
+              label: "Low"
+              description: "Balances speed with some reasoning; useful for straightforward queries and short explanations"
+            - value: medium
+              label: "Medium"
+              description: "Provides a solid balance of reasoning depth and latency for general-purpose tasks"
+            - value: high
+              label: "High"
+              description: "Maximizes reasoning depth for complex or ambiguous problems"
+            - value: xhigh
+              label: "Extra high"
+              description: "Extra high reasoning for complex problems"
+
+  - code: runtime-f
+    cliName: copilot
+    displayName: "Runtime F"
+    skillsHomeSubpath: .copilot/skills
+    skillsWorkdirSubpath: .github/skills
+    skillsAutoDiscovered: true
+    contextFilename: AGENTS.md
+    models:
+      - id: rt-f/gpt-5.5
+        realId: gpt-5.5
+        label: "GPT-5.5"
+        default: false
+        pricingInputPerMTok: 5.00
+        pricingOutputPerMTok: 30.00
+      - id: rt-f/gpt-5.4
+        realId: gpt-5.4
+        label: "GPT-5.4"
+        default: false
+        pricingInputPerMTok: 2.50
+        pricingOutputPerMTok: 15.00
+      - id: rt-f/gpt-5.4-mini
+        realId: gpt-5.4-mini
+        label: "GPT-5.4 mini"
+        default: false
+        pricingInputPerMTok: 0.75
+        pricingOutputPerMTok: 4.50
+      - id: rt-f/gpt-5.3-codex
+        realId: gpt-5.3-codex
+        label: "GPT-5.3-Codex"
+        default: false
+        pricingInputPerMTok: 1.75
+        pricingOutputPerMTok: 14.00
+      - id: rt-f/gpt-5.2-codex
+        realId: gpt-5.2-codex
+        label: "GPT-5.2-Codex"
+        default: false
+        pricingInputPerMTok: 1.75
+        pricingOutputPerMTok: 14.00
+      - id: rt-f/gpt-5.2
+        realId: gpt-5.2
+        label: "GPT-5.2"
+        default: false
+        pricingInputPerMTok: 0
+        pricingOutputPerMTok: 0
+      - id: rt-f/gpt-5-mini
+        realId: gpt-5-mini
+        label: "GPT-5 mini"
+        default: false
+        pricingInputPerMTok: 0
+        pricingOutputPerMTok: 0
+      - id: rt-f/gpt-4.1
+        realId: gpt-4.1
+        label: "GPT-4.1"
+        default: false
+        pricingInputPerMTok: 0
+        pricingOutputPerMTok: 0
+      - id: rt-f/claude-opus-4.7
+        realId: claude-opus-4.7
+        label: "Claude Opus 4.7"
+        default: false
+        pricingInputPerMTok: 5.00
+        pricingOutputPerMTok: 25.00
+      - id: rt-f/claude-sonnet-4.6
+        realId: claude-sonnet-4.6
+        label: "Claude Sonnet 4.6"
+        default: false
+        pricingInputPerMTok: 3.00
+        pricingOutputPerMTok: 15.00
+      - id: rt-f/claude-sonnet-4.5
+        realId: claude-sonnet-4.5
+        label: "Claude Sonnet 4.5"
+        default: false
+        pricingInputPerMTok: 3.00
+        pricingOutputPerMTok: 15.00
+      - id: rt-f/claude-haiku-4.5
+        realId: claude-haiku-4.5
+        label: "Claude Haiku 4.5"
+        default: false
+        pricingInputPerMTok: 1.00
+        pricingOutputPerMTok: 5.00
+
+  - code: runtime-g
+    cliName: cursor-agent
+    displayName: "Runtime G"
+    skillsHomeSubpath: .cursor/skills
+    skillsWorkdirSubpath: .cursor/skills
+    skillsAutoDiscovered: true
+    contextFilename: AGENTS.md
+    mcpConfig:
+      subpath: .cursor/mcp.json
+      format: json
+      key: mcpServers
+    models:
+      - id: rt-g/auto
+        realId: auto
+        label: "Auto"
+        default: true
+        pricingInputPerMTok: 0
+        pricingOutputPerMTok: 0
+
+  - code: runtime-h
+    cliName: deveco
+    displayName: "Runtime H"
+    skillsHomeSubpath: .config/deveco/skills
+    skillsWorkdirSubpath: .deveco/skills
+    skillsAutoDiscovered: true
+    contextFilename: AGENTS.md
+    models: []
+
+  - code: runtime-i
+    cliName: grok
+    displayName: "Runtime I"
+    homeEnvVar: GROK_HOME
+    homeDefaultSubpath: .grok
+    skillsHomeSubpath: skills
+    skillsWorkdirSubpath: .grok/skills
+    # Deliberately not auto-discovered: this runtime gets an explicit path
+    # pointer in the brief even though it has a native project directory.
+    contextFilename: AGENTS.md
+    models:
+      - id: rt-i/4.5
+        realId: grok-4.5
+        label: "Grok 4.5"
+        default: true
+        pricingInputPerMTok: 2.00
+        pricingOutputPerMTok: 6.00
+        thinking:
+          supportedLevels:
+            - value: low
+              label: "Low"
+            - value: medium
+              label: "Medium"
+            - value: high
+              label: "High"
+      - id: rt-i/composer-2.5-fast
+        realId: grok-composer-2.5-fast
+        label: "Grok Composer 2.5 Fast"
+        default: false
+        pricingInputPerMTok: 0
+        pricingOutputPerMTok: 0
+
+  - code: runtime-j
+    cliName: hermes
+    displayName: "Runtime J"
+    # The user-level skills root deliberately does NOT follow taskHome.envVar:
+    # the daemon reads importable skills from the fixed dot-directory below,
+    # while taskHome describes the home the real CLI derives at launch and the
+    # daemon overlays per task.
+    skillsHomeSubpath: .hermes/skills
+    skillsAutoDiscovered: true
+    contextFilename: AGENTS.md
+    taskHome:
+      envVar: HERMES_HOME
+      posixSubpath: .hermes
+      windowsAppDataSubpath: hermes
+    models: []
+
+  - code: runtime-k
+    cliName: kimi
+    displayName: "Runtime K"
+    skillsHomeSubpath: .kimi/skills
+    skillsWorkdirSubpath: .kimi/skills
+    skillsAutoDiscovered: true
+    contextFilename: AGENTS.md
+    models: []
+
+  - code: runtime-l
+    cliName: kiro-cli
+    displayName: "Runtime L"
+    skillsHomeSubpath: .kiro/skills
+    skillsWorkdirSubpath: .kiro/skills
+    skillsAutoDiscovered: true
+    contextFilename: AGENTS.md
+    models: []
+
+  - code: runtime-m
+    cliName: opencode
+    displayName: "Runtime M"
+    # The skills root uses a literal ".config" below the OS home dir, while the
+    # MCP config honours XDG_CONFIG_HOME — that asymmetry is what this runtime's
+    # real CLI does today, so the two are described independently.
+    skillsHomeSubpath: .config/opencode/skills
+    skillsWorkdirSubpath: .opencode/skills
+    skillsAutoDiscovered: true
+    contextFilename: AGENTS.md
+    mcpConfig:
+      baseEnvVar: XDG_CONFIG_HOME
+      baseDefaultSubpath: .config
+      subpath: opencode/opencode.json
+      format: json
+      key: mcp
+    models: []
+
+  - code: runtime-n
+    cliName: openclaw
+    displayName: "Runtime N"
+    # The skills root is home-relative and ignores the state-dir env var, which
+    # only the MCP config below honours — again mirroring the real CLI.
+    skillsHomeSubpath: .openclaw/skills
+    # This runtime scans <workspaceDir>/skills directly, not a dot-directory;
+    # the daemon pins its workspace to the task workdir per run.
+    skillsWorkdirSubpath: skills
+    skillsAutoDiscovered: true
+    contextFilename: AGENTS.md
+    mcpConfig:
+      fileEnvVar: CLAWDBOT_CONFIG_PATH
+      baseEnvVar: OPENCLAW_STATE_DIR
+      baseDefaultSubpath: .openclaw
+      subpath: openclaw.json
+      format: json
+      key: mcp.servers
+    models: []
+
+  - code: runtime-o
+    cliName: pi
+    displayName: "Runtime O"
+    skillsHomeSubpath: .pi/agent/skills
+    skillsWorkdirSubpath: .pi/skills
+    skillsAutoDiscovered: true
+    contextFilename: AGENTS.md
+    models: []
+
+  - code: runtime-p
+    cliName: qodercli
+    displayName: "Runtime P"
+    skillsHomeSubpath: .qoder/skills
+    skillsWorkdirSubpath: .qoder/skills
+    skillsAutoDiscovered: true
+    contextFilename: AGENTS.md
+    models: []
+
+  - code: runtime-q
+    cliName: qwen
+    displayName: "Runtime Q"
+    homeEnvVar: QWEN_HOME
+    homeDefaultSubpath: .qwen
+    skillsHomeSubpath: skills
+    skillsWorkdirSubpath: .qwen/skills
+    skillsAutoDiscovered: true
+    contextFilename: QWEN.md
+    models: []
+
+  - code: runtime-r
+    cliName: traecli
+    displayName: "Runtime R"
+    skillsHomeSubpath: .traecli/skills
+    skillsWorkdirSubpath: .traecli/skills
+    # Deliberately not auto-discovered: this runtime reads its own rules
+    # directory rather than the workdir context file, so the brief keeps the
+    # explicit path pointer and the prompt is injected inline instead.
+    contextFilename: AGENTS.md
+    models: []

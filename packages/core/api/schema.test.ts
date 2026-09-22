@@ -1,0 +1,599 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
+import { ApiClient } from './client';
+import { parseWithFallback } from './schema';
+
+function stubFetchJson(body: unknown, status = 200) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(
+      new Response(typeof body === 'string' ? body : JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ),
+  );
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('ApiClient schema fallback', () => {
+  describe('GitHub repository import', () => {
+    it('falls back safely when installation or repository responses are malformed', async () => {
+      stubFetchJson({ installations: 'not-an-array', configured: true });
+      const client = new ApiClient('https://api.example.test');
+      await expect(client.listGitHubInstallations('ws-1')).resolves.toEqual({
+        installations: [],
+        configured: false,
+        repository_browse_configured: false,
+        can_manage: false,
+      });
+
+      stubFetchJson({ repositories: [{ id: 'wrong-type' }] });
+      await expect(
+        client.listGitHubInstallationRepositories('ws-1', 'installation-1'),
+      ).resolves.toEqual({
+        repositories: [],
+        total_count: 0,
+        next_page: null,
+      });
+    });
+
+    it('adds the allowlisted repository return target to the connect request', async () => {
+      stubFetchJson({
+        configured: true,
+        url: 'https://github.com/apps/acme-bot/installations/new',
+      });
+      const client = new ApiClient('https://api.example.test');
+
+      await client.getGitHubConnectURL('ws-1', 'repositories');
+
+      const fetchMock = vi.mocked(fetch);
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://api.example.test/api/workspaces/ws-1/github/connect?return_to=repositories',
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe('listTimeline', () => {
+    it('falls back to an empty array when the body is null', async () => {
+      stubFetchJson(null);
+      const client = new ApiClient('https://api.example.test');
+      const entries = await client.listTimeline('issue-1');
+      expect(entries).toEqual([]);
+    });
+
+    it('falls back when the body is not an array', async () => {
+      stubFetchJson({ wrong: 'shape' });
+      const client = new ApiClient('https://api.example.test');
+      const entries = await client.listTimeline('issue-1');
+      expect(entries).toEqual([]);
+    });
+
+    it('accepts a new entry type rather than crashing on enum drift', async () => {
+      stubFetchJson([
+        {
+          type: 'future_kind', // not in TS union
+          id: 'e-1',
+          actor_type: 'member',
+          actor_id: 'u-1',
+          created_at: '2026-01-01T00:00:00Z',
+        },
+      ]);
+      const client = new ApiClient('https://api.example.test');
+      const entries = await client.listTimeline('issue-1');
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.type).toBe('future_kind');
+    });
+
+    it("preserves unknown fields the schema didn't list", async () => {
+      stubFetchJson([
+        {
+          type: 'comment',
+          id: 'e-1',
+          actor_type: 'member',
+          actor_id: 'u-1',
+          created_at: '2026-01-01T00:00:00Z',
+          future_field: { nested: 'value' },
+        },
+      ]);
+      const client = new ApiClient('https://api.example.test');
+      const entries = await client.listTimeline('issue-1');
+      const entry = entries[0] as unknown as Record<string, unknown>;
+      expect(entry.future_field).toEqual({ nested: 'value' });
+    });
+  });
+
+  describe('listIssues', () => {
+    it('falls back to an empty list when the response is malformed', async () => {
+      stubFetchJson({ issues: 'not-an-array', total: 0 });
+      const client = new ApiClient('https://api.example.test');
+      const res = await client.listIssues();
+      expect(res).toEqual({ issues: [], total: 0 });
+    });
+  });
+
+  describe('setIssueMetadataKey', () => {
+    it('returns the parsed metadata map on a valid response', async () => {
+      stubFetchJson({ metadata: { onboarding_seed: 'create_agent_guide' } });
+      const client = new ApiClient('https://api.example.test');
+      const res = await client.setIssueMetadataKey(
+        'issue-1',
+        'onboarding_seed',
+        'create_agent_guide',
+      );
+      expect(res).toEqual({
+        metadata: { onboarding_seed: 'create_agent_guide' },
+      });
+      const fetchMock = vi.mocked(fetch);
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://api.example.test/api/issues/issue-1/metadata/onboarding_seed',
+        expect.objectContaining({ method: 'PUT' }),
+      );
+    });
+
+    it('falls back to an empty metadata map when the response is malformed', async () => {
+      stubFetchJson({ metadata: 'not-an-object' });
+      const client = new ApiClient('https://api.example.test');
+      const res = await client.setIssueMetadataKey('issue-1', 'k', 'v');
+      expect(res).toEqual({ metadata: {} });
+    });
+  });
+
+  describe('createIssue', () => {
+    const validIssue = {
+      id: 'issue-1',
+      workspace_id: 'ws-1',
+      number: 1,
+      identifier: 'MUL-1',
+      title: 'Created',
+      description: null,
+      status: 'todo',
+      priority: 'none',
+      assignee_type: null,
+      assignee_id: null,
+      creator_type: 'member',
+      creator_id: 'user-1',
+      parent_issue_id: null,
+      project_id: null,
+      position: 0,
+      stage: null,
+      start_date: null,
+      due_date: null,
+      metadata: {},
+      properties: {},
+      created_at: '2025-01-01T00:00:00Z',
+      updated_at: '2025-01-01T00:00:00Z',
+    };
+    const label = {
+      id: 'label-1',
+      workspace_id: 'ws-1',
+      name: 'bug',
+      color: '#ef4444',
+      created_at: '2025-01-01T00:00:00Z',
+      updated_at: '2025-01-01T00:00:00Z',
+    };
+
+    it('keeps labels undefined when the backend omits the field (older backend)', async () => {
+      stubFetchJson(validIssue, 201);
+      const client = new ApiClient('https://api.example.test');
+      const issue = await client.createIssue({ title: 'Created' });
+      expect(issue.id).toBe('issue-1');
+      expect(issue.labels).toBeUndefined();
+    });
+
+    it('validates a well-formed labels array', async () => {
+      stubFetchJson({ ...validIssue, labels: [label] }, 201);
+      const client = new ApiClient('https://api.example.test');
+      const issue = await client.createIssue({ title: 'Created' });
+      expect(issue.labels?.map((l) => l.id)).toEqual(['label-1']);
+    });
+
+    it('degrades a null labels field to undefined so the client falls back', async () => {
+      stubFetchJson({ ...validIssue, labels: null }, 201);
+      const client = new ApiClient('https://api.example.test');
+      const issue = await client.createIssue({ title: 'Created' });
+      expect(issue.id).toBe('issue-1');
+      expect(issue.labels).toBeUndefined();
+    });
+
+    it('degrades a labels array of the wrong element shape to undefined', async () => {
+      stubFetchJson({ ...validIssue, labels: [{ nope: true }] }, 201);
+      const client = new ApiClient('https://api.example.test');
+      const issue = await client.createIssue({ title: 'Created' });
+      expect(issue.id).toBe('issue-1');
+      expect(issue.labels).toBeUndefined();
+    });
+
+    it('rejects when the whole response body is not a usable issue (no fake success)', async () => {
+      stubFetchJson({ not: 'an issue' }, 201);
+      const client = new ApiClient('https://api.example.test');
+      await expect(client.createIssue({ title: 'Created' })).rejects.toThrow();
+    });
+
+    it('rejects when the created issue has an empty id', async () => {
+      stubFetchJson({ ...validIssue, id: '' }, 201);
+      const client = new ApiClient('https://api.example.test');
+      await expect(client.createIssue({ title: 'Created' })).rejects.toThrow();
+    });
+  });
+
+  describe('searchIssues', () => {
+    it('falls back to an empty result when the response is malformed', async () => {
+      stubFetchJson({ issues: 'not-an-array', total: 0 });
+      const client = new ApiClient('https://api.example.test');
+      const res = await client.searchIssues({ q: 'bug' });
+      expect(res).toEqual({ issues: [], total: 0 });
+    });
+  });
+
+  describe('searchProjects', () => {
+    it('falls back to an empty result when the response is malformed', async () => {
+      stubFetchJson({ projects: 'not-an-array', total: 0 });
+      const client = new ApiClient('https://api.example.test');
+      const res = await client.searchProjects({ q: 'roadmap' });
+      expect(res).toEqual({ projects: [], total: 0 });
+    });
+  });
+
+  describe('listAutopilots', () => {
+    const baseAutopilot = {
+      id: 'ap-1',
+      workspace_id: 'ws-1',
+      title: 'Daily triage',
+      description: null,
+      assignee_id: 'agent-1',
+      status: 'active',
+      execution_mode: 'run_only',
+      issue_title_template: null,
+      created_by_type: 'member',
+      created_by_id: 'user-1',
+      last_run_at: null,
+      created_at: '2026-06-01T00:00:00Z',
+      updated_at: '2026-06-01T00:00:00Z',
+    };
+
+    it('falls back to an empty list when the response is malformed', async () => {
+      stubFetchJson({ autopilots: 'not-an-array', total: 1 });
+      const client = new ApiClient('https://api.example.test');
+      const res = await client.listAutopilots();
+      expect(res).toEqual({ autopilots: [], total: 0 });
+    });
+
+    it('accepts an old-server row without assignee_type or derived fields', async () => {
+      stubFetchJson({ autopilots: [baseAutopilot], total: 1 });
+      const client = new ApiClient('https://api.example.test');
+      const res = await client.listAutopilots();
+      expect(res.autopilots).toHaveLength(1);
+      expect(res.autopilots[0]?.assignee_type).toBe('agent');
+      expect(res.autopilots[0]?.trigger_kinds).toBeUndefined();
+      expect(res.autopilots[0]?.last_run_status).toBeUndefined();
+    });
+
+    it('keeps is_template optional and drops a non-boolean value', async () => {
+      stubFetchJson({
+        autopilots: [
+          baseAutopilot,
+          { ...baseAutopilot, id: 'ap-2', is_template: 'yes' },
+          { ...baseAutopilot, id: 'ap-3', is_template: true },
+        ],
+        total: 3,
+      });
+      const client = new ApiClient('https://api.example.test');
+      const res = await client.listAutopilots();
+      expect(res.autopilots).toHaveLength(3);
+      expect(res.autopilots[0]?.is_template).toBeUndefined();
+      expect(res.autopilots[1]?.is_template).toBeUndefined();
+      expect(res.autopilots[2]?.is_template).toBe(true);
+    });
+
+    it('passes derived fields through and tolerates enum drift', async () => {
+      stubFetchJson({
+        autopilots: [
+          {
+            ...baseAutopilot,
+            assignee_type: 'squad',
+            trigger_kinds: ['schedule', 'some_future_kind'],
+            next_run_at: '2026-06-13T09:00:00Z',
+            last_run_status: 'some_future_status',
+          },
+        ],
+        total: 1,
+      });
+      const client = new ApiClient('https://api.example.test');
+      const res = await client.listAutopilots();
+      expect(res.autopilots[0]?.trigger_kinds).toEqual(['schedule', 'some_future_kind']);
+      expect(res.autopilots[0]?.next_run_at).toBe('2026-06-13T09:00:00Z');
+      expect(res.autopilots[0]?.last_run_status).toBe('some_future_status');
+    });
+  });
+
+  describe('getConfig', () => {
+    it('drops malformed daemon setup URLs instead of throwing', async () => {
+      stubFetchJson({
+        cdn_domain: 'cdn.example.com',
+        allow_signup: true,
+        daemon_server_url: { wrong: 'shape' },
+        daemon_app_url: 123,
+        workspace_creation_disabled: false,
+        feature_flags: { composio_mcp_apps: true },
+      });
+      const client = new ApiClient('https://api.example.test');
+      const config = await client.getConfig();
+      expect(config.cdn_domain).toBe('cdn.example.com');
+      expect(config.allow_signup).toBe(true);
+      expect(config.daemon_server_url).toBeUndefined();
+      expect(config.daemon_app_url).toBeUndefined();
+      expect(config.feature_flags?.composio_mcp_apps).toBe(true);
+    });
+  });
+
+  describe('listGroupedIssues', () => {
+    it('falls back to empty groups when the response is malformed', async () => {
+      stubFetchJson({ groups: 'not-an-array' });
+      const client = new ApiClient('https://api.example.test');
+      const res = await client.listGroupedIssues({ group_by: 'assignee' });
+      expect(res).toEqual({ groups: [] });
+    });
+  });
+
+  describe('listComments', () => {
+    it('returns [] when the response is not an array', async () => {
+      stubFetchJson({ wrong: 'shape' });
+      const client = new ApiClient('https://api.example.test');
+      const comments = await client.listComments('issue-1');
+      expect(comments).toEqual([]);
+    });
+  });
+
+  describe('previewCommentTriggers', () => {
+    it('returns an empty agent list when the response is malformed', async () => {
+      stubFetchJson({ agents: 'not-an-array' });
+      const client = new ApiClient('https://api.example.test');
+      const preview = await client.previewCommentTriggers('issue-1', 'hello');
+      expect(preview).toEqual({ agents: [] });
+    });
+  });
+
+  describe('listIssueSubscribers', () => {
+    it('returns [] when the response is null', async () => {
+      stubFetchJson(null);
+      const client = new ApiClient('https://api.example.test');
+      const subs = await client.listIssueSubscribers('issue-1');
+      expect(subs).toEqual([]);
+    });
+  });
+
+  describe('listChildIssues', () => {
+    it('returns { issues: [] } when the issues field is missing', async () => {
+      stubFetchJson({});
+      const client = new ApiClient('https://api.example.test');
+      const res = await client.listChildIssues('issue-1');
+      expect(res).toEqual({ issues: [] });
+    });
+  });
+
+  describe('listAgentTemplates', () => {
+    it('falls back to [] when the body is null', async () => {
+      stubFetchJson(null);
+      const client = new ApiClient('https://api.example.test');
+      const tmpls = await client.listAgentTemplates();
+      expect(tmpls).toEqual([]);
+    });
+
+    it('defaults skills to [] when the field is missing from a template', async () => {
+      stubFetchJson([{ slug: 'x', name: 'X' }]);
+      const client = new ApiClient('https://api.example.test');
+      const tmpls = await client.listAgentTemplates();
+      expect(tmpls).toHaveLength(1);
+      expect(tmpls[0]?.skills).toEqual([]);
+    });
+
+    it('accepts the bare-array shape (current contract)', async () => {
+      stubFetchJson([
+        { slug: 'a', name: 'A', description: '', skills: [] },
+        { slug: 'b', name: 'B', description: '', skills: [] },
+      ]);
+      const client = new ApiClient('https://api.example.test');
+      const tmpls = await client.listAgentTemplates();
+      expect(tmpls.map((t) => t.slug)).toEqual(['a', 'b']);
+    });
+
+    it('accepts a future {templates: [...]} envelope without breaking', async () => {
+      stubFetchJson({
+        templates: [{ slug: 'a', name: 'A', description: '', skills: [] }],
+        total: 1,
+      });
+      const client = new ApiClient('https://api.example.test');
+      const tmpls = await client.listAgentTemplates();
+      expect(tmpls).toHaveLength(1);
+      expect(tmpls[0]?.slug).toBe('a');
+    });
+  });
+
+  describe('getAgentTemplate', () => {
+    it('falls back to a minimal record carrying the requested slug', async () => {
+      stubFetchJson({ wrong: 'shape' });
+      const client = new ApiClient('https://api.example.test');
+      const detail = await client.getAgentTemplate('code-reviewer');
+      expect(detail.slug).toBe('code-reviewer');
+      expect(detail.skills).toEqual([]);
+      expect(detail.instructions).toBe('');
+    });
+
+    it("defaults instructions to '' when the field is missing", async () => {
+      stubFetchJson({
+        slug: 'code-reviewer',
+        name: 'Code Reviewer',
+        description: '',
+        skills: [],
+      });
+      const client = new ApiClient('https://api.example.test');
+      const detail = await client.getAgentTemplate('code-reviewer');
+      expect(detail.instructions).toBe('');
+    });
+  });
+
+  describe('listAutopilotDeliveries', () => {
+    it('falls back to an empty list when the body is null', async () => {
+      stubFetchJson(null);
+      const client = new ApiClient('https://api.example.test');
+      const res = await client.listAutopilotDeliveries('ap-1');
+      expect(res).toEqual({ deliveries: [], total: 0 });
+    });
+
+    it('falls back to an empty list when `deliveries` is not an array', async () => {
+      stubFetchJson({ deliveries: 'not-an-array', total: 0 });
+      const client = new ApiClient('https://api.example.test');
+      const res = await client.listAutopilotDeliveries('ap-1');
+      expect(res).toEqual({ deliveries: [], total: 0 });
+    });
+
+    it('accepts an unknown future status value rather than dropping the row', async () => {
+      stubFetchJson({
+        deliveries: [
+          {
+            id: 'd-1',
+            workspace_id: 'ws-1',
+            autopilot_id: 'ap-1',
+            trigger_id: 't-1',
+            provider: 'github',
+            event: 'pull_request.opened',
+            dedupe_key: 'abc',
+            dedupe_source: 'x-github-delivery',
+            signature_status: 'valid',
+            status: 'quarantined',
+            attempt_count: 1,
+            content_type: 'application/json',
+            response_status: 200,
+            autopilot_run_id: null,
+            replayed_from_delivery_id: null,
+            error: null,
+            received_at: '2026-01-01T00:00:00Z',
+            last_attempt_at: '2026-01-01T00:00:00Z',
+            created_at: '2026-01-01T00:00:00Z',
+          },
+        ],
+        total: 1,
+      });
+      const client = new ApiClient('https://api.example.test');
+      const res = await client.listAutopilotDeliveries('ap-1');
+      expect(res.deliveries).toHaveLength(1);
+      expect(res.deliveries[0]?.status).toBe('quarantined');
+      expect(res.deliveries[0]?.dispatch_attempts).toBe(0);
+      expect(res.deliveries[0]?.available_at).toBe('');
+    });
+  });
+
+  describe('getAutopilotDelivery', () => {
+    it('falls back to a placeholder carrying the requested id', async () => {
+      stubFetchJson({ wrong: 'shape' });
+      const client = new ApiClient('https://api.example.test');
+      const detail = await client.getAutopilotDelivery('ap-1', 'd-1');
+      expect(detail.id).toBe('d-1');
+      expect(detail.autopilot_id).toBe('ap-1');
+    });
+  });
+
+  describe('createAgentFromTemplate', () => {
+    it('falls back to an empty agent when the response is malformed', async () => {
+      stubFetchJson({ unexpected: 'shape' });
+      const client = new ApiClient('https://api.example.test');
+      const resp = await client.createAgentFromTemplate({
+        template_slug: 'x',
+        name: 'X',
+        runtime_id: 'rt-1',
+      });
+      expect(resp.agent.id).toBe('');
+      expect(resp.imported_skill_ids).toEqual([]);
+      expect(resp.reused_skill_ids).toEqual([]);
+    });
+
+    it('defaults imported_skill_ids / reused_skill_ids to [] when missing', async () => {
+      stubFetchJson({ agent: { id: 'agent-1' } });
+      const client = new ApiClient('https://api.example.test');
+      const resp = await client.createAgentFromTemplate({
+        template_slug: 'x',
+        name: 'X',
+        runtime_id: 'rt-1',
+      });
+      expect(resp.agent.id).toBe('agent-1');
+      expect(resp.imported_skill_ids).toEqual([]);
+      expect(resp.reused_skill_ids).toEqual([]);
+    });
+  });
+
+  describe('cronPreview', () => {
+    it('returns the parsed next runs', async () => {
+      stubFetchJson({
+        next_runs: ['2026-07-14T01:00:00Z', '2026-07-14T03:00:00Z'],
+      });
+      const client = new ApiClient('https://api.example.test');
+      const res = await client.cronPreview({
+        expr: '0 9-21/2 * * *',
+        tz: 'Asia/Shanghai',
+      });
+      expect(res).toEqual({
+        next_runs: ['2026-07-14T01:00:00Z', '2026-07-14T03:00:00Z'],
+      });
+    });
+
+    it('URL-encodes the expression and timezone', async () => {
+      stubFetchJson({ next_runs: [] });
+      const client = new ApiClient('https://api.example.test');
+      await client.cronPreview({ expr: '0 9-21/2 * * 2-4', tz: 'Asia/Shanghai' });
+      const url = String(vi.mocked(fetch).mock.calls[0]?.[0]);
+      expect(url).toContain('/api/autopilots/cron-preview?');
+      expect(url).toContain('expr=0+9-21%2F2+*+*+2-4');
+      expect(url).toContain('tz=Asia%2FShanghai');
+    });
+
+    it('returns an empty list verbatim when the expression never fires', async () => {
+      stubFetchJson({ next_runs: [] });
+      const client = new ApiClient('https://api.example.test');
+      const res = await client.cronPreview({ expr: '0 0 30 2 *', tz: 'UTC' });
+      expect(res).toEqual({ next_runs: [] });
+    });
+
+    it('falls back to null when the response is malformed', async () => {
+      stubFetchJson({ next_runs: 'not-an-array' });
+      const client = new ApiClient('https://api.example.test');
+      const res = await client.cronPreview({ expr: '0 9 * * *', tz: 'UTC' });
+      expect(res).toEqual({ next_runs: null });
+    });
+
+    it('falls back to null when the field is missing entirely', async () => {
+      stubFetchJson({ runs: ['2026-07-14T01:00:00Z'] });
+      const client = new ApiClient('https://api.example.test');
+      const res = await client.cronPreview({ expr: '0 9 * * *', tz: 'UTC' });
+      expect(res).toEqual({ next_runs: null });
+    });
+  });
+});
+
+describe('parseWithFallback', () => {
+  const opts = { endpoint: 'TEST /unit' };
+
+  it('returns parsed data on success', () => {
+    const schema = z.object({ id: z.string() });
+    const out = parseWithFallback({ id: 'x' }, schema, { id: 'fallback' }, opts);
+    expect(out).toEqual({ id: 'x' });
+  });
+
+  it('returns the fallback when validation fails', () => {
+    const schema = z.object({ id: z.string() });
+    const fallback = { id: 'fallback' };
+    const out = parseWithFallback({ id: 123 }, schema, fallback, opts);
+    expect(out).toBe(fallback);
+  });
+
+  it('returns the fallback when data is null', () => {
+    const schema = z.object({ id: z.string() });
+    const fallback = { id: 'fallback' };
+    const out = parseWithFallback(null, schema, fallback, opts);
+    expect(out).toBe(fallback);
+  });
+});

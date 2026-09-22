@@ -1,0 +1,80 @@
+{
+  "nav": {
+    "inbox": "Входящие",
+    "chat": "Чат",
+    "my_issues": "Мои issue",
+    "issues": "Issues",
+    "projects": "Проекты",
+    "autopilots": "Автопилот",
+    "agents": "Агенты",
+    "squads": "Команды",
+    "usage": "Потребление",
+    "runtimes": "Среды выполнения",
+    "skills": "Skills",
+    "settings": "Настройки",
+    "capabilities": "Что вы можете",
+    "go_back": "Назад",
+    "go_forward": "Вперёд"
+  },
+  "tab": {
+    "issue": "Issue",
+    "project": "Проект",
+    "autopilot": "Автопилот",
+    "agent": "Агент",
+    "member": "Участник",
+    "squad": "Команда",
+    "skill": "Skill",
+    "machine": "Компьютер",
+    "runtime": "Среда выполнения",
+    "attachment": "Вложение",
+    "create_agent": "Новый агент",
+    "unknown": "Неизвестная страница"
+  },
+  "help": {
+    "trigger": "Помощь",
+    "docs": "Документация",
+    "feedback": "Обратная связь",
+    "replay_onboarding": "Пройти онбординг заново",
+    "server_version": "Версия сервера {{version}}",
+    "capabilities": "Что вы можете здесь делать"
+  },
+  "realtime": {
+    "degraded": {
+      "title": "Обновления приходят с задержкой",
+      "detail": "Приложение перешло на периодические запросы, поэтому изменения от агентов и коллег появляются позже обычного — а пока связи нет, не появляются вовсе.",
+      "cause": "Соединение реального времени не проходит — чаще всего его не пропускает сетевой маршрут. Недоступность сервера отсюда выглядит так же."
+    }
+  },
+  "workspace_loader": {
+    "loading_workspace": "Загружаем рабочее пространство…",
+    "loading_named_prefix": "Загружаем"
+  },
+  "sidebar": {
+    "unpin_tooltip": "Открепить",
+    "workspaces_label": "Рабочие пространства",
+    "create_workspace": "Создать рабочее пространство",
+    "pending_invitations_label": "Приглашения",
+    "invitation_workspace_fallback": "Рабочее пространство",
+    "invitation_join": "Принять",
+    "invitation_decline": "Отклонить",
+    "log_out": "Выйти",
+    "new_issue": "Новый issue",
+    "new_issue_shortcut": "C",
+    "pinned_label": "Закреплённое",
+    "workspace_group": "Рабочее пространство",
+    "configure_group": "Управление",
+    "unread_overflow": "99+"
+  },
+  "issue_window": {
+    "unavailable_title": "Issue недоступен",
+    "unavailable_description": "Это рабочее пространство больше недоступно в вашем аккаунте.",
+    "close_window": "Закрыть окно",
+    "error_title": "Что-то пошло не так",
+    "unknown_error": "Неизвестная ошибка маршрута",
+    "reload": "Перезагрузить"
+  },
+  "config_error": {
+    "title": "Ошибка конфигурации приложения",
+    "description": "Goosar Desktop не смог прочитать ~/.goosar/desktop.json. Исправьте или удалите файл и перезапустите приложение."
+  }
+}

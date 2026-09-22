@@ -1,0 +1,170 @@
+name: Desktop Smoke Build
+
+# Packaging is the one part of the desktop app that CANNOT be proven from a
+# contributor's macOS checkout: electron-builder's Windows and Linux targets
+# shell out to NSIS, fpm and rpmbuild, which behave differently (or do not
+# exist at all) off their native host. Everything that broke in issue #15 broke
+# here and nowhere else — `pnpm build`, `pnpm typecheck` and `pnpm test` were
+# all green on the same commits that shipped no installer for three release
+# tags in a row (v0.2.2, v0.2.3-rc1, v0.2.4-rc1).
+#
+# This runs on push to main and on demand (workflow_dispatch), NOT on every
+# pull request. The two-runner Windows+Linux packaging build is by far the
+# largest Actions-minutes consumer in this repo, and firing it on every
+# desktop-touching PR push dominated the CI bill. Packaging is now validated
+# the moment a change lands on main — still before any release tag — and any
+# branch can be checked pre-merge on demand via this workflow's "Run workflow"
+# button. A tag push is still a bad time to discover a broken installer; the
+# push-to-main run guards that. The trade is per-PR coverage for a much
+# smaller bill.
+#
+# The path list below filters the push trigger: `packages/**` is deliberately
+# absent (renderer/shared compile errors are caught by the `frontend` check in
+# ci.yml); what is filtered *in* is everything that decides how the app is
+# packaged.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "apps/desktop/**"
+      - ".github/workflows/desktop-smoke.yml"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux
+          - os: windows-latest
+            target: win
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # scripts/package.mjs derives the app version from `git describe
+          # --tags`, so a shallow clone silently produces a 0.0.0-g<sha> build.
+          fetch-depth: 0
+
+      - name: Install rpmbuild (Linux)
+        if: matrix.target == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Package Desktop installers (${{ matrix.target }})
+        working-directory: apps/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        # Both architectures, matching the release job exactly. Dropping arm64
+        # here would leave it proven only by a tag push — and because
+        # package.mjs exits on the first failing target, an x64-only gate would
+        # report "green" about a matrix half of which had never run. That is
+        # not hypothetical: the v0.2.4-rc1 release job died on Linux x64 rpm
+        # and on Windows x64 publish, so neither arm64 target has ever run.
+        run: node scripts/package.mjs --${{ matrix.target }} --x64 --arm64 --publish never
+
+      # `if-no-files-found: error` on the upload below is not a packaging
+      # assertion: it passes as long as *something* landed in dist/. The Linux
+      # release failure was exactly that shape — AppImage and .deb were built
+      # and only the .rpm was missing. Name every expected installer instead.
+      - name: Verify every expected installer was produced
+        shell: bash
+        working-directory: apps/desktop
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -uo pipefail
+          # package.mjs scopes the output directory per target whenever more
+          # than one is built, so each architecture owns a directory. Assert on
+          # directory + extension rather than on the full filename: the arch
+          # spelling inside a name is electron-builder's business and differs
+          # per target (x86_64 for rpm, amd64 for deb), while "each arch
+          # produced each kind of installer" is the property that matters.
+          if [ "$TARGET" = "linux" ]; then
+            expected=(
+              "dist/linux-x64/*.AppImage"
+              "dist/linux-x64/*.deb"
+              "dist/linux-x64/*.rpm"
+              "dist/linux-arm64/*.AppImage"
+              "dist/linux-arm64/*.deb"
+              "dist/linux-arm64/*.rpm"
+            )
+          else
+            # The NSIS installers only. dist/ also holds a `.__uninstaller.exe`
+            # per arch, which is an intermediate rather than a shipped artifact,
+            # so match the installer name shape explicitly here.
+            expected=(
+              "dist/win-x64/goosar-desktop-*-windows-x64.exe"
+              "dist/win-arm64/goosar-desktop-*-windows-arm64.exe"
+            )
+          fi
+          missing=0
+          for pattern in "${expected[@]}"; do
+            # `|| true` is load-bearing. GitHub runs `shell: bash` as
+            # `bash -e {0}`, and compgen exits non-zero when nothing matches, so
+            # an unguarded assignment aborts the step at the FIRST missing
+            # artifact — no annotation, no dist/ listing, and no way to tell
+            # from the red X which installer was absent. That is precisely the
+            # question this step exists to answer, so every pattern is checked
+            # and the failures are reported together at the end.
+            found=$(compgen -G "$pattern" || true)
+            if [ -z "$found" ]; then
+              echo "::error::no artifact matched $pattern"
+              missing=1
+              continue
+            fi
+            while read -r file; do
+              echo "ok  $file ($(wc -c < "$file") bytes)"
+            done <<< "$found"
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "--- everything actually produced ---"
+            # Same reasoning: a missing dist/ must not abort the step before the
+            # `exit 1` that reports why it failed.
+            find dist -type f 2>/dev/null | sort || true
+            exit 1
+          fi
+
+      - name: Upload Desktop artifacts (${{ matrix.target }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.target }}
+          path: apps/desktop/dist
+          if-no-files-found: error
+          # These are smoke-build byproducts — the artifacts a release actually
+          # ships come from release.yml. At ~1.5 GB (linux) and ~0.9 GB (win)
+          # per run, the 90-day default filled the account-wide Actions storage
+          # quota twice: once breaking the v0.3.0 image tags (the release's
+          # digest hand-off could not upload), and once failing this very job.
+          # Keep them long enough to download from a failed run, no longer.
+          retention-days: 5

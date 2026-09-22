@@ -1,0 +1,227 @@
+# working-on-issues source map
+
+Evidence layer for `SKILL.md`. Every contract the skill states is traced to a
+current `file:line` here. Lines were re-derived against the current `main`
+tree; the prior revision cited lines that have since moved (see the "drifted"
+column). Re-confirm with the verification command
+at the bottom before relying on an exact line.
+
+## `goosar issue pull-requests` — read PR links from Goosar
+
+| Behavior | File:line | Drifted from |
+|---|---|---|
+| CLI command `pull-requests <id>` (alias `prs`) | `server/cmd/goosar/cmd_issue.go:229` | `:105` |
+| `runIssuePullRequests` handler | `server/cmd/goosar/cmd_issue.go:774` | `:507` |
+| Calls `GET /api/issues/<id>/pull-requests` | `server/cmd/goosar/cmd_issue.go:789` | `:522` |
+| API route registration | `server/cmd/server/router.go:1439` | `:480` |
+| Handler `ListPullRequestsForIssue` → `Queries.ListPullRequestsByIssue` | `server/internal/handler/github.go:962,967` | `:687,692` |
+| Row → response mapper `issuePullRequestRowToResponse` | `server/internal/handler/github.go:227` | `:205` |
+
+The CLI resolves the issue ref, GETs the endpoint, and (for `--output json`)
+prints the raw `{"pull_requests": [...]}` body. Only `--output` is accepted; the
+default `table` shows `NUMBER STATE TITLE URL`.
+
+## PR response shape
+
+`GitHubPullRequestResponse` struct: `server/internal/handler/github.go:63`. JSON
+fields the agent can read off each element of `pull_requests`:
+
+- `provider` (`json:"provider"`, line 68)
+- `number` (`json:"number"`, line 72)
+- `html_url` (`json:"html_url"`, line 75)
+- `title` (`json:"title"`, line 73)
+- `state` (`json:"state"`, line 74) — the folded lifecycle enum (see below)
+- `merged_at` (`json:"merged_at"`, line 79), `closed_at` (line 80)
+- `mergeable_state` (`json:"mergeable_state"`, line 85) — mirrors GitHub; UI only
+  surfaces `clean`/`dirty`, other values round-trip as unknown
+- `snapshot_available` (`json:"snapshot_available"`, line 100) — for GitHub,
+  true only when the App snapshot feature is enabled and the snapshot head
+  matches the current PR head (`currentGitHubSnapshotAvailable`, line 280)
+- `mergeable` / `merge_state_status` (lines 95, 99) — conflict-only verdict vs
+  the complete merge gate; "ready" requires `merge_state_status == "clean"`
+- `checks_rollup` (`json:"checks_rollup"`, line 110) and run-level
+  `checks_total` / `checks_passed` / `checks_failed` / `checks_running`
+  (lines 116-119), plus `failed_check_names` (line 123)
+- `checks_conclusion` (`json:"checks_conclusion"`, line 113) — coarse
+  `"passed"`/`"failed"`/`"pending"` or `null`; GitHub derives it only from an
+  available current-head snapshot (mapper, `issuePullRequestRowToResponse`), while self-hosted VCS
+  providers use `aggregateChecksConclusion` (line 297)
+
+There is **no** standalone `draft` or `merged` boolean in the response. The
+PR lifecycle is encoded in the single `state` string by `derivePRState`
+(`server/internal/handler/github.go:1592`):
+
+```
+merged   → if PullRequest.Merged
+closed   → else if PullRequest.State == "closed"
+draft    → else if PullRequest.Draft
+open     → otherwise
+```
+
+`derivePRState` is called when the webhook upserts the row
+(`server/internal/handler/github.go:1390`), so `state` is what the list endpoint
+returns. "Is it merged?" = `state == "merged"` (or `merged_at != null`); "is it a
+draft?" = `state == "draft"`. Combine with `checks_conclusion` for CI status.
+
+## Two distinct webhook paths: link vs close-intent
+
+Both run inside the `pull_request` webhook handler, gated by the workspace
+auto-link flag (`workspaceAutoLinkPRsEnabled`, `github.go:1434,1667`).
+
+### Path 1 — link (title OR body OR branch)
+
+- `extractIdentifiers` regex helper: `server/internal/handler/github.go:1626`
+- driving regex `identifierRe` (`\b([a-z][a-z0-9]{1,9})-(\d+)\b`, case-insensitive):
+  `server/internal/handler/github.go:1035`
+- call site: `server/internal/handler/github.go:1435` —
+  `extractIdentifiers(p.PullRequest.Title, p.PullRequest.Body, p.PullRequest.Head.Ref)`
+
+Every `PREFIX-NUMBER` mention in **title, body, or branch** resolves to an issue
+in the workspace and writes a link row (`LinkIssueToPullRequest`, ~`github.go:1487`).
+This is what `goosar issue pull-requests` later reads back.
+
+**Reference-only flag (MUL-3739).** The link row carries a `reference_only`
+boolean (`migrations/127_issue_pull_request_reference_only.up.sql`). The handler
+computes a `qualifyingIdents` set = identifiers in **title or branch** (any
+`extractIdentifiers` match) ∪ **body closing keywords** (`closingIdents`). A
+linked identifier NOT in that set was matched only by a bare body mention, so its
+row is written with `reference_only = true`. Both `ListPullRequestsByIssue` and
+`GetIssuePullRequestCloseAggregate` filter `AND NOT reference_only`, so
+reference-only links are hidden from the CLI / UI PR list **and** excluded from
+the auto-advance gate (an open body-only mention must not silently block the
+issue from reaching `done` while invisible in the list). The row still exists for
+edit-time close-intent tracking. `reference_only` follows the same
+`preserve_close_intent` terminal gate as `close_intent`.
+
+Drifted from the prior revision's `github.go:727` citation.
+
+### Path 2 — close intent (title OR body only, keyword-adjacent)
+
+- `extractClosingIdentifiers` regex helper: `server/internal/handler/github.go:1649`
+- driving regex `closingIdentifierRe`
+  (`\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)[:\s]+([a-z][a-z0-9]{1,9})-(\d+)\b`):
+  `server/internal/handler/github.go:1046`
+- call site: `server/internal/handler/github.go:1444` —
+  `extractClosingIdentifiers(p.PullRequest.Title, p.PullRequest.Body)` (no branch arg)
+
+Only a `PREFIX-NUMBER` immediately after a closing keyword
+(`Closes`/`Fixes`/`Resolves`, optional `:` then whitespace) sets the link row's
+`close_intent` flag — the gate that auto-advances the issue to `done` on merge.
+`Fix MUL-1` closes; `Fix login MUL-1` does not (adjacency). Branch names are
+deliberately excluded (function doc, `github.go:1637-1648`): a branch like
+`mul-1/fix-login` links but must never declare close intent.
+
+Drifted from the prior revision's `github.go:736` citation.
+
+Net: a bare title prefix (`MUL-2759: ...`) or a branch ref links only (shown in
+the PR list); `Closes MUL-2759` links **and** records close intent; a bare body
+mention with no title/branch ref and no closing keyword links as `reference_only`
+and is hidden from the PR list.
+
+## Status side effects (enqueue contracts)
+
+| Behavior | File:line | Drifted from |
+|---|---|---|
+| Create-time: agent-assigned, non-backlog issue enqueues immediately | `server/internal/handler/issue.go:2263-2264` | new citation |
+| `shouldEnqueueAgentTask` returns false for `backlog` (parking lot) | `server/internal/handler/issue.go:2644-2648` | new citation |
+| Backlog → non-backlog (not done/cancelled) enqueues on update | `server/internal/handler/issue.go:2537-2540` | `:2523` |
+| Same contract in batch update | `server/internal/handler/issue.go:3021-3024` | new citation |
+| Child → `done` notifies + wakes the parent, gated by the stage barrier | `server/internal/handler/issue_child_done.go:66` (`notifyParentOfChildDone`; doc comment at `:15`; barrier gate at `:115`) | func def `:51` |
+| Status change (incl. → `cancelled`) does NOT cancel in-flight tasks; only issue deletion does (MUL-4465) | no-cancel note in `server/internal/handler/issue.go:2652-2658` (`UpdateIssue`) and `:3170-3171` (`BatchUpdateIssues`); deletion still cancels at `:2863` (`DeleteIssue`) / `:3239` (`BatchDeleteIssues`) via `CancelTasksForIssue` (`server/internal/service/task.go:1229`) | new citation |
+| `StartTask` / `CompleteTask` do not write issue status (agent CLI owns progress) | `server/internal/service/task.go` (`StartTask` / `CompleteTask` comments) | new citation |
+| Assignment brief: ordinary agent `in_progress` then `in_review`; squad leader `in_progress` only on first dispatch | `server/internal/daemon/execenv/runtime_config_sections.go` (`writeWorkflowAssignment`) | new citation |
+| Failed task may roll `in_progress` → `todo` when no active task remains | `server/internal/service/task.go` (`HandleFailedTasks`) | new citation |
+
+Creation with `--status todo` (or any non-backlog status) on an agent-assigned
+issue fires the agent immediately; `--status backlog` parks it with the assignee
+set but no trigger. Promoting `backlog → todo` later fires it then (update path,
+line 2537).
+
+Moving an issue to `cancelled` used to call `CancelTasksForIssue` and stop every
+active task on it (the old #940 behavior). MUL-4465 removed that from both
+`UpdateIssue` and `BatchUpdateIssues`: a status flip — `cancelled` included —
+never cancels tasks now. `CancelTasksForIssue` fires only from the issue-deletion
+paths (`DeleteIssue` / `BatchDeleteIssues`), where the owning issue row is going
+away, so no task is left orphaned.
+
+## Sub-issue stages (barrier wake)
+
+| Behavior | File:line |
+|---|---|
+| `issue.stage` column (nullable, `>= 1`) | `server/migrations/123_issue_stage.up.sql` |
+| Stage barrier: notify+wake fire only when the lowest unfinished stage is all-terminal; unstaged set = one implicit stage | `server/internal/handler/issue_child_done.go:231` (`stageBarrierClosed`) |
+| Per-stage summary + next stage for the wake comment | `server/internal/handler/issue_child_done.go:254` (`stageProgressSummary`) |
+| `--stage` on `issue create` / `issue update` | `server/cmd/goosar/cmd_issue.go:515,538` |
+| `goosar issue children <id>` (sub-issues grouped by stage) | `server/cmd/goosar/cmd_issue.go:237`; route `GET /api/issues/{id}/children` → `ListChildIssues` |
+
+Advancement is agent-driven: the server only detects the closed barrier and
+wakes the parent assignee. Promoting the next stage's `backlog` sub-issues to
+`todo` is the woken agent's decision, not a server side effect. When the woken
+assignee (often a squad leader) decides the parent is complete, the system
+comment explicitly asks for `goosar issue status <parent-id> in_review` —
+comment-triggered runs otherwise must not change status unless asked.
+
+## `goosar issue comment add` — post a comment
+
+| Behavior | File:line |
+|---|---|
+| Command is `add <issue-id>`; there is **no** `create` verb or alias on `issue comment` | `server/cmd/goosar/cmd_issue.go:303-304` (`issueCommentAddCmd`, `Use: "add <issue-id>"`) |
+| Registered under `issue comment` (siblings: `list`, `delete`, `resolve`, `unresolve`) | `server/cmd/goosar/cmd_issue.go:462` and the `AddCommand` calls around it |
+| Body-source flags `--content` / `--content-stdin` / `--content-file`, plus `--allow-external-file`, `--parent`, `--attachment`, `--output` (default `json`) | `server/cmd/goosar/cmd_issue.go:584-590` |
+| One body source required | `server/cmd/goosar/cmd_issue.go:1968` (`--content, --content-stdin, or --content-file is required`) |
+| Body sources are mutually exclusive; resolution order stdin → file → inline | `server/cmd/goosar/cmd_issue.go:40` (`resolveTextFlag`) |
+| Empty stdin fails with an actionable error naming `--content-file` / piping / `--content` (#121) | `server/cmd/goosar/cmd_issue.go:130` |
+| Inline `--content` decodes `\n`, `\r`, `\t`, `\\`; stdin and file bodies stay verbatim | `server/internal/util/text.go:17` (`UnescapeBackslashEscapes`), called at `cmd_issue.go:97` |
+| `--content-file` path must resolve inside the working directory unless `--allow-external-file` is passed (MUL-4252) | `server/cmd/goosar/cmd_issue.go:148-161` (`ensureFileFlagWithinWorkdir`) |
+| POSTs `/api/issues/<id>/comments` after resolving the issue ref | `server/cmd/goosar/cmd_issue.go:2023` |
+| A comment-triggered task cannot post top-level: `parent_id` must match its trigger comment | `server/internal/handler/comment.go:1339` |
+| Runtime brief states the same contract: agent-authored bodies MUST use `--content-file` | `server/internal/daemon/execenv/runtime_config_sections.go:265,294` |
+
+`--content-stdin` is only usable when the *same* command line pipes bytes into
+the process. Agent shell tools spawn commands without a body on stdin, so a bare
+`--content-stdin` either reads an empty stdin (error above, exit 1) or blocks on
+a stdin that never closes. The HEREDOC form reaches the CLI but the heredoc/flag
+boundary silently swallows trailing flags (#4182), which is why the runtime
+brief and the skill both prescribe `--content-file`.
+
+## Metadata CLI
+
+| Behavior | File:line |
+|---|---|
+| `goosar issue metadata set <issue-id> --key --value [--type]` | `server/cmd/goosar/cmd_issue_metadata.go:80,109-111` |
+| `goosar issue metadata delete <issue-id> --key` | `server/cmd/goosar/cmd_issue_metadata.go:93,113` |
+| API routes (PUT/DELETE `/metadata/{key}`) | `server/cmd/server/router.go:478-479` |
+
+`--value` is JSON-parsed by default (bool/number sniff); `--type` forces
+`string`/`number`/`bool`.
+
+## Custom properties CLI
+
+| Behavior | File:line |
+|---|---|
+| `goosar property list/get/create/update/archive/unarchive` | `server/cmd/goosar/cmd_property.go` |
+| `goosar issue property list/set/unset` (name→id translation) | `server/cmd/goosar/cmd_property.go` (`encodeIssuePropertyValue`) |
+| Definition CRUD, admin gate, agent-actor rejection | `server/internal/handler/property.go` (`requirePropertyAdmin`) |
+| Optional catalog icon field and allowlist validation | `server/internal/handler/property.go` (`PropertyResponse`, `validatePropertyIcon`) |
+| Per-type value validation (self-correcting errors) | `server/internal/handler/property.go` (`validatePropertyValue`) |
+| API routes (`/api/properties`, PUT/DELETE `/api/issues/{id}/properties/{propertyId}`) | `server/cmd/server/router.go` |
+
+## Verification command
+
+Re-derive any line above before depending on it:
+
+```bash
+cd server
+grep -n 'pull-requests <id>'                 cmd/goosar/cmd_issue.go
+grep -n 'ListPullRequestsForIssue'           cmd/server/router.go internal/handler/github.go
+grep -n 'func issuePullRequestRowToResponse\|type GitHubPullRequestResponse struct\|func derivePRState\|func extractIdentifiers\|func extractClosingIdentifiers\|closingIdentifierRe' internal/handler/github.go
+grep -n 'extractIdentifiers(\|extractClosingIdentifiers(\|derivePRState(' internal/handler/github.go
+grep -n 'qualifyingIdents\|reference_only\|ReferenceOnly' internal/handler/github.go pkg/db/queries/github.sql
+grep -n 'prevIssue.Status == "backlog"\|func (h \*Handler) shouldEnqueueAgentTask' internal/handler/issue.go
+grep -n 'func notifyParentOfChildDone'       internal/handler/issue_child_done.go
+grep -n 'var issueCommentAddCmd\|func runIssueCommentAdd\|func resolveTextFlag\|nothing was piped in' cmd/goosar/cmd_issue.go
+grep -n 'issueCommentAddCmd.Flags()'         cmd/goosar/cmd_issue.go
+```
+
+`goosar issue comment --help` lists the real verbs (`add`, `delete`, `list`,
+`resolve`, `unresolve`) if the CLI is installed.

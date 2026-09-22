@@ -1,0 +1,124 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-config
+  labels:
+    {{- include "goosar.labels" . | nindent 4 }}
+data:
+  # --- Backend ---
+  PORT: "8080"
+  APP_ENV: {{ .Values.backend.config.appEnv | quote }}
+  # Logging (#434). Application logs go to the pod's stderr, the audit journal
+  # (#389) to stdout. json is one object per line with an RFC3339 timestamp —
+  # what a cluster log collector wants. An empty LOG_LEVEL means the built-in
+  # default: info on APP_ENV=production. Rotation is the cluster's job: the
+  # kubelet caps container logs (containerLogMaxSize / containerLogMaxFiles,
+  # 10Mi x 5 by default) — check it on your nodes, the chart cannot set it.
+  # Prometheus listener (#396). Empty means "no listener", which is the
+  # default. 0.0.0.0 is intentional: Prometheus scrapes it across the pod
+  # network, and the port is on neither the Service nor the Ingress.
+  METRICS_ADDR: {{ if .Values.monitoring.enabled }}{{ printf "0.0.0.0:%v" .Values.monitoring.port | quote }}{{ else }}""{{ end }}
+  LOG_FORMAT: {{ .Values.backend.config.logFormat | quote }}
+  LOG_LEVEL: {{ .Values.backend.config.logLevel | quote }}
+  GOOSAR_APP_URL: {{ .Values.backend.config.appUrl | quote }}
+  FRONTEND_ORIGIN: {{ .Values.backend.config.frontendOrigin | quote }}
+  CORS_ALLOWED_ORIGINS: {{ .Values.backend.config.corsAllowedOrigins | quote }}
+  COOKIE_DOMAIN: {{ .Values.backend.config.cookieDomain | quote }}
+  RESEND_FROM_EMAIL: {{ .Values.backend.config.resendFromEmail | quote }}
+  ALLOW_SIGNUP: {{ .Values.backend.config.allowSignup | quote }}
+  ALLOWED_EMAILS: {{ .Values.backend.config.allowedEmails | quote }}
+  ALLOWED_EMAIL_DOMAINS: {{ .Values.backend.config.allowedEmailDomains | quote }}
+  DISABLE_WORKSPACE_CREATION: {{ .Values.backend.config.disableWorkspaceCreation | quote }}
+  GOOSAR_VCS_INTEGRATION_ENABLED: {{ .Values.backend.config.vcsIntegrationEnabled | quote }}
+  S3_BUCKET: {{ .Values.backend.config.s3Bucket | quote }}
+  S3_REGION: {{ .Values.backend.config.s3Region | quote }}
+  CLOUDFRONT_DOMAIN: {{ .Values.backend.config.cloudfrontDomain | quote }}
+  CLOUDFRONT_KEY_PAIR_ID: {{ .Values.backend.config.cloudfrontKeyPairId | quote }}
+  LOCAL_UPLOAD_BASE_URL: {{ .Values.backend.config.localUploadBaseUrl | quote }}
+  # Provisioning store (#231). The OCI password deliberately stays out of
+  # this ConfigMap: put GOOSAR_PROVISIONING_OCI_PASSWORD into the
+  # existingSecret the backend already consumes via envFrom.
+  GOOSAR_PROVISIONING_STORE: {{ .Values.backend.config.provisioningStore | quote }}
+  GOOSAR_PROVISIONING_LOCAL_PREFIX: {{ .Values.backend.config.provisioningLocalPrefix | quote }}
+  GOOSAR_PROVISIONING_OCI_URL: {{ .Values.backend.config.provisioningOciUrl | quote }}
+  GOOSAR_PROVISIONING_OCI_REPOSITORY: {{ .Values.backend.config.provisioningOciRepository | quote }}
+  GOOSAR_PROVISIONING_OCI_USERNAME: {{ .Values.backend.config.provisioningOciUsername | quote }}
+  # Shared state for a multi-replica backend (#397): realtime relay, rate-limit
+  # budgets, connection revocation, liveness/cache stores. Empty = single-node.
+  # A URL carrying a password belongs in existingSecret instead; envFrom
+  # applies the Secret after this ConfigMap, so the Secret's value wins.
+  REDIS_URL: {{ .Values.redis.url | quote }}
+  # Deployment administrators (#213): seeds the deployment_admin role while
+  # its table is empty (first deployment only); afterwards the database is
+  # authoritative and this list is only compared and logged.
+  GOOSAR_DEPLOYMENT_ADMIN_EMAILS: {{ .Values.backend.config.deploymentAdminEmails | quote }}
+  GOOSAR_DEPLOYMENT_JIRA_URL: {{ .Values.backend.config.deploymentJiraUrl | quote }}
+  GOOSAR_DEPLOYMENT_CONFLUENCE_URL: {{ .Values.backend.config.deploymentConfluenceUrl | quote }}
+  GOOSAR_DEPLOYMENT_EWS_URL: {{ .Values.backend.config.deploymentEwsUrl | quote }}
+  GOOSAR_DEPLOYMENT_BITRIX24_URL: {{ .Values.backend.config.deploymentBitrix24Url | quote }}
+  GOOSAR_DEPLOYMENT_MCP_GATEWAY_URL: {{ .Values.backend.config.deploymentMcpGatewayUrl | quote }}
+  GOOSAR_DEPLOYMENT_MAIL_DOMAIN: {{ .Values.backend.config.deploymentMailDomain | quote }}
+  GOOSAR_DEPLOYMENT_LLM_API_BASE: {{ .Values.backend.config.deploymentLlmApiBase | quote }}
+  GOOSAR_DEPLOYMENT_LLM_MODEL: {{ .Values.backend.config.deploymentLlmModel | quote }}
+  # Actual LLM gateway wiring read by GET /api/deployment/client-secrets
+  # (server/cmd/server/router.go, deployment_secrets.go) — distinct from the
+  # GOOSAR_DEPLOYMENT_LLM_* pair above. The key itself goes in existingSecret
+  # (GOOSAR_LLM_API_KEY), not here.
+  GOOSAR_LLM_BASE_URL: {{ .Values.backend.config.llmBaseUrl | quote }}
+  GOOSAR_LLM_DEFAULT_MODEL: {{ .Values.backend.config.llmDefaultModel | quote }}
+  GOOSAR_ROLE_WORKSPACES: {{ .Values.backend.config.roleWorkspaces | quote }}
+  # ADR-0015 stand type: perimeter (default, also when empty) / demo / dev /
+  # local. Decides which "we set this up for you" conveniences a stand may
+  # switch on; an unknown value is a hard startup error.
+  GOOSAR_DEPLOYMENT_PROFILE: {{ .Values.backend.config.deploymentProfile | quote }}
+  # Rate limits (#530). Empty = the in-binary defaults (600/min per user,
+  # 5/min per IP on the code route); the ADR-0015 `dev` stand relaxes them so a
+  # load run measures the product instead of the limiter.
+  RATE_LIMIT_API: {{ .Values.backend.config.rateLimitApi | quote }}
+  RATE_LIMIT_AUTH: {{ .Values.backend.config.rateLimitAuth | quote }}
+  # Corporate sign-in (#394). See docs/auth/corporate-auth.md.
+  #
+  # The two SECRETS deliberately stay out of this ConfigMap: put
+  # GOOSAR_OIDC_CLIENT_SECRET and GOOSAR_LDAP_BIND_PASSWORD into the
+  # existingSecret the backend already consumes via envFrom. A ConfigMap is
+  # readable by anything with get on the namespace, and an LDAP bind password
+  # is a directory credential.
+  GOOSAR_AUTH_METHODS: {{ .Values.backend.config.authMethods | quote }}
+  # Second factor (#391). Not a secret — it is the label an authenticator app
+  # shows — so the ConfigMap is the right home for it.
+  GOOSAR_TOTP_ISSUER: {{ .Values.backend.config.totpIssuer | quote }}
+  GOOSAR_OIDC_ISSUER: {{ .Values.backend.config.oidcIssuer | quote }}
+  GOOSAR_OIDC_CLIENT_ID: {{ .Values.backend.config.oidcClientId | quote }}
+  GOOSAR_OIDC_REDIRECT_URL: {{ .Values.backend.config.oidcRedirectUrl | quote }}
+  GOOSAR_OIDC_SCOPES: {{ .Values.backend.config.oidcScopes | quote }}
+  GOOSAR_OIDC_ADMIN_CLAIM: {{ .Values.backend.config.oidcAdminClaim | quote }}
+  GOOSAR_OIDC_ADMIN_VALUE: {{ .Values.backend.config.oidcAdminValue | quote }}
+  GOOSAR_OIDC_DISPLAY_NAME: {{ .Values.backend.config.oidcDisplayName | quote }}
+  GOOSAR_LDAP_URL: {{ .Values.backend.config.ldapUrl | quote }}
+  GOOSAR_LDAP_START_TLS: {{ .Values.backend.config.ldapStartTls | quote }}
+  GOOSAR_LDAP_BIND_DN: {{ .Values.backend.config.ldapBindDn | quote }}
+  GOOSAR_LDAP_BASE_DN: {{ .Values.backend.config.ldapBaseDn | quote }}
+  GOOSAR_LDAP_USER_FILTER: {{ .Values.backend.config.ldapUserFilter | quote }}
+  GOOSAR_LDAP_EMAIL_ATTR: {{ .Values.backend.config.ldapEmailAttr | quote }}
+  GOOSAR_LDAP_NAME_ATTR: {{ .Values.backend.config.ldapNameAttr | quote }}
+  GOOSAR_LDAP_ADMIN_GROUP: {{ .Values.backend.config.ldapAdminGroup | quote }}
+  GOOSAR_LDAP_DISPLAY_NAME: {{ .Values.backend.config.ldapDisplayName | quote }}
+
+  # Soft heap target for the Go GC (#439). Keep it below backend.resources'
+  # memory limit so the runtime collects instead of being OOM-killed by the
+  # kubelet with no Go-side trace.
+  GOMEMLIMIT: {{ .Values.backend.config.goMemLimit | quote }}
+  # Day-2 retention (#439): scheduler audit purge + orphan-upload GC.
+  # Empty strings mean "use the in-binary defaults" (720h / 24h / 1h).
+  GOOSAR_SCHEDULER_AUDIT_RETENTION: {{ .Values.backend.config.schedulerAuditRetention | quote }}
+  GOOSAR_UPLOAD_GC_GRACE: {{ .Values.backend.config.uploadGcGrace | quote }}
+  GOOSAR_HYGIENE_SWEEP_INTERVAL: {{ .Values.backend.config.hygieneSweepInterval | quote }}
+  # Minimum daemon/CLI version allowed to take tasks (#439). Empty = the
+  # built-in floor; "none" disables the gate.
+  GOOSAR_MIN_DAEMON_VERSION: {{ .Values.backend.config.minDaemonVersion | quote }}
+
+  {{- if not .Values.postgres.external.enabled }}
+  # --- PostgreSQL (consumed by the backend to build DATABASE_URL) ---
+  POSTGRES_DB: {{ .Values.postgres.database | quote }}
+  POSTGRES_USER: {{ .Values.postgres.user | quote }}
+  {{- end }}

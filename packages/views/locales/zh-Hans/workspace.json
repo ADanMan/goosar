@@ -1,0 +1,106 @@
+{
+  "create_form": {
+    "name_label": "工作区名称",
+    "name_placeholder": "我的工作区",
+    "url_label": "工作区 URL",
+    "url_placeholder": "my-workspace",
+    "template_label": "工作区模板",
+    "template_none": "不使用模板",
+    "template_none_description": "从空白开始，软件包和预设可以稍后添加。",
+    "submit": "创建工作区",
+    "submitting": "创建中...",
+    "errors": {
+      "slug_format": "只能包含小写字母、数字和连字符",
+      "slug_taken": "该工作区 URL 已被占用。",
+      "slug_reserved": "该工作区 URL 是系统保留的，无法使用。",
+      "slug_conflict_toast": "请换一个工作区 URL",
+      "create_failed": "创建工作区失败"
+    }
+  },
+  "new_page": {
+    "back": "返回",
+    "log_out": "退出登录",
+    "title": "欢迎使用 Goosar",
+    "description": "一个工作区，让你和 AI 队友并肩协作——一起处理 issue、留下评论、共享同一份上下文。",
+    "invite_hint": "工作区创建后可邀请队友加入。",
+    "join_instead": "加入组织已设置的工作区"
+  },
+  "join_page": {
+    "title": "选择你的工作区",
+    "description": "你所在的组织已经为每个角色准备好了工作区。选择属于你的那个，里面的一切都已就绪。",
+    "loading": "正在加载角色…",
+    "empty": "目前还没有开放加入的角色。你可以自己创建工作区，或者请管理员发送邀请。",
+    "members_other": "{{count}} 位成员",
+    "join": "加入",
+    "joining": "正在加入…",
+    "failed": "加入失败，请重试。",
+    "create_instead": "改为创建自己的工作区"
+  },
+  "creation_disabled": {
+    "title": "已禁用创建工作区",
+    "description": "该 Goosar 实例不允许创建新的工作区，请联系管理员邀请你加入已有工作区。"
+  },
+  "no_access": {
+    "title": "工作区不可用",
+    "description": "该工作区不存在，或你没有访问权限。",
+    "go_to_workspaces": "前往我的工作区",
+    "sign_in_different": "使用其他账号登录"
+  },
+  "capabilities": {
+    "title": "你在这里能做什么",
+    "lede": "简单说说助手每天能帮你做的事。用你自己的话告诉它要做什么就行。",
+    "role_eyebrow": "工作区角色",
+    "role_no_detail_note": "这个角色下助手具体能帮什么，暂时还没有写。下面是它在任何工作中都能做的事。",
+    "no_role_note": "这个工作区没有绑定特定角色——下面是助手为所有人做的事。",
+    "baseline_heading": "所有角色都有",
+    "baseline_ask_title": "用平常的话提要求",
+    "baseline_ask_body": "用普通语言说明要做什么即可，不必了解背后是怎么运作的。",
+    "baseline_docs_title": "处理文档",
+    "baseline_docs_body": "起草、改写、校对文档、表格或演示稿。",
+    "baseline_find_title": "查找并汇总",
+    "baseline_find_body": "把零散的信息汇成一个清楚的答复，并标明每条的来源。",
+    "baseline_track_title": "让工作一目了然",
+    "baseline_track_body": "任务、回复和成品文件都留在一处，随时可以回头查看。",
+    "boundary_heading": "谁负责设置什么",
+    "boundary_admin_title": "整个工作区统一设置",
+    "boundary_admin_body": "AI 连接、助手，以及工作工具的访问权限都已设置好。这里没有需要你了解或设置的东西。",
+    "boundary_admin_body_unconfirmed": "AI 连接、助手，以及工作工具的访问权限，都是为整个工作区统一设置一次的，通常由管理员完成。",
+    "boundary_you_title": "由你完成",
+    "boundary_you_body": "工作工具的个人密钥。它们以你的身份工作，只能打开对你开放的内容——所以只有你能填。",
+    "llm_ready": "AI 连接已设置",
+    "services_heading": "你的工作工具",
+    "badge_admin_provided": "由管理员设置",
+    "badge_admin_off": "管理员暂时关闭",
+    "badge_you_missing": "需要你的密钥",
+    "badge_you_filled": "已填写密钥",
+    "badge_you_none": "不需要密钥",
+    "saved_not_verified": "「已填写密钥」只表示值已保存。要确认它是否真的可用，请在服务卡片上展开「如何获取访问权限」，查看其中的「如何确认可用」。",
+    "open_setup": "在哪里填写密钥",
+    "sample_tasks_heading": "现在就试试",
+    "sample_tasks_lede": "这不是演示：点一下就会生成一条真实任务，助手接手处理，结果在新标签页里打开。",
+    "sample_task_run": "运行",
+    "sample_task_run_again": "再运行一次",
+    "sample_task_created": "任务 {{identifier}} 已创建，助手已经接手。",
+    "sample_task_failed": "任务没能创建，请再试一次。",
+    "sample_task_needs_key": "需要你的密钥：{{services}}",
+    "sample_task_needs_key_body": "在助手能以你的身份登录该服务之前，这件事做不了。密钥要由你来填，怎么获取写在说明里。",
+    "sample_task_no_helper": "这个空间的助手还没准备好。准备好之后，就可以从这里运行了。"
+  },
+  "credentials_banner": {
+    "title": "有工作工具还缺少你的密钥",
+    "body": "助手暂时还不能处理这些：{{services}}。这些密钥只有你能填写，说明里写了每一个从哪里获取。",
+    "action": "看看该怎么做",
+    "dismiss": "关闭"
+  },
+  "role_setup": {
+    "title": "设置你的角色",
+    "autopilots_title_other": "自动化（{{count}}）：启用",
+    "autopilots_body": "你的角色自带自动化。它们默认暂停，在你确认之前不会运行。",
+    "autopilots_action": "启用",
+    "autopilots_enabling": "启用中…",
+    "autopilots_enabled": "自动化已启用",
+    "autopilots_partial_other": "有 {{count}} 个自动化未能启用",
+    "runtime_title": "智能体还没有机器",
+    "runtime_body": "在连接一台机器并对工作区开放之前，任何任务都无法运行。"
+  }
+}

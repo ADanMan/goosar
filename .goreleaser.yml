@@ -1,0 +1,107 @@
+version: 2
+
+project_name: goosar
+
+builds:
+  - id: goosar
+    main: ./cmd/goosar
+    dir: server
+    binary: goosar
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.ShortCommit}}
+      - -X main.date={{.Date}}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  # Legacy archive name kept so already-released CLIs (whose `goosar update`
+  # looks for `goosar_{os}_{arch}.{ext}`) can keep self-updating. Remove
+  # once those versions are no longer in use.
+  - id: legacy
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+  # Versioned archive name used by current CLI / install scripts /
+  # desktop bootstrap going forward.
+  - id: versioned
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .ProjectName }}-cli-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+# A tag carrying a prerelease suffix (v1.2.3-rc1) publishes as a GitHub
+# pre-release; a plain vX.Y.Z publishes stable. Without this, GoReleaser's
+# default (`prerelease: false`) marks EVERY tag stable — v0.2.3-rc1 was cut
+# as a baseline marker, published flagged "Latest", and had to be corrected
+# by hand afterwards. The same rule already exists in release.yml, where
+# `is_stable` is false for any tag containing `-` and withholds the Docker
+# `latest` tag; `auto` applies it to the release object too, so the two
+# cannot disagree.
+release:
+  prerelease: auto
+  # #203: the local release pipeline is retryable by design — a failure in a
+  # later stage (desktop, helm) leaves a GitHub release with assets already
+  # uploaded, and the next run must REPLACE them (they may come from an older
+  # position of the same tag), not fail with 422 already_exists.
+  replace_existing_artifacts: true
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+# Homebrew publishing is off for now. GoReleaser runs this step last, so a
+# failure here fails the whole release AFTER the binaries, GHCR images and
+# Helm chart have already been built and pushed — v0.2.1 died exactly that
+# way, on `GET /repos/adanman/homebrew-tap: 401 Bad credentials`.
+#
+# Two things are missing, not one: the HOMEBREW_TAP_GITHUB_TOKEN secret is
+# not set on this repo, and adanman/homebrew-tap does not appear to exist
+# yet. Re-enabling needs both — with only the token you get a 404 instead
+# of a 401.
+#
+# Install paths that stay working meanwhile: scripts/install.sh already
+# falls back to downloading the release binary when brew is absent or the
+# formula is missing, and the GitHub Release still carries the CLI archives.
+# Docs still mention `brew install adanman/tap/goosar`, which will
+# 404 until this block comes back.
+#
+# brews:
+#   - name: goosar
+#     ids:
+#       - versioned
+#     repository:
+#       owner: adanman
+#       name: homebrew-tap
+#       branch: main
+#       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+#     directory: Formula
+#     homepage: "https://github.com/adanman/goosar"
+#     description: "Goosar CLI — local agent runtime and management tool for the Goosar platform"
+#     license: "Apache-2.0"
+#     install: |
+#       bin.install "goosar"
+#     test: |
+#       system "#{bin}/goosar", "version"

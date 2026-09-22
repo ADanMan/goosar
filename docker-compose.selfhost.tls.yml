@@ -1,0 +1,58 @@
+# TLS for the hop to the bundled PostgreSQL (#386).
+#
+# The base stack talks to Postgres over the private compose network with
+# sslmode=disable, because the bundled server ships without certificates.
+# This overlay turns TLS on for stands that need the database hop encrypted
+# and authenticated (an ИБ review, a shared Docker host, a stand where the
+# compose network is not the trust boundary you want).
+#
+# Usage:
+#   bash scripts/selfhost-pg-tls.sh            # writes ./certs/{ca.crt,server.crt,server.key}
+#   docker compose -f docker-compose.selfhost.yml \
+#                  -f docker-compose.selfhost.tls.yml up -d
+#
+# The generated server certificate has CN/SAN "postgres", which is the compose
+# service name the backend dials, so sslmode=verify-full validates — that is
+# the default here on purpose. The knob is POSTGRES_TLS_SSLMODE, deliberately
+# NOT the base file's POSTGRES_SSLMODE: that one ships as "disable" in
+# .env.example, so reusing it would let the overlay silently fall back to
+# plaintext. Set POSTGRES_TLS_SSLMODE=require to encrypt without verifying the
+# certificate.
+#
+# For an EXTERNAL managed database do not use this overlay: set
+# POSTGRES_SSLMODE=require in .env against the base file instead, and see
+# SELF_HOSTING.md «TLS для базы данных» for the verify-full variant.
+
+services:
+  postgres:
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Per file, not the whole ./certs directory: that directory also holds
+      # ca.key, the key that signs the certificate the backend trusts with
+      # sslmode=verify-full. Code execution in either container must not hand
+      # over the ability to mint a certificate for the name "postgres".
+      - ./certs/server.crt:/certs/server.crt:ro
+      - ./certs/server.key:/certs/server.key:ro
+    # PostgreSQL refuses a key file that is group/world readable or not owned
+    # by the database user, and a bind-mounted file keeps its host ownership.
+    # Copying it into place at boot is the portable fix: this shell runs as
+    # root, then hands off to the image's own entrypoint, which drops to the
+    # postgres user exactly as it does without the overlay.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        install -d -m 700 -o postgres -g postgres /var/lib/postgresql/tls &&
+        install -m 600 -o postgres -g postgres /certs/server.crt /certs/server.key /var/lib/postgresql/tls/ &&
+        exec docker-entrypoint.sh postgres
+        -c ssl=on
+        -c ssl_cert_file=/var/lib/postgresql/tls/server.crt
+        -c ssl_key_file=/var/lib/postgresql/tls/server.key
+
+  backend:
+    volumes:
+      - backend_uploads:/app/data/uploads
+      # The backend needs the CA certificate and nothing else — not the CA
+      # private key, and not the server key either.
+      - ./certs/ca.crt:/certs/ca.crt:ro
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-goosar}:${POSTGRES_PASSWORD:-goosar}@postgres:5432/${POSTGRES_DB:-goosar}?sslmode=${POSTGRES_TLS_SSLMODE:-verify-full}&sslrootcert=/certs/ca.crt

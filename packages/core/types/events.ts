@@ -1,0 +1,485 @@
+import type { Issue, IssueMetadata, IssueReaction } from './issue';
+import type { IssueProperty, IssuePropertyValues } from './property';
+import type { Agent } from './agent';
+import type { InboxItem } from './inbox';
+import type { Comment, Reaction } from './comment';
+import type { TimelineEntry } from './activity';
+import type { Workspace, MemberWithUser, Invitation } from './workspace';
+import type { Project } from './project';
+import type { Label } from './label';
+
+export type WSEventType =
+  | 'issue:created'
+  | 'issue:updated'
+  | 'issue:deleted'
+  | 'comment:created'
+  | 'comment:updated'
+  | 'comment:deleted'
+  | 'comment:resolved'
+  | 'comment:unresolved'
+  | 'agent:status'
+  | 'agent:created'
+  | 'agent:archived'
+  | 'agent:restored'
+  | 'task:queued'
+  | 'task:dispatch'
+  | 'task:running'
+  | 'task:waiting_local_directory'
+  | 'task:progress'
+  | 'task:completed'
+  | 'task:failed'
+  | 'task:message'
+  | 'task:cancelled'
+  | 'inbox:new'
+  | 'inbox:read'
+  | 'inbox:archived'
+  | 'inbox:unarchived'
+  | 'inbox:batch-read'
+  | 'inbox:batch-archived'
+  | 'workspace:updated'
+  | 'workspace:deleted'
+  | 'member:added'
+  | 'member:updated'
+  | 'member:removed'
+  | 'daemon:heartbeat'
+  | 'daemon:register'
+  | 'skill:created'
+  | 'skill:updated'
+  | 'skill:deleted'
+  | 'subscriber:added'
+  | 'subscriber:removed'
+  | 'activity:created'
+  | 'reaction:added'
+  | 'reaction:removed'
+  | 'issue_reaction:added'
+  | 'issue_reaction:removed'
+  | 'chat:message'
+  | 'chat:done'
+  | 'chat:cancel_finalized'
+  | 'chat:session_read'
+  | 'chat:session_deleted'
+  | 'chat:session_updated'
+  | 'project:created'
+  | 'project:updated'
+  | 'project:deleted'
+  | 'squad:created'
+  | 'squad:updated'
+  | 'squad:deleted'
+  | 'label:created'
+  | 'label:updated'
+  | 'label:deleted'
+  | 'issue_labels:changed'
+  | 'issue_metadata:changed'
+  | 'issue_properties:changed'
+  | 'property:created'
+  | 'property:updated'
+  | 'pin:created'
+  | 'pin:deleted'
+  | 'pin:reordered'
+  | 'invitation:created'
+  | 'invitation:accepted'
+  | 'invitation:declined'
+  | 'invitation:revoked'
+  | 'github_installation:created'
+  | 'github_installation:deleted'
+  | 'pull_request:linked'
+  | 'pull_request:updated'
+  | 'pull_request:unlinked';
+
+export interface WSMessage<T = unknown> {
+  type: WSEventType;
+  payload: T;
+  actor_id?: string;
+  actor_type?: string;
+}
+
+export interface IssueCreatedPayload {
+  issue: Issue;
+}
+
+export interface IssueUpdatedPayload {
+  issue: Issue;
+  assignee_changed?: boolean;
+  status_changed?: boolean;
+  project_changed?: boolean;
+}
+
+export interface IssueDeletedPayload {
+  issue_id: string;
+}
+
+export interface IssueLabelsChangedPayload {
+  issue_id: string;
+  labels: Label[];
+}
+
+export interface IssueMetadataChangedPayload {
+  issue_id: string;
+  metadata: IssueMetadata;
+}
+
+export interface IssuePropertiesChangedPayload {
+  issue_id: string;
+  properties: IssuePropertyValues;
+}
+
+export interface PropertyChangedPayload {
+  property: IssueProperty;
+}
+
+export interface AgentStatusPayload {
+  agent: Agent;
+}
+
+export interface AgentCreatedPayload {
+  agent: Agent;
+}
+
+export interface AgentArchivedPayload {
+  agent: Agent;
+}
+
+export interface AgentRestoredPayload {
+  agent: Agent;
+}
+
+export interface InboxNewPayload {
+  item: InboxItem;
+}
+
+export interface InboxReadPayload {
+  item_id: string;
+  recipient_id: string;
+}
+
+export interface InboxArchivedPayload {
+  item_id: string;
+  recipient_id: string;
+}
+
+export interface InboxUnarchivedPayload {
+  item_id: string;
+  issue_id: string | null;
+  recipient_id: string;
+}
+
+export interface InboxBatchReadPayload {
+  recipient_id: string;
+  count: number;
+}
+
+export interface InboxBatchArchivedPayload {
+  recipient_id: string;
+  count: number;
+}
+
+export interface CommentCreatedPayload {
+  comment: Comment;
+}
+
+export interface CommentUpdatedPayload {
+  comment: Comment;
+}
+
+export interface CommentDeletedPayload {
+  comment_id: string;
+  issue_id: string;
+}
+
+export interface CommentResolvedPayload {
+  comment: Comment;
+}
+
+export interface CommentUnresolvedPayload {
+  comment: Comment;
+}
+
+export interface WorkspaceUpdatedPayload {
+  workspace: Workspace;
+}
+
+export interface WorkspaceDeletedPayload {
+  workspace_id: string;
+}
+
+export interface MemberUpdatedPayload {
+  member: MemberWithUser;
+}
+
+export interface MemberAddedPayload {
+  member: MemberWithUser;
+  workspace_id: string;
+  workspace_name?: string;
+}
+
+export interface MemberRemovedPayload {
+  member_id: string;
+  user_id: string;
+  workspace_id: string;
+}
+
+export interface SubscriberAddedPayload {
+  issue_id: string;
+  user_type: string;
+  user_id: string;
+  reason: string;
+}
+
+export interface SubscriberRemovedPayload {
+  issue_id: string;
+  user_type: string;
+  user_id: string;
+}
+
+export interface ActivityCreatedPayload {
+  issue_id: string;
+  entry: TimelineEntry;
+}
+
+export interface TaskMessagePayload {
+  task_id: string;
+  issue_id: string;
+  chat_session_id?: string;
+  seq: number;
+  type: 'text' | 'thinking' | 'tool_use' | 'tool_result' | 'error';
+  tool?: string;
+  content?: string;
+  input?: Record<string, unknown>;
+  output?: string;
+  created_at?: string;
+}
+
+export interface TaskQueuedPayload {
+  task_id: string;
+  agent_id: string;
+  issue_id: string;
+  chat_session_id?: string;
+  status: string;
+}
+
+export interface TaskDispatchPayload {
+  task_id: string;
+  agent_id: string;
+  issue_id: string;
+  runtime_id: string;
+  chat_session_id?: string;
+}
+
+export interface TaskRunningPayload {
+  task_id: string;
+  agent_id: string;
+  issue_id: string;
+  chat_session_id?: string;
+  status: string;
+}
+
+export interface TaskWaitingLocalDirectoryPayload {
+  task_id: string;
+  agent_id: string;
+  issue_id: string;
+  chat_session_id?: string;
+  status: string;
+  wait_reason?: string;
+}
+
+export interface TaskCompletedPayload {
+  task_id: string;
+  agent_id: string;
+  issue_id: string;
+  chat_session_id?: string;
+  status: string;
+}
+
+export interface TaskFailedPayload {
+  task_id: string;
+  agent_id: string;
+  issue_id: string;
+  chat_session_id?: string;
+  status: string;
+}
+
+export interface TaskCancelledPayload {
+  task_id: string;
+  agent_id: string;
+  issue_id: string;
+  chat_session_id?: string;
+  status: string;
+}
+
+export interface ReactionAddedPayload {
+  reaction: Reaction;
+  issue_id: string;
+}
+
+export interface ReactionRemovedPayload {
+  comment_id: string;
+  issue_id: string;
+  emoji: string;
+  actor_type: string;
+  actor_id: string;
+}
+
+export interface IssueReactionAddedPayload {
+  reaction: IssueReaction;
+  issue_id: string;
+}
+
+export interface IssueReactionRemovedPayload {
+  issue_id: string;
+  emoji: string;
+  actor_type: string;
+  actor_id: string;
+}
+
+export interface ChatMessageEventPayload {
+  chat_session_id: string;
+  message_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  task_id?: string;
+  created_at: string;
+}
+
+export interface ChatDonePayload {
+  chat_session_id: string;
+  task_id: string;
+  message_id?: string;
+  content?: string;
+  elapsed_ms?: number;
+  created_at?: string;
+  message_kind?: import('./chat').ChatMessageKind;
+}
+
+export interface ChatCancelFinalizedPayload {
+  outcome: 'stopped' | 'restored';
+  chat_session_id: string;
+  task_id: string;
+  initiator_user_id?: string;
+  message_id?: string;
+  content?: string;
+  message_kind?: import('./chat').ChatMessageKind;
+  created_at?: string;
+  elapsed_ms?: number;
+}
+
+export interface ChatSessionReadPayload {
+  chat_session_id: string;
+}
+
+export interface ChatSessionDeletedPayload {
+  chat_session_id: string;
+}
+
+export interface ProjectCreatedPayload {
+  project: Project;
+}
+
+export interface ProjectUpdatedPayload {
+  project: Project;
+}
+
+export interface ProjectDeletedPayload {
+  project_id: string;
+}
+
+export interface InvitationCreatedPayload {
+  invitation: Invitation;
+  workspace_name?: string;
+}
+
+export interface InvitationAcceptedPayload {
+  invitation_id: string;
+  member: MemberWithUser;
+}
+
+export interface InvitationDeclinedPayload {
+  invitation_id: string;
+  invitee_email: string;
+}
+
+export interface InvitationRevokedPayload {
+  invitation_id: string;
+  invitee_email: string;
+}
+
+export interface WSEventPayloadMap {
+  'issue:created': IssueCreatedPayload;
+  'issue:updated': IssueUpdatedPayload;
+  'issue:deleted': IssueDeletedPayload;
+  'issue_labels:changed': IssueLabelsChangedPayload;
+  'issue_properties:changed': IssuePropertiesChangedPayload;
+  'property:created': PropertyChangedPayload;
+  'property:updated': PropertyChangedPayload;
+  'issue_reaction:added': IssueReactionAddedPayload;
+  'issue_reaction:removed': IssueReactionRemovedPayload;
+  'comment:created': CommentCreatedPayload;
+  'comment:updated': CommentUpdatedPayload;
+  'comment:deleted': CommentDeletedPayload;
+  'comment:resolved': CommentResolvedPayload;
+  'comment:unresolved': CommentUnresolvedPayload;
+  'reaction:added': ReactionAddedPayload;
+  'reaction:removed': ReactionRemovedPayload;
+  'agent:status': AgentStatusPayload;
+  'agent:created': AgentCreatedPayload;
+  'agent:archived': AgentArchivedPayload;
+  'agent:restored': AgentRestoredPayload;
+  'task:queued': TaskQueuedPayload;
+  'task:dispatch': TaskDispatchPayload;
+  'task:running': TaskRunningPayload;
+  'task:waiting_local_directory': TaskWaitingLocalDirectoryPayload;
+  'task:completed': TaskCompletedPayload;
+  'task:failed': TaskFailedPayload;
+  'task:message': TaskMessagePayload;
+  'task:cancelled': TaskCancelledPayload;
+  'task:progress': unknown;
+  'inbox:new': InboxNewPayload;
+  'inbox:read': InboxReadPayload;
+  'inbox:archived': InboxArchivedPayload;
+  'inbox:unarchived': InboxUnarchivedPayload;
+  'inbox:batch-read': InboxBatchReadPayload;
+  'inbox:batch-archived': InboxBatchArchivedPayload;
+  'workspace:updated': WorkspaceUpdatedPayload;
+  'workspace:deleted': WorkspaceDeletedPayload;
+  'member:added': MemberAddedPayload;
+  'member:updated': MemberUpdatedPayload;
+  'member:removed': MemberRemovedPayload;
+  'subscriber:added': SubscriberAddedPayload;
+  'subscriber:removed': SubscriberRemovedPayload;
+  'activity:created': ActivityCreatedPayload;
+  'chat:message': ChatMessageEventPayload;
+  'chat:done': ChatDonePayload;
+  'chat:cancel_finalized': ChatCancelFinalizedPayload;
+  'chat:session_read': ChatSessionReadPayload;
+  'chat:session_deleted': ChatSessionDeletedPayload;
+  'chat:session_updated': unknown;
+  'project:created': ProjectCreatedPayload;
+  'project:updated': ProjectUpdatedPayload;
+  'project:deleted': ProjectDeletedPayload;
+  'invitation:created': InvitationCreatedPayload;
+  'invitation:accepted': InvitationAcceptedPayload;
+  'invitation:declined': InvitationDeclinedPayload;
+  'invitation:revoked': InvitationRevokedPayload;
+  'daemon:heartbeat': unknown;
+  'daemon:register': unknown;
+  'skill:created': unknown;
+  'skill:updated': unknown;
+  'skill:deleted': unknown;
+  'squad:created': unknown;
+  'squad:updated': unknown;
+  'squad:deleted': unknown;
+  'label:created': unknown;
+  'label:updated': unknown;
+  'label:deleted': unknown;
+  'pin:created': unknown;
+  'pin:deleted': unknown;
+  'pin:reordered': unknown;
+  'github_installation:created': unknown;
+  'github_installation:deleted': unknown;
+  'pull_request:linked': unknown;
+  'pull_request:updated': unknown;
+  'pull_request:unlinked': unknown;
+}
+
+export type WSEventPayload<E extends WSEventType> = E extends keyof WSEventPayloadMap
+  ? WSEventPayloadMap[E]
+  : unknown;

@@ -1,0 +1,188 @@
+---
+title: Участие в разработке
+description: Порядок локальной разработки для тех, кто вносит изменения в код Goosar.
+---
+
+## Модель разработки [#development-model]
+
+Для локальной разработки используется один общий контейнер PostgreSQL и по одной базе данных на каждый checkout.
+
+- Основной checkout обычно использует `.env` и `POSTGRES_DB=goosar`.
+- Каждый Git worktree использует свой `.env.worktree`.
+- Все checkout подключаются к одному хосту PostgreSQL: `localhost:5433`.
+- Изоляция происходит на уровне базы данных, а не отдельным проектом Docker Compose.
+- Порты бэкенда и фронтенда при этом уникальны для каждого worktree.
+
+## Требования [#prerequisites]
+
+- Node.js `v20+`
+- `pnpm` `v10.28+`
+- Go `v1.26+`
+- Docker
+
+## Первичная настройка [#first-time-setup]
+
+### Основной checkout [#main-checkout]
+
+```bash
+cp .env.example .env
+make setup-main
+```
+
+Что делает `make setup-main`:
+
+- устанавливает зависимости JavaScript командой `pnpm install`;
+- проверяет, что общий контейнер PostgreSQL запущен;
+- создаёт базу данных приложения, если её нет;
+- применяет к ней все миграции.
+
+Запуск приложения:
+
+```bash
+make start-main
+```
+
+### Worktree [#worktree]
+
+Из каталога worktree:
+
+```bash
+make worktree-env
+make setup-worktree
+```
+
+Запуск приложения в worktree:
+
+```bash
+make start-worktree
+```
+
+## Ежедневная работа [#daily-workflow]
+
+### Основной checkout [#daily-main-checkout]
+
+```bash
+make start-main
+make stop-main
+make check-main
+```
+
+### Worktree под новую функцию [#feature-worktree]
+
+```bash
+git worktree add ../goosar-feature -b feat/my-change main
+cd ../goosar-feature
+make worktree-env
+make setup-worktree
+make start-worktree
+```
+
+Повседневные команды:
+
+```bash
+make start-worktree
+make stop-worktree
+make check-worktree
+```
+
+## Одновременный запуск основного checkout и worktree [#running-main-and-worktree-simultaneously]
+
+Это штатный сценарий. Оба checkout используют один контейнер PostgreSQL, но разные базы данных и порты:
+
+| | Основной checkout | Worktree |
+|---|---|---|
+| База данных | `goosar` | `goosar_my_feature_702` |
+| Порт бэкенда | `8081` | генерируется (например, `18782`) |
+| Порт фронтенда | `3001` | генерируется (например, `13702`) |
+
+## Команды [#commands]
+
+```bash
+# Фронтенд (все команды идут через Turborepo)
+pnpm install
+pnpm dev:web          # dev-сервер Next.js (порт 3001)
+pnpm dev:desktop      # Electron в режиме разработки (electron-vite, HMR)
+pnpm build            # сборка всех фронтенд-приложений
+pnpm typecheck        # проверка типов TypeScript
+pnpm lint             # ESLint
+pnpm test             # тесты TS (Vitest)
+
+# Бэкенд (Go)
+make dev              # запуск Go-сервера (порт 8081)
+make daemon           # запуск локального демона
+make build            # сборка бинарников сервера и CLI
+make test             # тесты Go
+make sqlc             # перегенерация кода sqlc
+make migrate-up       # применить миграции БД
+make migrate-down     # откатить миграции
+```
+
+## Тестирование [#testing]
+
+Запуск всех локальных проверок:
+
+```bash
+make check
+```
+
+Команда выполняет:
+
+1. проверку типов TypeScript;
+2. модульные тесты TypeScript;
+3. тесты Go;
+4. сквозные тесты Playwright.
+
+## Устранение неполадок [#troubleshooting]
+
+### Нет файла окружения [#missing-env-file]
+
+Создайте нужный файл окружения:
+
+```bash
+# Основной checkout
+cp .env.example .env
+
+# Worktree
+make worktree-env
+```
+
+### Как узнать, какую базу использует checkout [#check-which-database-a-checkout-uses]
+
+```bash
+cat .env           # или .env.worktree
+```
+
+Найдите `POSTGRES_DB`, `DATABASE_URL`, `PORT`, `FRONTEND_PORT`.
+
+### Список всех локальных баз данных [#list-all-local-databases]
+
+```bash
+docker compose exec -T postgres psql -U goosar -d postgres \
+  -At -c "select datname from pg_database order by datname;"
+```
+
+### Полный сброс [#destructive-reset]
+
+Остановить PostgreSQL, сохранив локальные базы:
+
+```bash
+make db-down
+```
+
+Сбросить только базу текущего checkout: команда удаляет `POSTGRES_DB`, создаёт её заново и повторно применяет все миграции. Базы других worktree не затрагиваются.
+
+```bash
+make stop
+make db-reset
+make start
+```
+
+> `make db-reset` не запустится, если `DATABASE_URL` указывает на удалённый хост.
+
+Стереть все локальные данные PostgreSQL:
+
+```bash
+docker compose down -v
+```
+
+> **Предупреждение.** Команда удаляет общий том Docker и все базы данных. После неё нужно снова выполнить `make setup-main` или `make setup-worktree`.

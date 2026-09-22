@@ -1,0 +1,20 @@
+# Dependencies and build output
+node_modules/
+dist/
+build/
+out/
+.next/
+.turbo/
+.source/
+coverage/
+android/
+ios/
+next-env.d.ts
+
+# Generated — regenerated from a non-Prettier source.
+packages/core/paths/reserved-slugs.ts
+
+# Lockfiles and vendored/third-party content
+pnpm-lock.yaml
+server/internal/agenttmpl/vendored/
+apps/desktop/resources-agent/

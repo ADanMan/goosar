@@ -1,0 +1,458 @@
+# Self-hosting Docker Compose — starts PostgreSQL, backend, and frontend.
+#
+# Services bind to 127.0.0.1 only. For cross-machine or public access, front
+# them with a reverse proxy (Caddy / nginx / Cloudflare Tunnel) that terminates
+# TLS and forwards to 127.0.0.1:8081 (backend) and 127.0.0.1:3001 (frontend).
+# Do NOT change these bindings to 0.0.0.0 — Docker bypasses host firewalls
+# (UFW/iptables) by default, so the raw ports would be exposed to the internet
+# with the default Postgres credentials. See:
+#   apps/docs/content/docs/self-host-quickstart.mdx
+#
+# Usage:
+#   cp .env.example .env
+#   # Edit .env — set JWT_SECRET at minimum (openssl rand -hex 32);
+#   # compose refuses to start without it.
+#   docker compose -f docker-compose.selfhost.yml up -d
+#
+# Frontend: http://localhost:${FRONTEND_PORT:-3001}
+# Backend:  http://localhost:${BACKEND_PORT:-8081}
+#
+# SINGLE NODE BY DESIGN (#397). This stack is one machine: one Postgres, one
+# backend, one frontend. It survives a process crash, a container OOM, and a
+# host reboot (restart: unless-stopped + healthchecks below), and its data
+# survives on named volumes you back up. It does NOT survive the machine —
+# there is no second node to fail over to, and running `docker compose up`
+# twice against the same volumes corrupts them rather than scaling anything.
+#
+# Move to the Helm chart (deploy/helm/goosar) when you need the API to stay
+# up through a node loss or a rolling upgrade: several backend replicas behind
+# a Service, an external/HA Postgres, and Redis for shared state. See
+# SELF_HOSTING.md «Высокая доступность».
+
+name: goosar
+
+services:
+  postgres:
+    # Pinned by digest (supply-chain: the tag is mutable, the digest is not).
+    # The tag stays in the ref for readability; Docker uses the digest. To move
+    # to a new pg17 build: `docker manifest inspect pgvector/pgvector:pg17`
+    # (or pull it) and replace the sha256 below with the multi-arch index
+    # digest. The offline kit (offline/make-kit.sh) derives and pulls this
+    # exact ref, so the pinned digest travels into the air-gapped image tar too.
+    image: pgvector/pgvector:pg17@sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-goosar}
+      POSTGRES_USER: ${POSTGRES_USER:-goosar}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-goosar}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    # Log rotation (#434). Docker's default json-file driver keeps every line
+    # a container ever wrote until the disk is full; a debug-chatty backend
+    # gets there in weeks. Caps are overridable from .env (LOG_MAX_SIZE /
+    # LOG_MAX_FILE) — 50m x 5 keeps ~250 MB of recent history per service.
+    logging:
+      driver: json-file
+      options:
+        max-size: ${LOG_MAX_SIZE:-50m}
+        max-file: "${LOG_MAX_FILE:-5}"
+    # Memory cap (#439). Without one, an unbounded backend or a heavy query
+    # lets the host OOM-killer pick a victim — usually Postgres, which dies
+    # with nothing in the compose logs to explain it. `mem_limit` is the
+    # non-swarm knob Compose honours directly; `deploy.resources` only applies
+    # under swarm. Defaults match the Helm chart's 1Gi limits so a stand
+    # behaves the same on both. Override per service in .env; a stack that
+    # needs more must also have the host RAM for it.
+    mem_limit: ${POSTGRES_MEM_LIMIT:-1g}
+    # The official entrypoint starts as root to fix up the data directory and
+    # then drops to the postgres user itself, so `user:` / `read_only:` do not
+    # apply here — no-new-privileges is the part that does (#384).
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-goosar} -d ${POSTGRES_DB:-goosar}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    # GOOSAR_BACKEND_DIGEST, when set to "@sha256:<digest>", pins the exact
+    # image the release tag resolved to (a release tag is still mutable at the
+    # registry). Unset (default) leaves the ref as repo:tag — byte-for-byte the
+    # previous behavior. When both are present Docker honors the digest; the
+    # tag stays for readability. Get the digest after a release with:
+    #   docker buildx imagetools inspect ghcr.io/adanman/goosar-backend:<tag>
+    image: ${GOOSAR_BACKEND_IMAGE:-ghcr.io/adanman/goosar-backend}:${GOOSAR_IMAGE_TAG:-latest}${GOOSAR_BACKEND_DIGEST:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8081}:8080"
+    volumes:
+      - backend_uploads:/app/data/uploads
+    # Non-root + hardened runtime (#384). The image already declares
+    # USER goosar (uid 1001); `user:` restates it so a stand cannot silently
+    # regain root by pulling an older tag. The only writable paths the server
+    # needs are the uploads volume and /tmp (multipart uploads over the
+    # in-memory limit spool through os.TempDir()), so the root filesystem can
+    # be read-only.
+    #
+    # UPGRADE NOTE: a backend_uploads volume created by a pre-#384 image is
+    # root-owned and uid 1001 cannot write it. Fix it once:
+    #   docker compose -f docker-compose.selfhost.yml run --rm --no-deps --user root --cap-add CHOWN \
+    #     --entrypoint sh backend -c 'chown -R 1001:1001 /app/data/uploads'
+    # (`compose run` inherits cap_drop ALL below, so even root needs CHOWN
+    # added back for that one-off.) The entrypoint warns at startup when
+    # this is still pending.
+    user: "1001:1001"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      # sslmode for the hop to Postgres (#386). Default stays "disable":
+      # the bundled Postgres ships without certificates and both containers sit
+      # on a private compose network, so requiring TLS by default would break
+      # every existing stand on upgrade. To turn TLS on, generate certificates
+      # with scripts/selfhost-pg-tls.sh and add the overlay:
+      #   docker compose -f docker-compose.selfhost.yml \
+      #                  -f docker-compose.selfhost.tls.yml up -d
+      # For an external managed database set POSTGRES_SSLMODE=require (or
+      # verify-full with a CA, see SELF_HOSTING.md «TLS для базы данных»).
+      DATABASE_URL: postgres://${POSTGRES_USER:-goosar}:${POSTGRES_PASSWORD:-goosar}@postgres:5432/${POSTGRES_DB:-goosar}?sslmode=${POSTGRES_SSLMODE:-disable}
+      PORT: "8080"
+      METRICS_ADDR: ${METRICS_ADDR:-}
+      # Provisioning store (#231): compose only forwards variables listed
+      # here — an .env entry alone never reaches the container. Empty means
+      # "store disabled", exactly like an unset variable inside the backend.
+      GOOSAR_RUNTIME_RECONNECT_GRACE: ${GOOSAR_RUNTIME_RECONNECT_GRACE:-}
+      GOOSAR_PROVISIONING_STORE: ${GOOSAR_PROVISIONING_STORE:-}
+      GOOSAR_PROVISIONING_LOCAL_PREFIX: ${GOOSAR_PROVISIONING_LOCAL_PREFIX:-}
+      GOOSAR_PROVISIONING_OCI_URL: ${GOOSAR_PROVISIONING_OCI_URL:-}
+      GOOSAR_PROVISIONING_OCI_REPOSITORY: ${GOOSAR_PROVISIONING_OCI_REPOSITORY:-}
+      GOOSAR_PROVISIONING_OCI_USERNAME: ${GOOSAR_PROVISIONING_OCI_USERNAME:-}
+      GOOSAR_PROVISIONING_OCI_PASSWORD: ${GOOSAR_PROVISIONING_OCI_PASSWORD:-}
+      GOOSAR_PROVISIONING_OCI_PACKAGES: ${GOOSAR_PROVISIONING_OCI_PACKAGES:-}
+      GOOSAR_PROVISIONING_SYNC_TIMEOUT: ${GOOSAR_PROVISIONING_SYNC_TIMEOUT:-}
+      # Required — the backend refuses to start in production with an empty
+      # or placeholder signing secret. Generate one: openssl rand -hex 32
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required — generate one with `openssl rand -hex 32` and set it in .env (make selfhost does this automatically)}
+      # Retired signing secrets, verify-only, for a JWT_SECRET rotation
+      # that must not sign everyone out (#388). Empty in steady state.
+      JWT_SECRET_PREVIOUS: ${JWT_SECRET_PREVIOUS:-}
+      # Audit journal retention in days (#389); 0 keeps both journals forever.
+      GOOSAR_AUDIT_RETENTION_DAYS: ${GOOSAR_AUDIT_RETENTION_DAYS:-}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3001}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-noreply@goosar.ru}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-25}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      SMTP_TLS: ${SMTP_TLS:-}
+      SMTP_TLS_INSECURE: ${SMTP_TLS_INSECURE:-false}
+      SMTP_EHLO_NAME: ${SMTP_EHLO_NAME:-}
+      S3_BUCKET: ${S3_BUCKET:-}
+      # No default region: when S3_BUCKET is set, the backend refuses to start
+      # unless the destination is explicit — AWS_ENDPOINT_URL for S3-compatible
+      # storage (MinIO, R2, B2, ...) or S3_REGION for real AWS S3.
+      S3_REGION: ${S3_REGION:-}
+      AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-}
+      S3_USE_PATH_STYLE: ${S3_USE_PATH_STYLE:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      # Local-disk storage knobs — the default backend when S3_BUCKET is unset.
+      # LOCAL_UPLOAD_BASE_URL is what makes buildMarkdownURL persist the public
+      # /uploads/<key> path instead of the auth-required
+      # /api/attachments/<id>/download endpoint, so an <img> in a message body
+      # loads without a token.
+      LOCAL_UPLOAD_DIR: ${LOCAL_UPLOAD_DIR:-}
+      LOCAL_UPLOAD_BASE_URL: ${LOCAL_UPLOAD_BASE_URL:-}
+      ATTACHMENT_DOWNLOAD_MODE: ${ATTACHMENT_DOWNLOAD_MODE:-auto}
+      ATTACHMENT_DOWNLOAD_URL_TTL: ${ATTACHMENT_DOWNLOAD_URL_TTL:-30m}
+      CLOUDFRONT_DOMAIN: ${CLOUDFRONT_DOMAIN:-}
+      CLOUDFRONT_KEY_PAIR_ID: ${CLOUDFRONT_KEY_PAIR_ID:-}
+      CLOUDFRONT_PRIVATE_KEY: ${CLOUDFRONT_PRIVATE_KEY:-}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      # Markdown external-image policy (issue #64): allow (default) | block |
+      # allowlist. block/allowlist stop comment/agent-authored external image
+      # URLs from making every viewer fetch a third-party server; attachments
+      # keep rendering in every mode. GOOSAR_IMAGE_HOSTS (comma-separated
+      # exact hostnames) is honored in allowlist mode only.
+      GOOSAR_EXTERNAL_IMAGES: ${GOOSAR_EXTERNAL_IMAGES:-allow}
+      GOOSAR_IMAGE_HOSTS: ${GOOSAR_IMAGE_HOSTS:-}
+      APP_ENV: ${APP_ENV:-production}
+      # Logging (#434). Format: json (default here — one object per line with
+      # an RFC3339 timestamp, which is what a SIEM wants) or text. Level:
+      # debug|info|warn|error; empty means the built-in default, which is
+      # info on APP_ENV=production. The GOOSAR_-prefixed spellings win when
+      # both are set.
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_LEVEL: ${LOG_LEVEL:-}
+      GOOSAR_LOG_FORMAT: ${GOOSAR_LOG_FORMAT:-}
+      GOOSAR_LOG_LEVEL: ${GOOSAR_LOG_LEVEL:-}
+      GOOSAR_DEV_VERIFICATION_CODE: ${GOOSAR_DEV_VERIFICATION_CODE:-}
+      GOOSAR_APP_URL: ${GOOSAR_APP_URL:-http://localhost:3001}
+      GOOSAR_SHUTDOWN_HOLD_DURATION: ${GOOSAR_SHUTDOWN_HOLD_DURATION:-}
+      ALLOW_SIGNUP: ${ALLOW_SIGNUP:-true}
+      ALLOWED_EMAILS: ${ALLOWED_EMAILS:-}
+      ALLOWED_EMAIL_DOMAINS: ${ALLOWED_EMAIL_DOMAINS:-}
+      DISABLE_WORKSPACE_CREATION: ${DISABLE_WORKSPACE_CREATION:-}
+      # Corporate sign-in (#394). Every value is passed through: an .env the
+      # stack does not forward is the silent break of #231 / #468. Secrets stay
+      # secrets — the client secret and the bind password are read from the
+      # environment and are never logged, audited or served by any endpoint.
+      GOOSAR_AUTH_METHODS: ${GOOSAR_AUTH_METHODS:-}
+      # Second factor (#391): the name an authenticator app shows for this
+      # stand. Empty falls back to the product name; set it when a team runs
+      # more than one deployment, so the entries are told apart on the phone.
+      GOOSAR_TOTP_ISSUER: ${GOOSAR_TOTP_ISSUER:-}
+      GOOSAR_OIDC_ISSUER: ${GOOSAR_OIDC_ISSUER:-}
+      GOOSAR_OIDC_CLIENT_ID: ${GOOSAR_OIDC_CLIENT_ID:-}
+      GOOSAR_OIDC_CLIENT_SECRET: ${GOOSAR_OIDC_CLIENT_SECRET:-}
+      GOOSAR_OIDC_REDIRECT_URL: ${GOOSAR_OIDC_REDIRECT_URL:-}
+      GOOSAR_OIDC_SCOPES: ${GOOSAR_OIDC_SCOPES:-}
+      GOOSAR_OIDC_ADMIN_CLAIM: ${GOOSAR_OIDC_ADMIN_CLAIM:-}
+      GOOSAR_OIDC_ADMIN_VALUE: ${GOOSAR_OIDC_ADMIN_VALUE:-}
+      GOOSAR_OIDC_DISPLAY_NAME: ${GOOSAR_OIDC_DISPLAY_NAME:-}
+      GOOSAR_LDAP_URL: ${GOOSAR_LDAP_URL:-}
+      GOOSAR_LDAP_START_TLS: ${GOOSAR_LDAP_START_TLS:-}
+      GOOSAR_LDAP_BIND_DN: ${GOOSAR_LDAP_BIND_DN:-}
+      GOOSAR_LDAP_BIND_PASSWORD: ${GOOSAR_LDAP_BIND_PASSWORD:-}
+      GOOSAR_LDAP_BASE_DN: ${GOOSAR_LDAP_BASE_DN:-}
+      GOOSAR_LDAP_USER_FILTER: ${GOOSAR_LDAP_USER_FILTER:-}
+      GOOSAR_LDAP_EMAIL_ATTR: ${GOOSAR_LDAP_EMAIL_ATTR:-}
+      GOOSAR_LDAP_NAME_ATTR: ${GOOSAR_LDAP_NAME_ATTR:-}
+      GOOSAR_LDAP_ADMIN_GROUP: ${GOOSAR_LDAP_ADMIN_GROUP:-}
+      GOOSAR_LDAP_DISPLAY_NAME: ${GOOSAR_LDAP_DISPLAY_NAME:-}
+      # Delivery profile: leave empty for cloud-equivalent behavior; set to
+      # "perimeter" on operator-managed closed-network deployments to force
+      # every client self-update channel off (see SELF_HOSTING.md, «Конфигурация»).
+      GOOSAR_DELIVERY_PROFILE: ${GOOSAR_DELIVERY_PROFILE:-}
+      # ADR-0015 stand type: perimeter (default) / demo / dev / local.
+      GOOSAR_DEPLOYMENT_PROFILE: ${GOOSAR_DEPLOYMENT_PROFILE:-}
+      # External skill sources (clawhub, github, skillssh). Leave empty for
+      # the profile default: all enabled on cloud, all disabled on the
+      # perimeter profile. Comma list to enable specific sources, "none" to
+      # disable all (see SELF_HOSTING.md, «Конфигурация»).
+      GOOSAR_SKILL_SOURCES: ${GOOSAR_SKILL_SOURCES:-}
+      # Perimeter allowlist policies (#65/#69): leave empty for the profile
+      # defaults — unrestricted on cloud, the corporate preset surface /
+      # hermes-only on perimeter (see SELF_HOSTING.md, «Конфигурация»).
+      GOOSAR_MCP_ALLOWED_HOSTS: ${GOOSAR_MCP_ALLOWED_HOSTS:-}
+      GOOSAR_MCP_ALLOWED_COMMANDS: ${GOOSAR_MCP_ALLOWED_COMMANDS:-}
+      GOOSAR_ALLOWED_PROVIDERS: ${GOOSAR_ALLOWED_PROVIDERS:-}
+      GITHUB_APP_SLUG: ${GITHUB_APP_SLUG:-}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
+      # Public URL the API is reachable at from the open internet, no
+      # trailing slash. Used to mint absolute webhook URLs for autopilot
+      # webhook triggers. Leave unset behind a same-origin reverse proxy
+      # (e.g. plain localhost dev); the frontend will compose the URL
+      # from window.origin + webhook_path in that case. Headers are
+      # intentionally NOT used to derive this value, to avoid Host /
+      # X-Forwarded-Host spoofing on misconfigured proxies.
+      GOOSAR_PUBLIC_URL: ${GOOSAR_PUBLIC_URL:-}
+      # Comma-separated CIDRs whose source IP is allowed to set
+      # X-Forwarded-For / X-Real-IP for the webhook per-IP rate limiter.
+      # Empty default = headers ignored, RemoteAddr used. Set e.g.
+      # "127.0.0.1/32" when running behind a same-host reverse proxy.
+      GOOSAR_TRUSTED_PROXIES: ${GOOSAR_TRUSTED_PROXIES:-}
+      # Rotation grace window (#388): retired keys, still accepted for
+      # decryption. Empty it once `goosar_admin rotate-secrets` reports 0.
+      # Slack bot integration. GOOSAR_SLACK_SECRET_KEY is the opt-in: unset =
+      # integration disabled. It decrypts the per-installation bot/app tokens,
+      # which are brought by each workspace via OAuth/BYO and stored encrypted
+      # in the database, so this single deployment-wide key is all the operator
+      # needs to set here.
+      GOOSAR_SLACK_SECRET_KEY: ${GOOSAR_SLACK_SECRET_KEY:-}
+      GOOSAR_SLACK_SECRET_KEY_PREVIOUS: ${GOOSAR_SLACK_SECRET_KEY_PREVIOUS:-}
+      # Self-hosted Git provider integration (Forgejo / Gitea / GitLab). This
+      # is a self-host-only feature, so the compose file turns it on by default;
+      # the managed cloud leaves it unset (off). It still needs a valid
+      # GOOSAR_VCS_SECRET_KEY below to actually work.
+      GOOSAR_VCS_INTEGRATION_ENABLED: ${GOOSAR_VCS_INTEGRATION_ENABLED:-true}
+      # VCS integration at-rest encryption key for token-based providers
+      GOOSAR_VCS_SECRET_KEY: ${GOOSAR_VCS_SECRET_KEY:-}
+      GOOSAR_VCS_SECRET_KEY_PREVIOUS: ${GOOSAR_VCS_SECRET_KEY_PREVIOUS:-}
+      # Agent mcp_config at-rest encryption key. mcp_config routinely embeds
+      # MCP server credentials (corporate PATs, gateway bearer tokens), so set
+      # this on every deployment (openssl rand -base64 32). Unset = mcp_config
+      # is stored in PLAINTEXT (startup warning). Setting it later is safe: a
+      # startup backfill encrypts existing rows. Never remove it once set —
+      # encrypted values are unreadable without it.
+      GOOSAR_MCP_SECRET_KEY: ${GOOSAR_MCP_SECRET_KEY:-}
+      GOOSAR_MCP_SECRET_KEY_PREVIOUS: ${GOOSAR_MCP_SECRET_KEY_PREVIOUS:-}
+      # Deployment administrators (#213): seeds the deployment_admin role
+      # while its table is empty (first deployment only); afterwards the
+      # database is authoritative and this list is only compared and logged.
+      GOOSAR_DEPLOYMENT_ADMIN_EMAILS: ${GOOSAR_DEPLOYMENT_ADMIN_EMAILS:-}
+      GOOSAR_DEPLOYMENT_JIRA_URL: ${GOOSAR_DEPLOYMENT_JIRA_URL:-}
+      GOOSAR_DEPLOYMENT_CONFLUENCE_URL: ${GOOSAR_DEPLOYMENT_CONFLUENCE_URL:-}
+      GOOSAR_DEPLOYMENT_EWS_URL: ${GOOSAR_DEPLOYMENT_EWS_URL:-}
+      GOOSAR_DEPLOYMENT_BITRIX24_URL: ${GOOSAR_DEPLOYMENT_BITRIX24_URL:-}
+      GOOSAR_DEPLOYMENT_MCP_GATEWAY_URL: ${GOOSAR_DEPLOYMENT_MCP_GATEWAY_URL:-}
+      GOOSAR_DEPLOYMENT_MAIL_DOMAIN: ${GOOSAR_DEPLOYMENT_MAIL_DOMAIN:-}
+      GOOSAR_DEPLOYMENT_LLM_API_BASE: ${GOOSAR_DEPLOYMENT_LLM_API_BASE:-}
+      GOOSAR_DEPLOYMENT_LLM_MODEL: ${GOOSAR_DEPLOYMENT_LLM_MODEL:-}
+      # Actual LLM gateway credentials (#/api/deployment/client-secrets reads
+      # these three, not the GOOSAR_DEPLOYMENT_LLM_* pair above). Without
+      # them the backend never issues a client secret and every client shows
+      # the AI gateway as unavailable.
+      GOOSAR_LLM_API_KEY: ${GOOSAR_LLM_API_KEY:-}
+      GOOSAR_LLM_BASE_URL: ${GOOSAR_LLM_BASE_URL:-}
+      GOOSAR_LLM_DEFAULT_MODEL: ${GOOSAR_LLM_DEFAULT_MODEL:-}
+      # Role workspaces (#484): auto (default) provisions one workspace per
+      # enabled workspace_template row on every start, owned by the first
+      # deployment administrator; off leaves roles to the operator. Needs
+      # GOOSAR_MCP_SECRET_KEY. Unknown values refuse startup.
+      GOOSAR_ROLE_WORKSPACES: ${GOOSAR_ROLE_WORKSPACES:-}
+      # Day-2 retention (#439): scheduler audit purge + orphan-upload GC.
+      # Empty = the in-binary defaults (30d / 24h / hourly).
+      GOOSAR_SCHEDULER_AUDIT_RETENTION: ${GOOSAR_SCHEDULER_AUDIT_RETENTION:-}
+      GOOSAR_UPLOAD_GC_GRACE: ${GOOSAR_UPLOAD_GC_GRACE:-}
+      GOOSAR_HYGIENE_SWEEP_INTERVAL: ${GOOSAR_HYGIENE_SWEEP_INTERVAL:-}
+      # Retention policy (#399). Every content window ships EMPTY = keep
+      # forever: deleting a team's closed issues or its chat history is the
+      # operator's decision, not a default the product may guess at.
+      GOOSAR_RETENTION_CHAT: ${GOOSAR_RETENTION_CHAT:-}
+      GOOSAR_RETENTION_TASKS: ${GOOSAR_RETENTION_TASKS:-}
+      GOOSAR_RETENTION_CLOSED_ISSUES: ${GOOSAR_RETENTION_CLOSED_ISSUES:-}
+      GOOSAR_RETENTION_ACTIVITY: ${GOOSAR_RETENTION_ACTIVITY:-}
+      GOOSAR_ATTACHMENT_PURGE_GRACE: ${GOOSAR_ATTACHMENT_PURGE_GRACE:-}
+      # Workspace/subject export (#399). GOOSAR_EXPORT_DIR defaults inside the
+      # uploads volume mounted above — the one writable persistent path this
+      # container has, since its root filesystem is read-only.
+      GOOSAR_EXPORT_DIR: ${GOOSAR_EXPORT_DIR:-}
+      GOOSAR_EXPORT_TIMEOUT: ${GOOSAR_EXPORT_TIMEOUT:-}
+      GOOSAR_EXPORT_MAX_BYTES: ${GOOSAR_EXPORT_MAX_BYTES:-}
+      GOOSAR_EXPORT_RETENTION: ${GOOSAR_EXPORT_RETENTION:-}
+      # Rate limits (#530). Empty = the in-binary defaults; the `dev`
+      # deployment profile writes RATE_LIMIT_API/RATE_LIMIT_AUTH into .env,
+      # and a limit this file does not forward silently never reaches the
+      # backend. Forward the whole family, not just the two the profile sets.
+      RATE_LIMIT_EXPORT: ${RATE_LIMIT_EXPORT:-}
+      RATE_LIMIT_API: ${RATE_LIMIT_API:-}
+      RATE_LIMIT_AUTH: ${RATE_LIMIT_AUTH:-}
+      RATE_LIMIT_AUTH_VERIFY: ${RATE_LIMIT_AUTH_VERIFY:-}
+      RATE_LIMIT_AUTH_EMAIL: ${RATE_LIMIT_AUTH_EMAIL:-}
+      RATE_LIMIT_MFA_VERIFY: ${RATE_LIMIT_MFA_VERIFY:-}
+      RATE_LIMIT_TOKEN: ${RATE_LIMIT_TOKEN:-}
+      RATE_LIMIT_JOIN: ${RATE_LIMIT_JOIN:-}
+      RATE_LIMIT_CONTACT_SALES: ${RATE_LIMIT_CONTACT_SALES:-}
+      RATE_LIMIT_TRUSTED_PROXIES: ${RATE_LIMIT_TRUSTED_PROXIES:-}
+      # Minimum daemon/CLI version allowed to take tasks (#439). Empty = the
+      # built-in floor; "none" disables the gate.
+      GOOSAR_MIN_DAEMON_VERSION: ${GOOSAR_MIN_DAEMON_VERSION:-}
+      # Soft heap target for the Go GC (#439). Keep it BELOW mem_limit: the Go
+      # runtime then collects harder as it approaches the number instead of
+      # growing into the cgroup limit and being OOM-killed with no Go-side
+      # trace. ~90% of the default 1g limit; raise both together.
+      GOMEMLIMIT: ${BACKEND_GOMEMLIMIT:-900MiB}
+    mem_limit: ${BACKEND_MEM_LIMIT:-1g}
+    # /readyz checks the database connection and the migration state, so an
+    # unhealthy backend here means "not serving", not merely "process alive".
+    # busybox wget ships in the alpine runtime; no extra package.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/readyz"]
+      interval: 30s
+      timeout: 5s
+      # Migrations run before the listener opens, so allow a slow first boot
+      # without counting those attempts as failures.
+      start_period: 120s
+      retries: 3
+    restart: unless-stopped
+    # Log rotation (#434). Docker's default json-file driver keeps every line
+    # a container ever wrote until the disk is full; a debug-chatty backend
+    # gets there in weeks. Caps are overridable from .env (LOG_MAX_SIZE /
+    # LOG_MAX_FILE) — 50m x 5 keeps ~250 MB of recent history per service.
+    logging:
+      driver: json-file
+      options:
+        max-size: ${LOG_MAX_SIZE:-50m}
+        max-file: "${LOG_MAX_FILE:-5}"
+
+  frontend:
+    # GOOSAR_WEB_DIGEST mirrors GOOSAR_BACKEND_DIGEST for the web image; see
+    # the backend service above. Unset (default) = repo:tag, unchanged behavior.
+    image: ${GOOSAR_WEB_IMAGE:-ghcr.io/adanman/goosar-web}:${GOOSAR_IMAGE_TAG:-latest}${GOOSAR_WEB_DIGEST:-}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3001}:3000"
+    # The web image already runs as the unprivileged nextjs user (uid 1001).
+    # No read_only here: the Next.js standalone server writes its fetch/ISR
+    # cache under .next/cache inside the image (#384).
+    user: "1001:1001"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      HOSTNAME: "0.0.0.0"
+      REMOTE_API_URL: ${REMOTE_API_URL:-http://backend:8080}
+      DOCS_URL: ${DOCS_URL:-}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+      # Current macOS .dmg download URL. The mac build is signed and notarized
+      # outside CI, so no mac asset rides the GitHub release and the macOS
+      # buttons on /download stay hidden until this points at the uploaded file.
+      # Read per request by the server component, so changing it needs only a
+      # container restart — no image rebuild.
+      GOOSAR_MAC_DMG_URL: ${GOOSAR_MAC_DMG_URL:-}
+      GOOSAR_MAC_X64_DMG_URL: ${GOOSAR_MAC_X64_DMG_URL:-}
+      GOOSAR_WIN_X64_EXE_URL: ${GOOSAR_WIN_X64_EXE_URL:-}
+      GOOSAR_LINUX_X64_APPIMAGE_URL: ${GOOSAR_LINUX_X64_APPIMAGE_URL:-}
+      GOOSAR_LINUX_ARM64_APPIMAGE_URL: ${GOOSAR_LINUX_ARM64_APPIMAGE_URL:-}
+      # Optional static star count for the landing header's GitHub badge.
+      # The landing never calls api.github.com from visitors' browsers;
+      # leave empty to hide the badge.
+      GOOSAR_GITHUB_STARS: ${GOOSAR_GITHUB_STARS:-}
+      # Set to "off" to keep /download from calling api.github.com for
+      # release assets (the call is anonymous and cached either way). The
+      # self-served CLI installer and GOOSAR_MAC_DMG_URL keep working.
+      GOOSAR_DOWNLOAD_GITHUB_RELEASES: ${GOOSAR_DOWNLOAD_GITHUB_RELEASES:-}
+      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-}
+      # Markdown external-image policy (issue #64) — the SAME values as the
+      # backend service above. The Next server stamps the img-src CSP on app
+      # documents (apps/web/lib/image-policy-csp.ts); the backend enforces it
+      # on API/upload/attachment-preview responses. CLOUDFRONT_DOMAIN /
+      # LOCAL_UPLOAD_BASE_URL are repeated here so the document CSP keeps
+      # this deployment's own attachment hosts loadable in block/allowlist
+      # mode. No effect while the mode is "allow" (the default).
+      GOOSAR_EXTERNAL_IMAGES: ${GOOSAR_EXTERNAL_IMAGES:-allow}
+      GOOSAR_IMAGE_HOSTS: ${GOOSAR_IMAGE_HOSTS:-}
+      CLOUDFRONT_DOMAIN: ${CLOUDFRONT_DOMAIN:-}
+      LOCAL_UPLOAD_BASE_URL: ${LOCAL_UPLOAD_BASE_URL:-}
+      # Node's heap cap, same reasoning as the backend's GOMEMLIMIT: V8 must
+      # give up before the cgroup does. ~90% of the default 1g limit.
+      NODE_OPTIONS: ${FRONTEND_NODE_OPTIONS:---max-old-space-size=900}
+    mem_limit: ${FRONTEND_MEM_LIMIT:-1g}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    restart: unless-stopped
+    # Log rotation (#434). Docker's default json-file driver keeps every line
+    # a container ever wrote until the disk is full; a debug-chatty backend
+    # gets there in weeks. Caps are overridable from .env (LOG_MAX_SIZE /
+    # LOG_MAX_FILE) — 50m x 5 keeps ~250 MB of recent history per service.
+    logging:
+      driver: json-file
+      options:
+        max-size: ${LOG_MAX_SIZE:-50m}
+        max-file: "${LOG_MAX_FILE:-5}"
+
+volumes:
+  pgdata:
+  backend_uploads:

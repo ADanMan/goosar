@@ -1,0 +1,45 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+.next
+dist
+server/bin
+server/tmp
+
+# Git
+.git
+.gitignore
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+e2e/test-results
+coverage
+
+# Docs
+docs/
+
+# Desktop app (not needed for web self-hosting)
+apps/desktop
+
+# Offline (perimeter) build kit: only offline/kit/context is consumed inside
+# the build (COPY offline/ in Dockerfile.web). The saved base images and the
+# vendor tarball are used by scripts on the host — keep them out of the
+# context so backend/web builds do not upload gigabytes for nothing.
+offline/kit/images
+offline/kit/go-vendor.tar.gz

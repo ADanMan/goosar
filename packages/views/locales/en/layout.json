@@ -1,0 +1,80 @@
+{
+  "nav": {
+    "inbox": "Inbox",
+    "chat": "Chat",
+    "my_issues": "My Issues",
+    "issues": "Issues",
+    "projects": "Projects",
+    "autopilots": "Autopilot",
+    "agents": "Agents",
+    "squads": "Squads",
+    "usage": "Usage",
+    "runtimes": "Runtimes",
+    "skills": "Skills",
+    "settings": "Settings",
+    "capabilities": "What you can do",
+    "go_back": "Go back",
+    "go_forward": "Go forward"
+  },
+  "tab": {
+    "issue": "Issue",
+    "project": "Project",
+    "autopilot": "Autopilot",
+    "agent": "Agent",
+    "member": "Member",
+    "squad": "Squad",
+    "skill": "Skill",
+    "machine": "Machine",
+    "runtime": "Runtime",
+    "attachment": "Attachment",
+    "create_agent": "Create Agent",
+    "unknown": "Unknown page"
+  },
+  "help": {
+    "trigger": "Help",
+    "docs": "Docs",
+    "feedback": "Feedback",
+    "replay_onboarding": "Replay onboarding",
+    "server_version": "Server version {{version}}",
+    "capabilities": "What you can do here"
+  },
+  "realtime": {
+    "degraded": {
+      "title": "Updates are delayed",
+      "detail": "The app has fallen back to periodic refreshes, so changes made by agents and teammates arrive later than usual — and not at all while the connection is down.",
+      "cause": "The realtime connection is not getting through — most often the network route does not allow it. A server outage looks the same from here."
+    }
+  },
+  "workspace_loader": {
+    "loading_workspace": "Loading workspace…",
+    "loading_named_prefix": "Loading"
+  },
+  "sidebar": {
+    "unpin_tooltip": "Unpin",
+    "workspaces_label": "Workspaces",
+    "create_workspace": "Create workspace",
+    "pending_invitations_label": "Pending invitations",
+    "invitation_workspace_fallback": "Workspace",
+    "invitation_join": "Join",
+    "invitation_decline": "Decline",
+    "log_out": "Log out",
+    "new_issue": "New Issue",
+    "new_issue_shortcut": "C",
+    "pinned_label": "Pinned",
+    "workspace_group": "Workspace",
+    "configure_group": "Configure",
+    "unread_overflow": "99+"
+  },
+  "issue_window": {
+    "unavailable_title": "Issue unavailable",
+    "unavailable_description": "This workspace is no longer available in your account.",
+    "close_window": "Close window",
+    "error_title": "Something went wrong",
+    "unknown_error": "Unknown route error",
+    "reload": "Reload"
+  },
+  "config_error": {
+    "title": "Desktop configuration error",
+    "description": "Goosar Desktop could not load ~/.goosar/desktop.json. Fix or remove the file and restart the app."
+  }
+}

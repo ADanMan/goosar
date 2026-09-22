@@ -1,0 +1,140 @@
+package execenv
+
+import (
+	"strings"
+	"testing"
+
+	"gopkg.in/yaml.v3"
+)
+
+func parseFrontmatter(t *testing.T, content string) map[string]any {
+	t.Helper()
+	if !strings.HasPrefix(content, "---\n") {
+		t.Fatalf("content does not start with a frontmatter block:\n%s", content)
+	}
+	rest := content[len("---\n"):]
+	end := strings.Index(rest, "\n---")
+	if end < 0 {
+		t.Fatalf("frontmatter has no closing delimiter:\n%s", content)
+	}
+	var m map[string]any
+	if err := yaml.Unmarshal([]byte(rest[:end]), &m); err != nil {
+		t.Fatalf("frontmatter is not valid YAML: %v\nblock:\n%s", err, rest[:end])
+	}
+	return m
+}
+
+func TestEnsureSkillFrontmatterReSynthesizesInvalidYAML(t *testing.T) {
+	t.Parallel()
+
+	const body = "# Heading\n\nReal skill body.\n"
+
+	broken := "---\nname: keep-me\ndescription: bad: value here\n---\n\n" + body
+
+	got := ensureSkillFrontmatter(broken, "my-slug", "DB description: with a colon")
+
+	fm := parseFrontmatter(t, got)
+	if name, _ := fm["name"].(string); name != "my-slug" {
+		t.Errorf("name = %#v, want %q", fm["name"], "my-slug")
+	}
+	if desc, _ := fm["description"].(string); desc != "DB description: with a colon" {
+		t.Errorf("description = %#v, want the DB description verbatim", fm["description"])
+	}
+	if !strings.Contains(got, "Real skill body.") {
+		t.Errorf("body was dropped during re-synthesis:\n%s", got)
+	}
+}
+
+func TestEnsureSkillFrontmatterReSynthesizesInvalidYAMLWithEmptyDescription(t *testing.T) {
+	t.Parallel()
+
+	broken := "---\nname: keep-me\ndescription: bad: value\n---\n\nbody text\n"
+
+	got := ensureSkillFrontmatter(broken, "my-slug", "")
+
+	fm := parseFrontmatter(t, got)
+	if name, _ := fm["name"].(string); name != "my-slug" {
+		t.Errorf("name = %#v, want %q", fm["name"], "my-slug")
+	}
+	if _, present := fm["description"]; present {
+		t.Errorf("description should be omitted when DB description is empty, got %#v", fm["description"])
+	}
+	if !strings.Contains(got, "body text") {
+		t.Errorf("body was dropped during re-synthesis:\n%s", got)
+	}
+}
+
+func TestEnsureSkillFrontmatterLeavesValidYAMLUntouched(t *testing.T) {
+	t.Parallel()
+
+	valid := "---\nname: upstream\ndescription: \"colon: safe because quoted\"\nextra-key: kept\n---\n\nbody\n"
+
+	if got := ensureSkillFrontmatter(valid, "my-slug", "ignored"); got != valid {
+		t.Errorf("valid frontmatter was rewritten;\n got: %q\nwant: %q", got, valid)
+	}
+}
+
+func TestFrontmatterPartsClosingDelimiterVariants(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		content  string
+		wantFM   string
+		wantBody string
+		wantOK   bool
+	}{
+		{
+			name:     "newline terminated with blank line",
+			content:  "---\nname: x\n---\n\nbody",
+			wantFM:   "name: x",
+			wantBody: "\nbody",
+			wantOK:   true,
+		},
+		{
+			name:     "closing delimiter at EOF",
+			content:  "---\nname: x\n---",
+			wantFM:   "name: x",
+			wantBody: "",
+			wantOK:   true,
+		},
+		{
+			name:     "crlf terminated",
+			content:  "---\r\nname: x\r\n---\r\nbody",
+			wantFM:   "name: x\r",
+			wantBody: "body",
+			wantOK:   true,
+		},
+		{
+			name:     "horizontal rule is not a delimiter",
+			content:  "---\nname: x\n----\n---\nbody",
+			wantFM:   "name: x\n----",
+			wantBody: "body",
+			wantOK:   true,
+		},
+		{
+			name:     "no closing delimiter keeps full content as body",
+			content:  "---\nname: x\nbody without close",
+			wantFM:   "",
+			wantBody: "---\nname: x\nbody without close",
+			wantOK:   false,
+		},
+		{
+			name:     "no opening delimiter",
+			content:  "no frontmatter here",
+			wantFM:   "",
+			wantBody: "no frontmatter here",
+			wantOK:   false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fm, body, ok := frontmatterParts(tc.content)
+			if ok != tc.wantOK || fm != tc.wantFM || body != tc.wantBody {
+				t.Errorf("frontmatterParts(%q) = (%q, %q, %v), want (%q, %q, %v)",
+					tc.content, fm, body, ok, tc.wantFM, tc.wantBody, tc.wantOK)
+			}
+		})
+	}
+}

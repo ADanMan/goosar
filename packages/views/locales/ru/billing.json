@@ -1,0 +1,75 @@
+{
+  "title": "Оплата (тестовая страница)",
+  "subtitle": "Прямой проброс в /api/v1/billing/* из goosar-cloud. Это не готовый интерфейс — просто все эндпоинты на одной странице, чтобы проверить прокси и оплату через Stripe.",
+  "endpoints": {
+    "balance": "GET /api/cloud-billing/balance",
+    "transactions": "GET /api/cloud-billing/transactions",
+    "batches": "GET /api/cloud-billing/batches",
+    "topups": "GET /api/cloud-billing/topups",
+    "buy": "GET /price-tiers · POST /checkout-sessions · POST /portal-sessions"
+  },
+  "balance": {
+    "title": "Баланс",
+    "credits_suffix": "кред.",
+    "meta": "raw micro: {{micro}} · owner: {{owner}}… · updated {{updated}}"
+  },
+  "buy": {
+    "title": "Купить кредиты / управление оплатой",
+    "no_tiers": "Тарифы не настроены. Скорее всего, в облаке не задан ключ Stripe — checkout вернёт 503.",
+    "tier_money_to_credits": "{{money}} → {{credits}} кред.",
+    "tier_bonus": " + бонус {{credits}}",
+    "tier_bonus_with_expiry": " + бонус {{credits}} ({{expiry}})",
+    "tier_id": "id: {{id}}",
+    "open_portal": "Открыть Stripe Billing Portal",
+    "portal_hint": "Для тех, кто ещё не платил, 400 — это норма: записи о клиенте в Stripe пока нет.",
+    "toast_no_url": "Облако не вернуло ссылку на оплату",
+    "toast_checkout_failed": "Не удалось начать оплату",
+    "toast_no_portal_url": "Облако не вернуло ссылку на портал",
+    "toast_portal_failed": "Не удалось открыть портал"
+  },
+  "checkout": {
+    "session_label": "Сессия оплаты {{prefix}}…",
+    "loading": "Загружаем статус заказа…",
+    "fetch_failed": "Не удалось получить статус: {{error}}",
+    "fetch_failed_unknown": "неизвестная ошибка",
+    "final_status": "Итоговый статус: {{status}}",
+    "polling_status": "Опрашиваем статус… сейчас: {{status}}",
+    "status_unknown": "неизвестен",
+    "label_order": "Заказ",
+    "label_tier": "Тариф",
+    "label_charged": "Оплачено",
+    "charged_value": "{{money}} · {{credits}} кред.",
+    "charged_with_bonus": "{{money}} · {{credits}} кред. + бонус {{bonus}}",
+    "clear_url": "Убрать из URL"
+  },
+  "transactions": {
+    "title": "Операции",
+    "empty": "Операций пока нет.",
+    "credits_value": "{{value}} кред.",
+    "row_meta": "{{date}} · баланс после: {{balance}} кред. · ref: {{ref}}",
+    "ref_empty": "—"
+  },
+  "batches": {
+    "title": "Партии кредитов",
+    "empty": "Партий пока нет.",
+    "remaining_over_total": "{{remaining}} / {{total}} кред.",
+    "id_suffix": "{{id}}…",
+    "consumed": "Израсходовано: {{value}} кред.",
+    "expires_suffix": " · истекает {{value}}",
+    "never_expires_suffix": " · бессрочно"
+  },
+  "topups": {
+    "title": "Пополнения",
+    "empty": "Пополнений пока нет.",
+    "amount_to_credits": "{{money}} → {{credits}} кред.",
+    "amount_to_credits_with_bonus": "{{money}} → {{credits}} кред. + бонус {{bonus}}",
+    "row_meta": "{{date}} · stripe: {{checkout}}",
+    "stripe_empty": "—"
+  },
+  "shared": {
+    "request_failed": "Не удалось выполнить запрос",
+    "refresh": "Обновить",
+    "paging": "стр. {{page}} / {{totalPages}} · всего {{total}}",
+    "date_dash": "—"
+  }
+}

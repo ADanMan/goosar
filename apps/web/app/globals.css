@@ -1,0 +1,59 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "../../../packages/ui/styles/tokens.css";
+@import "../../../packages/ui/styles/base.css";
+@import "./custom.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@source "../../../packages/ui/**/*.{ts,tsx}";
+@source "../../../packages/core/**/*.{ts,tsx}";
+@source "../../../packages/views/**/*.{ts,tsx}";
+
+/* Font stacks. `--font-montserrat` and `--font-comfortaa` are the self-hosted
+   next/font/local families (+ their synthetic size-adjusted fallbacks), set on
+   <html> by the variable classes in app/layout.tsx. We compose `--font-sans` and
+   `--font-heading` here in static CSS — rather than baking the CJK tail into
+   next/font's `fallback` — so they can be overridden per `<html lang>` and stay
+   CSP-safe (no inline <style>). Tailwind's `font-sans` / `font-heading` utilities
+   resolve these variables (see packages/ui/styles/tokens.css `@theme inline`).
+   `--font-serif` is the editorial headline slot and carries the same display
+   face as `--font-heading`.
+
+   Body text is Montserrat; headings are Comfortaa. Both cover Latin and Cyrillic;
+   CJK chars fall through to the platform Chinese fonts, then Korean. Chinese MUST
+   stay before Korean so zh users never get Korean Hanja glyph shapes (Hangul is a
+   separate Unicode block, so ko users still get Korean fonts for Hangul). Kept in
+   sync with apps/desktop/src/renderer/src/globals.css. */
+:root {
+  --font-sans: var(--font-montserrat), -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Apple SD Gothic Neo",
+    "Malgun Gothic", "Noto Sans CJK KR", sans-serif;
+  --font-heading: var(--font-comfortaa), var(--font-montserrat), -apple-system,
+    BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei",
+    "Noto Sans CJK SC", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR",
+    sans-serif;
+  --font-serif: var(--font-heading);
+}
+
+/* Japanese: Kanji are Han ideographs sharing the same Unicode block as Chinese,
+   and CSS font-fallback order is NOT affected by `<html lang>` — so the
+   Chinese-first default above would hand Japanese users Chinese glyph shapes
+   for shared ideographs. Promote a Japanese-first CJK chain only for Japanese.
+   `[lang|="ja"]` is the BCP-47 language-range selector: it matches exactly `ja`
+   or `ja-<region>` (layout.tsx emits `ja-JP`), never unrelated 3-letter subtags
+   such as `jam`. The brand faces still lead for Latin/Cyrillic; zh/ko remain as
+   a deep fallback. */
+html[lang|="ja"] {
+  --font-sans: var(--font-montserrat), "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Yu Gothic", "YuGothic", "Meiryo", "Noto Sans CJK JP", "Noto Sans JP",
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", "Noto Sans CJK SC", "Apple SD Gothic Neo", "Malgun Gothic",
+    "Noto Sans CJK KR", sans-serif;
+  --font-heading: var(--font-comfortaa), var(--font-montserrat), "Hiragino Sans",
+    "Hiragino Kaku Gothic ProN", "Yu Gothic", "YuGothic", "Meiryo",
+    "Noto Sans CJK JP", "Noto Sans JP", -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC",
+    "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", sans-serif;
+}

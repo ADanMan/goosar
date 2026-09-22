@@ -1,0 +1,109 @@
+{
+  "create_form": {
+    "name_label": "Workspace Name",
+    "name_placeholder": "My Workspace",
+    "url_label": "Workspace URL",
+    "url_placeholder": "my-workspace",
+    "template_label": "Workspace template",
+    "template_none": "No template",
+    "template_none_description": "Start empty — add packages and presets later.",
+    "submit": "Create workspace",
+    "submitting": "Creating...",
+    "errors": {
+      "slug_format": "Only lowercase letters, numbers, and hyphens",
+      "slug_taken": "That workspace URL is already taken.",
+      "slug_reserved": "That workspace URL is reserved and cannot be used.",
+      "slug_conflict_toast": "Choose a different workspace URL",
+      "create_failed": "Failed to create workspace"
+    }
+  },
+  "new_page": {
+    "back": "Back",
+    "log_out": "Log out",
+    "title": "Welcome to Goosar",
+    "description": "One workspace where you and your AI teammates work side by side — taking issues, leaving comments, sharing the same context.",
+    "invite_hint": "You can invite teammates once your workspace is ready.",
+    "join_instead": "Join a workspace my organisation set up"
+  },
+  "join_page": {
+    "title": "Choose your workspace",
+    "description": "Your organisation has already set up a workspace for each role. Pick yours — everything inside is ready to work with.",
+    "loading": "Loading roles…",
+    "empty": "This deployment offers no roles to join yet. Create your own workspace or ask an administrator for an invitation.",
+    "members_one": "{{count}} member",
+    "members_other": "{{count}} members",
+    "join": "Join",
+    "joining": "Joining…",
+    "failed": "Could not join. Try again.",
+    "create_instead": "Create my own workspace instead"
+  },
+  "creation_disabled": {
+    "title": "Workspace creation is disabled",
+    "description": "This Goosar instance does not allow new workspaces to be created. Ask your administrator for an invitation to an existing workspace."
+  },
+  "no_access": {
+    "title": "Workspace not available",
+    "description": "This workspace doesn't exist or you don't have access.",
+    "go_to_workspaces": "Go to my workspaces",
+    "sign_in_different": "Sign in as a different user"
+  },
+  "capabilities": {
+    "title": "What you can do here",
+    "lede": "A short tour of what the assistant helps you with day to day. Just tell it, in your own words, what needs doing.",
+    "role_eyebrow": "Workspace role",
+    "role_no_detail_note": "Nobody has written down yet what the assistant does specifically in this role. Below is what it does in any kind of work.",
+    "no_role_note": "This workspace is not tied to a particular role — below is what the assistant does for everyone.",
+    "baseline_heading": "In every role",
+    "baseline_ask_title": "Ask in plain words",
+    "baseline_ask_body": "Describe what needs doing in ordinary language. You never have to learn how it works underneath.",
+    "baseline_docs_title": "Work on documents",
+    "baseline_docs_body": "Draft, rewrite and proofread a document, a spreadsheet or a deck.",
+    "baseline_find_title": "Find and pull things together",
+    "baseline_find_body": "Gather scattered facts into one clear answer, and show where each of them came from.",
+    "baseline_track_title": "Keep the work in sight",
+    "baseline_track_body": "Tasks, answers and finished files stay in one place — you can always come back to them.",
+    "boundary_heading": "Who sets up what",
+    "boundary_admin_title": "Set up for the whole workspace",
+    "boundary_admin_body": "The AI connection, the assistant and access to your work tools are already set up. There is nothing here for you to understand or set up.",
+    "boundary_admin_body_unconfirmed": "The AI connection, the assistant and access to your work tools are set up once for the whole workspace. Usually an administrator does that.",
+    "boundary_you_title": "Left to you",
+    "boundary_you_body": "Your personal keys to your work tools. They act as you and open exactly what is open to you — which is why only you can enter them.",
+    "llm_ready": "AI connection is set up",
+    "services_heading": "Your work tools",
+    "badge_admin_provided": "Set up by an administrator",
+    "badge_admin_off": "Switched off by an administrator for now",
+    "badge_you_missing": "Needs your key",
+    "badge_you_filled": "Key entered",
+    "badge_you_none": "No key needed",
+    "saved_not_verified": "\"Key entered\" means the value was saved. To find out whether it actually works, open \"How to get access\" on the service card and read the \"How to check it works\" part.",
+    "open_setup": "Where to enter the key",
+    "sample_tasks_heading": "Try it right now",
+    "sample_tasks_lede": "This is not a demo: one click files a real task, the assistant picks it up, and the result opens in a new tab.",
+    "sample_task_run": "Run it",
+    "sample_task_run_again": "Run it again",
+    "sample_task_created": "Task {{identifier}} created — the assistant has picked it up.",
+    "sample_task_failed": "The task could not be created. Try again.",
+    "sample_task_needs_key": "Your key is needed: {{services}}",
+    "sample_task_needs_key_body": "The assistant cannot do this until it can sign in to the service as you. The key is yours to enter — the instructions say how to get it.",
+    "sample_task_no_helper": "The assistant for this workspace is not ready yet. Once it is, you can run this task from here."
+  },
+  "credentials_banner": {
+    "title": "Some work tools are still missing your keys",
+    "body": "The assistant cannot work with these yet: {{services}}. Only you can enter these keys — the instructions say where to get each one.",
+    "action": "Show me what to do",
+    "dismiss": "Dismiss"
+  },
+  "role_setup": {
+    "title": "Set up your role",
+    "autopilots_title_one": "Autopilot ({{count}}): turn it on",
+    "autopilots_title_other": "Autopilots ({{count}}): turn them on",
+    "autopilots_body": "Your role comes with autopilots, seeded paused so nothing fires before you say so.",
+    "autopilots_action": "Turn on",
+    "autopilots_enabling": "Turning on…",
+    "autopilots_enabled": "Autopilots are on",
+    "autopilots_partial_one": "{{count}} autopilot could not be turned on",
+    "autopilots_partial_other": "{{count}} autopilots could not be turned on",
+    "runtime_title": "Your agent has no machine",
+    "runtime_body": "Nothing can run until a machine is connected and shared with the workspace."
+  }
+}

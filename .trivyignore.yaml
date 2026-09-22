@@ -1,0 +1,47 @@
+# Findings accepted for the delivery because upstream has published no fixed
+# version (#520). Everything with a fix is patched instead — the floors live in
+# scripts/dependency-floor.test.sh. The shape of this file (path scope, expiry,
+# statement) is asserted by scripts/dependency-floor.test.sh.
+#
+# Every entry is scoped to pnpm-lock.yaml: both packages are build-time only,
+# so they are suppressed for the source scan and stay reportable the day one of
+# them turns up in a shipped image.
+#
+# Accepted 09.09.2026 for v1.0.1, expiring 08.12.2026. At expiry the test fails
+# and the entry has to be re-checked against upstream — re-date it or drop it.
+#
+# https://trivy.dev/latest/docs/configuration/filtering/
+vulnerabilities:
+  - id: CVE-2025-71329
+    paths:
+      - "pnpm-lock.yaml"
+    statement: >-
+      image-size: reached only by the Next.js build when it measures a
+      statically imported image, so every input is a file from this repository.
+      Not traced into the standalone runtime output — the v1.0.0 web image scan
+      does not contain the package. No fixed version upstream.
+    expired_at: 2026-12-08
+  - id: CVE-2025-71330
+    paths:
+      - "pnpm-lock.yaml"
+    statement: >-
+      image-size, same reachability as CVE-2025-71329: build-time only, absent
+      from the runtime image. No fixed version upstream.
+    expired_at: 2026-12-08
+  - id: CVE-2026-56876
+    paths:
+      - "pnpm-lock.yaml"
+    statement: >-
+      extract-zip: electron-builder unpacks the Electron distribution with it at
+      desktop-build time. Build machine only, never shipped, and never fed
+      anything but the artifacts electron-builder just downloaded and
+      checksummed. No fixed version upstream.
+    expired_at: 2026-12-08
+  - id: CVE-2026-19693
+    paths:
+      - "pnpm-lock.yaml"
+    statement: >-
+      extract-zip: same reachability as CVE-2026-56876 — electron-builder
+      unpacks the Electron distribution with it at desktop-build time. Build
+      machine only, never shipped. No fixed version upstream.
+    expired_at: 2026-12-08

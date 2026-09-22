@@ -1,0 +1,268 @@
+{{- $backendImageTag := default .Chart.AppVersion .Values.images.backend.tag -}}
+{{- if .Values.backend.uploads.persistence.enabled -}}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "goosar.backend.fullname" . }}-uploads
+  labels:
+    {{- include "goosar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  accessModes:
+    {{- toYaml .Values.backend.uploads.persistence.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.backend.uploads.persistence.size | quote }}
+  {{- with .Values.backend.uploads.persistence.storageClass }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "goosar.backend.fullname" . }}
+  labels:
+    {{- include "goosar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  # The backend entrypoint runs migrations before starting. Concurrent runs are
+  # serialized by a Postgres advisory lock in cmd/migrate (see GitHub
+  # adanman/goosar#3647): the first pod migrates, the rest block on the
+  # lock and then no-op.
+  replicas: {{ .Values.backend.replicas }}
+  strategy:
+    {{- if gt (int .Values.backend.replicas) 1 }}
+    # Multi-replica (#397): never drop below the current replica count during a
+    # rollout, so the API stays up. Requires storage every pod can attach to —
+    # S3, or a ReadWriteMany uploads PVC.
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+    {{- else }}
+    # Single replica on a ReadWriteOnce uploads PVC: a rolling update would
+    # deadlock on Multi-Attach, so the old pod must go first.
+    type: Recreate
+    {{- end }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: goosar
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      annotations:
+        # Roll the backend pods whenever its config changes. envFrom does not
+        # watch the referenced objects, and helm upgrade alone won't change the
+        # pod template hash, so without these checksums editing values.yaml +
+        # `helm upgrade` would leave the old pods running stale config.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        # existingSecret is created out-of-band (not a chart template), so we
+        # checksum the live object via lookup instead of $.Template.BasePath.
+        # lookup returns empty during `helm template`/`--dry-run`, so the
+        # rendered value there is a placeholder; on a real install/upgrade it
+        # reflects the actual Secret and rolls pods on rotation.
+        checksum/secret: {{ (lookup "v1" "Secret" .Release.Namespace .Values.existingSecret).data | toYaml | sha256sum }}
+        {{- if and .Values.monitoring.enabled .Values.monitoring.podAnnotations }}
+        # For Prometheus installs that discover by annotation rather than by
+        # ServiceMonitor (#396).
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.monitoring.port | quote }}
+        prometheus.io/path: /metrics
+        {{- end }}
+      labels:
+        {{- include "goosar.labels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+    spec:
+      {{- with .Values.backend.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: backend
+          image: "{{ .Values.images.backend.repository }}:{{ $backendImageTag }}"
+          imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
+          {{- with .Values.backend.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - containerPort: 8080
+              name: http
+            {{- if .Values.monitoring.enabled }}
+            - containerPort: {{ .Values.monitoring.port }}
+              name: metrics
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config
+            - secretRef:
+                name: {{ .Values.existingSecret }}
+          env:
+            # #397: the backend refuses to start when this is > 1 without a
+            # usable REDIS_URL.
+            - name: GOOSAR_REPLICAS
+              value: {{ .Values.backend.replicas | quote }}
+            {{- if not .Values.postgres.external.enabled }}
+            - name: DATABASE_URL
+              value: {{ include "goosar.databaseUrl" . | quote }}
+            {{- end }}
+          volumeMounts:
+            # readOnlyRootFilesystem (#384) still needs a writable /tmp:
+            # multipart uploads over the in-memory limit spool through
+            # os.TempDir(). Mounted unconditionally so the mount set does not
+            # depend on the uploads PVC toggle.
+            - name: tmp
+              mountPath: /tmp
+            # Without the PVC the directory still has to be writable: the
+            # root filesystem is read-only, and local storage (no S3) writes
+            # here. emptyDir keeps the pre-#384 ephemeral behaviour.
+            - name: uploads
+              mountPath: /app/data/uploads
+          # The entrypoint runs `./migrate up` before serving traffic, so
+          # nothing answers on 8080 until the migration finishes. On a cold
+          # cluster that can take minutes; the startupProbe holds liveness and
+          # readiness off with a ~5 min budget (30 * 10s) so the pod is never
+          # killed mid-migration. Once it passes, the livenessProbe below takes
+          # over.
+          #
+          # It probes /health, not /readyz, for the same reason the liveness
+          # probe does (#397): a startupProbe on /readyz would kill and restart
+          # every pod whose database is unreachable for five minutes, which is
+          # the crash loop this chart is trying not to build. Traffic is gated
+          # by the readinessProbe below, which does check the database and the
+          # migration state.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            failureThreshold: 30
+            periodSeconds: 10
+          # /readyz checks the database and the migration state: exactly what
+          # must be true before this pod takes traffic, and what must go false
+          # to pull it out of the Service during a rolling update.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          # Liveness is NOT readiness (#397): /health only asserts the process
+          # is serving. Pointing liveness at /readyz would restart every pod
+          # during a database blip — turning a short outage into a crash loop
+          # across the whole Deployment.
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+      {{- with .Values.backend.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.backend.affinity }}
+      affinity:
+        {{- toYaml .Values.backend.affinity | nindent 8 }}
+      {{- else if and (gt (int .Values.backend.replicas) 1) .Values.backend.spreadReplicas }}
+      # Preferred, not required (#397): on a single-node cluster a hard rule
+      # would leave every extra replica Pending forever.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: goosar
+                    app.kubernetes.io/instance: {{ .Release.Name }}
+                    app.kubernetes.io/component: backend
+      {{- end }}
+      {{- with .Values.backend.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: uploads
+          {{- if .Values.backend.uploads.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "goosar.backend.fullname" . }}-uploads
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "goosar.backend.fullname" . }}
+  labels:
+    {{- include "goosar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: goosar
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: backend
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+    {{- if .Values.monitoring.enabled }}
+    # ClusterIP only — the Ingress routes to the `http` port by name, so the
+    # metrics port never leaves the cluster (#396).
+    - port: {{ .Values.monitoring.port }}
+      targetPort: metrics
+      name: metrics
+    {{- end }}
+{{- if .Values.frontend.compatibility.backendAlias }}
+---
+# DNS alias for legacy goosar-web images that baked
+# REMOTE_API_URL=http://backend:8080 at build time. Current images resolve
+# frontend.config.remoteApiUrl at runtime and do not need this Service.
+#
+# The name is intentionally unprefixed ("backend", not "{{ .Release.Name }}-backend")
+# because the baked-in host has no release prefix. As a result only ONE release
+# of this chart can run per namespace, and the name may collide with a
+# pre-existing Service/backend (see frontend.compatibility.backendAlias in
+# values.yaml).
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  labels:
+    {{- include "goosar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend-alias
+spec:
+  type: ExternalName
+  externalName: {{ printf "%s.%s.svc.cluster.local" (include "goosar.backend.fullname" .) .Release.Namespace }}
+{{- end }}
+{{- $pdb := .Values.backend.podDisruptionBudget }}
+{{- $pdbEnabled := ternary (gt (int .Values.backend.replicas) 1) (eq (toString $pdb.enabled) "true") (eq (toString $pdb.enabled) "auto") }}
+{{- if $pdbEnabled }}
+---
+# Keeps a voluntary disruption (node drain, cluster upgrade) from taking the
+# API down. Deliberately absent at replicas: 1 — a PDB that can never be
+# satisfied blocks the drain instead of protecting anything.
+# https://kubernetes.io/docs/tasks/run-application/configure-pdb/
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "goosar.backend.fullname" . }}
+  labels:
+    {{- include "goosar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  minAvailable: {{ $pdb.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: goosar
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: backend
+{{- end }}

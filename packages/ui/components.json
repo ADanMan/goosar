@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "base-nova",
+  "rsc": false,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "styles/tokens.css",
+    "baseColor": "zinc",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "iconLibrary": "lucide",
+  "aliases": {
+    "components": "@goosar/ui/components",
+    "ui": "@goosar/ui/components/ui",
+    "hooks": "@goosar/ui/hooks",
+    "lib": "@goosar/ui/lib",
+    "utils": "@goosar/ui/lib/utils"
+  }
+}

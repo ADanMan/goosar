@@ -1,0 +1,69 @@
+'use client';
+
+import { Switch } from '@goosar/ui/components/ui/switch';
+import {
+  MANUAL_CREATE_FIELDS,
+  QUICK_CREATE_FIELDS,
+  useIssueCreateSettingsStore,
+} from '@goosar/core/issues/stores/issue-create-settings-store';
+import { toast } from 'sonner';
+import { useT } from '../../i18n';
+import { SettingsCard, SettingsRow, SettingsSection, SettingsTab } from './settings-layout';
+
+export function IssueTab() {
+  const { t } = useT('settings');
+  const quickFields = useIssueCreateSettingsStore((s) => s.quickCreateFields);
+  const setQuickVisible = useIssueCreateSettingsStore((s) => s.setQuickCreateFieldVisible);
+  const manualFields = useIssueCreateSettingsStore((s) => s.manualCreateFields);
+  const setManualVisible = useIssueCreateSettingsStore((s) => s.setManualCreateFieldVisible);
+
+  const savedToast = () =>
+    toast.success(
+      t(($) => $.auto_save.toast_saved),
+      { id: 'settings-auto-save' },
+    );
+
+  return (
+    <SettingsTab title={t(($) => $.page.tabs.issue)} description={t(($) => $.issue.description)}>
+      <SettingsSection
+        title={t(($) => $.issue.quick_create_title)}
+        description={t(($) => $.issue.quick_create_description)}
+      >
+        <SettingsCard>
+          {QUICK_CREATE_FIELDS.map((field) => (
+            <SettingsRow key={field} label={t(($) => $.issue.fields[field])}>
+              <Switch
+                checked={quickFields.includes(field)}
+                onCheckedChange={(checked) => {
+                  setQuickVisible(field, checked);
+                  savedToast();
+                }}
+                aria-label={t(($) => $.issue.fields[field])}
+              />
+            </SettingsRow>
+          ))}
+        </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection
+        title={t(($) => $.issue.manual_create_title)}
+        description={t(($) => $.issue.manual_create_description)}
+      >
+        <SettingsCard>
+          {MANUAL_CREATE_FIELDS.map((field) => (
+            <SettingsRow key={field} label={t(($) => $.issue.fields[field])}>
+              <Switch
+                checked={manualFields.includes(field)}
+                onCheckedChange={(checked) => {
+                  setManualVisible(field, checked);
+                  savedToast();
+                }}
+                aria-label={t(($) => $.issue.fields[field])}
+              />
+            </SettingsRow>
+          ))}
+        </SettingsCard>
+      </SettingsSection>
+    </SettingsTab>
+  );
+}

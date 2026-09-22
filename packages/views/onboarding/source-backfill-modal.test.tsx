@@ -1,0 +1,320 @@
+import { act, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { I18nProvider } from '@goosar/core/i18n/react';
+import enCommon from '../locales/en/common.json';
+import enOnboarding from '../locales/en/onboarding.json';
+
+const TEST_RESOURCES = { en: { common: enCommon, onboarding: enOnboarding } };
+
+const { mockUser, mockSaveQuestionnaire, mockWorkspace, mockAgentDoneTotal, mockListIssues } =
+  vi.hoisted(() => ({
+    mockUser: { value: null as null | Record<string, unknown> },
+    mockSaveQuestionnaire: vi.fn(),
+    mockWorkspace: {
+      value: { id: 'ws-1', slug: 'ws-1' } as null | { id: string; slug: string },
+    },
+    mockAgentDoneTotal: { value: 3 },
+    mockListIssues: vi.fn(),
+  }));
+
+vi.mock('@goosar/core/auth', async () => {
+  const actual = await vi.importActual<typeof import('@goosar/core/auth')>('@goosar/core/auth');
+  const useAuthStore = Object.assign(
+    (selector: (s: { user: unknown }) => unknown) => selector({ user: mockUser.value }),
+    { getState: () => ({ user: mockUser.value }) },
+  );
+  return { ...actual, useAuthStore };
+});
+
+vi.mock('@goosar/core/onboarding', async () => {
+  const actual =
+    await vi.importActual<typeof import('@goosar/core/onboarding')>('@goosar/core/onboarding');
+  return { ...actual, saveQuestionnaire: mockSaveQuestionnaire };
+});
+
+vi.mock('@goosar/core/paths', async () => {
+  const actual = await vi.importActual<typeof import('@goosar/core/paths')>('@goosar/core/paths');
+  return { ...actual, useCurrentWorkspace: () => mockWorkspace.value };
+});
+
+vi.mock('@goosar/core/api', async () => {
+  const actual = await vi.importActual<typeof import('@goosar/core/api')>('@goosar/core/api');
+  return {
+    ...actual,
+    api: {
+      ...actual.api,
+      listIssues: mockListIssues,
+    },
+  };
+});
+
+import { SourceBackfillModal } from './source-backfill-modal';
+
+function setUser(partial: Record<string, unknown> | null) {
+  mockUser.value = partial;
+}
+
+function wipeDismissCounters() {
+  for (let i = window.localStorage.length - 1; i >= 0; i--) {
+    const k = window.localStorage.key(i);
+    if (k && k.startsWith('goosar.source_backfill.dismiss.')) {
+      window.localStorage.removeItem(k);
+    }
+  }
+}
+
+function mockPrefersReducedMotion(matches: boolean) {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    configurable: true,
+    value: (q: string) => ({
+      matches: q.includes('reduce') ? matches : false,
+      media: q,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}
+
+beforeEach(() => {
+  mockSaveQuestionnaire.mockReset();
+  mockSaveQuestionnaire.mockResolvedValue(undefined);
+  mockListIssues.mockReset();
+  mockAgentDoneTotal.value = 3;
+  mockListIssues.mockImplementation(async () => ({
+    issues: [],
+    total: mockAgentDoneTotal.value,
+  }));
+  mockWorkspace.value = { id: 'ws-1', slug: 'ws-1' };
+  setUser(null);
+  wipeDismissCounters();
+  mockPrefersReducedMotion(true);
+});
+
+afterEach(() => {
+  wipeDismissCounters();
+});
+
+function renderModal() {
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={qc}>
+      <I18nProvider locale="en" resources={TEST_RESOURCES}>
+        <SourceBackfillModal />
+      </I18nProvider>
+    </QueryClientProvider>,
+  );
+}
+
+describe('SourceBackfillModal', () => {
+  it('does not render when there is no user', () => {
+    renderModal();
+    expect(screen.queryByText(/How did you hear about Goosar/i)).not.toBeInTheDocument();
+  });
+
+  it('does not render when the user already recorded a source', () => {
+    setUser({
+      id: 'u1',
+      onboarded_at: '2026-01-01T00:00:00Z',
+      onboarding_questionnaire: { source: ['search'] },
+    });
+    renderModal();
+    expect(screen.queryByText(/How did you hear about Goosar/i)).not.toBeInTheDocument();
+    expect(mockListIssues).not.toHaveBeenCalled();
+  });
+
+  it('opens for an onboarded user with empty source once agents completed enough issues', async () => {
+    setUser({
+      id: 'u1',
+      onboarded_at: '2026-01-01T00:00:00Z',
+      onboarding_questionnaire: { source: [] },
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(screen.getByText(/How did you hear about Goosar/i)).toBeInTheDocument();
+    });
+  });
+
+  it('stays closed while agents have completed fewer issues than the threshold', async () => {
+    mockAgentDoneTotal.value = 2;
+    setUser({
+      id: 'u1',
+      onboarded_at: '2026-01-01T00:00:00Z',
+      onboarding_questionnaire: { source: [] },
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(mockListIssues).toHaveBeenCalled();
+    });
+    expect(screen.queryByText(/How did you hear about Goosar/i)).not.toBeInTheDocument();
+  });
+
+  it('stays closed outside a workspace context', async () => {
+    mockWorkspace.value = null;
+    setUser({
+      id: 'u1',
+      onboarded_at: '2026-01-01T00:00:00Z',
+      onboarding_questionnaire: { source: [] },
+    });
+    renderModal();
+    expect(screen.queryByText(/How did you hear about Goosar/i)).not.toBeInTheDocument();
+    expect(mockListIssues).not.toHaveBeenCalled();
+  });
+
+  it('counts done issues assigned to agents or squads in the current workspace', async () => {
+    setUser({
+      id: 'u1',
+      onboarded_at: '2026-01-01T00:00:00Z',
+      onboarding_questionnaire: { source: [] },
+    });
+    renderModal();
+    await waitFor(() => {
+      expect(mockListIssues).toHaveBeenCalledWith({
+        workspace_id: 'ws-1',
+        statuses: ['done'],
+        assignee_types: ['agent', 'squad'],
+        limit: 1,
+      });
+    });
+  });
+
+  it('Submit PATCHes the merged questionnaire preserving role / use_case', async () => {
+    setUser({
+      id: 'u1',
+      onboarded_at: '2026-01-01T00:00:00Z',
+      onboarding_questionnaire: {
+        source: [],
+        role: 'engineer',
+        role_skipped: false,
+        use_case: ['ship_code', 'plan_research'],
+        use_case_skipped: false,
+        version: 2,
+      },
+    });
+    const user = userEvent.setup();
+    renderModal();
+    await user.click(await screen.findByText('Friends or colleagues'));
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() => {
+      expect(mockSaveQuestionnaire).toHaveBeenCalledTimes(1);
+    });
+    const sent = mockSaveQuestionnaire.mock.calls[0]![0];
+    expect(sent.source).toEqual(['friends_colleagues']);
+    expect(sent.source_skipped).toBe(false);
+    expect(sent.role).toBe('engineer');
+    expect(sent.use_case).toEqual(['ship_code', 'plan_research']);
+    expect(sent.version).toBe(2);
+  });
+
+  it('Skip PATCHes source_skipped=true preserving role / use_case', async () => {
+    setUser({
+      id: 'u1',
+      onboarded_at: '2026-01-01T00:00:00Z',
+      onboarding_questionnaire: {
+        source: [],
+        role: 'founder',
+        use_case: ['manage_team'],
+        version: 2,
+      },
+    });
+    const user = userEvent.setup();
+    renderModal();
+    await user.click(await screen.findByRole('button', { name: 'Skip' }));
+    await waitFor(() => {
+      expect(mockSaveQuestionnaire).toHaveBeenCalledTimes(1);
+    });
+    const sent = mockSaveQuestionnaire.mock.calls[0]![0];
+    expect(sent.source).toEqual([]);
+    expect(sent.source_skipped).toBe(true);
+    expect(sent.role).toBe('founder');
+    expect(sent.use_case).toEqual(['manage_team']);
+  });
+
+  it('treats a legacy single-string source as already answered', () => {
+    setUser({
+      id: 'u1',
+      onboarded_at: '2026-01-01T00:00:00Z',
+      onboarding_questionnaire: { source: 'search' },
+    });
+    renderModal();
+    expect(screen.queryByText(/How did you hear about Goosar/i)).not.toBeInTheDocument();
+  });
+
+  it('picking a second option replaces the first (single-select primary source)', async () => {
+    setUser({
+      id: 'u1',
+      onboarded_at: '2026-01-01T00:00:00Z',
+      onboarding_questionnaire: { source: [] },
+    });
+    const user = userEvent.setup();
+    renderModal();
+    await screen.findByText('Friends or colleagues');
+    const radios = screen.getAllByRole('radio');
+    const friends = radios[0]!;
+    const search = radios[1]!;
+
+    await user.click(friends);
+    expect(friends).toHaveAttribute('aria-checked', 'true');
+    expect(search).toHaveAttribute('aria-checked', 'false');
+
+    await user.click(search);
+    expect(friends).toHaveAttribute('aria-checked', 'false');
+    expect(search).toHaveAttribute('aria-checked', 'true');
+
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+    await waitFor(() => {
+      expect(mockSaveQuestionnaire).toHaveBeenCalledTimes(1);
+    });
+    const sent = mockSaveQuestionnaire.mock.calls[0]![0];
+    expect(sent.source).toEqual(['search']);
+    expect(sent.source).not.toContain('friends_colleagues');
+  });
+
+  it('defers the entrance by ~700ms when the user has not opted into reduced motion', async () => {
+    mockPrefersReducedMotion(false);
+    vi.useFakeTimers();
+    try {
+      setUser({
+        id: 'u1',
+        onboarded_at: '2026-01-01T00:00:00Z',
+        onboarding_questionnaire: { source: [] },
+      });
+      renderModal();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.queryByText(/How did you hear about Goosar/i)).not.toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(699);
+      });
+      expect(screen.queryByText(/How did you hear about Goosar/i)).not.toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(50);
+      });
+      expect(screen.getByText(/How did you hear about Goosar/i)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not open once the per-user dismiss cap is reached on this browser', () => {
+    window.localStorage.setItem('goosar.source_backfill.dismiss.u1', '3');
+    setUser({
+      id: 'u1',
+      onboarded_at: '2026-01-01T00:00:00Z',
+      onboarding_questionnaire: { source: [] },
+    });
+    renderModal();
+    expect(screen.queryByText(/How did you hear about Goosar/i)).not.toBeInTheDocument();
+    expect(mockListIssues).not.toHaveBeenCalled();
+  });
+});

@@ -1,0 +1,9 @@
+No provisioning package store was bundled into this build.
+
+Reason: GOOSAR_PROVISIONING_PACKAGES_DIR is unset
+
+Point GOOSAR_PROVISIONING_PACKAGES_DIR at a packed provisioning-package directory
+(scripts/pack-provisioning-packages.mjs output) to stage it. The
+baked-in store is the battery-included DMG's fallback when the
+deployment server serves no provisioning catalog; the thin/public
+build ships without it and provisions from the server instead.

@@ -1,0 +1,125 @@
+'use client';
+
+import { StatusIcon } from '../../issues/components';
+import { IssueAgentActivityIndicator } from '../../issues/components/issue-agent-activity-indicator';
+import { ActorAvatar } from '../../common/actor-avatar';
+import { Archive, ArchiveRestore } from 'lucide-react';
+import type { InboxItem } from '@goosar/core/types';
+import type { InboxView } from './inbox-view';
+import { InboxDetailLabel } from './inbox-detail-label';
+import { getInboxDisplayTitle } from './inbox-display';
+import { useT } from '../../i18n';
+
+export function useTimeAgo() {
+  const { t } = useT('inbox');
+  return (dateStr: string): string => {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return t(($) => $.list.time.just_now);
+    if (minutes < 60) return t(($) => $.list.time.minutes, { count: minutes });
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return t(($) => $.list.time.hours, { count: hours });
+    const days = Math.floor(hours / 24);
+    return t(($) => $.list.time.days, { count: days });
+  };
+}
+
+export function InboxListItem({
+  item,
+  view,
+  isSelected,
+  onClick,
+  onAction,
+}: {
+  item: InboxItem;
+  view: InboxView;
+  isSelected: boolean;
+  onClick: () => void;
+  onAction: () => void;
+}) {
+  const { t } = useT('inbox');
+  const timeAgo = useTimeAgo();
+  const displayTitle = getInboxDisplayTitle(item);
+  const isArchivedView = view === 'archived';
+  const showUnread = item.read !== true && !isArchivedView;
+  const ActionIcon = isArchivedView ? ArchiveRestore : Archive;
+  const actionLabel = isArchivedView
+    ? t(($) => $.list.unarchive_tooltip)
+    : t(($) => $.list.archive_tooltip);
+  const actorType = item.actor_type ?? item.recipient_type;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group flex w-full items-center gap-3 rounded-md px-2 py-2.5 text-left transition-colors ${
+        isSelected ? 'bg-accent' : 'hover:bg-accent/50'
+      }`}
+    >
+      <ActorAvatar
+        actorType={actorType}
+        actorId={item.actor_id ?? item.recipient_id}
+        size="lg"
+        enableHoverCard
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1.5">
+            {showUnread && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand" />}
+            <span
+              className={`truncate text-sm ${showUnread ? 'font-medium' : 'text-muted-foreground'}`}
+            >
+              {displayTitle}
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <span
+              role="button"
+              tabIndex={-1}
+              title={actionLabel}
+              aria-label={actionLabel}
+              onClick={(e) => {
+                e.stopPropagation();
+                onAction();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.stopPropagation();
+                  onAction();
+                }
+              }}
+              className="hidden rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground group-hover:inline-flex"
+            >
+              <ActionIcon className="h-3.5 w-3.5" />
+            </span>
+            {item.issue_status && (
+              <StatusIcon status={item.issue_status} className="h-3.5 w-3.5 shrink-0" />
+            )}
+          </div>
+        </div>
+        <div className="mt-0.5 flex items-center justify-between gap-2">
+          <p
+            className={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs ${showUnread ? 'text-muted-foreground' : 'text-muted-foreground/60'}`}
+          >
+            <InboxDetailLabel item={item} />
+          </p>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {/* Badge only, no hover card (MUL-5189). "An agent is on this"
+                is worth showing while triaging; the card behind it adds only
+                elapsed time, which does not change whether you open the row.
+                The row already carries the ActorAvatar hover card on the
+                left, so a second popup here was mostly noise. */}
+            {item.issue_id && (
+              <IssueAgentActivityIndicator issueId={item.issue_id} hoverCard={false} />
+            )}
+            <span
+              className={`text-xs ${showUnread ? 'text-muted-foreground' : 'text-muted-foreground/60'}`}
+            >
+              {timeAgo(item.created_at)}
+            </span>
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}

@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://goosar.ru/schemas/provisioning-package-manifest.json",
+  "title": "PackageManifest",
+  "description": "Manifest for one packed provisioning package (<name>-<version>-<platform>.manifest.json). Mirrors the TypeScript type in apps/desktop/src/shared/provisioning-manifest.ts and the plain-JS validator in apps/desktop/scripts/provisioning-manifest.mjs. Reference for a future Go struct (issue #182, slice 1 of #172).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "name",
+    "version",
+    "type",
+    "platform",
+    "sha256",
+    "size",
+    "requires"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1,
+      "description": "Manifest schema version. Currently always 1."
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]*$",
+      "description": "Package name, e.g. a skill or MCP server directory name."
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^\\S+$",
+      "description": "Package version. Must not contain whitespace or '@'."
+    },
+    "type": {
+      "type": "string",
+      "enum": ["skill", "mcp-server", "runtime"]
+    },
+    "platform": {
+      "type": "string",
+      "enum": ["*", "darwin-arm64", "darwin-x64", "win-x64", "linux-x64"],
+      "description": "'*' means platform-independent (no compiled/native content)."
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "sha256 of the packed .tar.zst file's bytes (not a tree hash)."
+    },
+    "size": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Size in bytes of the packed .tar.zst file."
+    },
+    "requires": {
+      "type": "array",
+      "description": "Other packages this package depends on, each shaped <type>:<name>@<version>, e.g. 'runtime:python@3.11.9'.",
+      "items": {
+        "type": "string",
+        "pattern": "^(skill|mcp-server|runtime):[a-zA-Z0-9][a-zA-Z0-9._-]*@\\S+$"
+      }
+    }
+  }
+}

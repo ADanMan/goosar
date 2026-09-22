@@ -1,0 +1,16 @@
+{
+  "title": "Документация",
+  "pages": [
+    "index",
+    "---Установка---",
+    "self-host-quickstart",
+    "install-agent-runtime",
+    "custom-runtimes",
+    "---Аутентификация и безопасность---",
+    "auth-setup",
+    "auth-tokens",
+    "security",
+    "---Разработчикам---",
+    "developers"
+  ]
+}
