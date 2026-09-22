@@ -1,0 +1,76 @@
+{
+  "skills": [
+    {
+      "source_url": "https://github.com/anthropics/skills/tree/main/skills/canvas-design",
+      "dir": "canvas-design",
+      "owner": "anthropics",
+      "repo": "skills",
+      "ref": "main",
+      "path": "skills/canvas-design",
+      "commit": "0a64e398ec6bb34a494f0c347e8ccae53a862f8e"
+    },
+    {
+      "source_url": "https://github.com/anthropics/skills/tree/main/skills/frontend-design",
+      "dir": "frontend-design",
+      "owner": "anthropics",
+      "repo": "skills",
+      "ref": "main",
+      "path": "skills/frontend-design",
+      "commit": "0a64e398ec6bb34a494f0c347e8ccae53a862f8e"
+    },
+    {
+      "source_url": "https://github.com/anthropics/skills/tree/main/skills/internal-comms",
+      "dir": "internal-comms",
+      "owner": "anthropics",
+      "repo": "skills",
+      "ref": "main",
+      "path": "skills/internal-comms",
+      "commit": "0a64e398ec6bb34a494f0c347e8ccae53a862f8e"
+    },
+    {
+      "source_url": "https://github.com/anthropics/skills/tree/main/skills/web-artifacts-builder",
+      "dir": "web-artifacts-builder",
+      "owner": "anthropics",
+      "repo": "skills",
+      "ref": "main",
+      "path": "skills/web-artifacts-builder",
+      "commit": "0a64e398ec6bb34a494f0c347e8ccae53a862f8e"
+    },
+    {
+      "source_url": "https://github.com/anthropics/skills/tree/main/skills/webapp-testing",
+      "dir": "webapp-testing",
+      "owner": "anthropics",
+      "repo": "skills",
+      "ref": "main",
+      "path": "skills/webapp-testing",
+      "commit": "0a64e398ec6bb34a494f0c347e8ccae53a862f8e"
+    },
+    {
+      "source_url": "https://github.com/obra/superpowers-skills/tree/main/skills/debugging/root-cause-tracing",
+      "dir": "root-cause-tracing",
+      "owner": "obra",
+      "repo": "superpowers-skills",
+      "ref": "main",
+      "path": "skills/debugging/root-cause-tracing",
+      "commit": "cdcd624ad3fd8026deb692e565351854569798dd"
+    },
+    {
+      "source_url": "https://github.com/vercel-labs/agent-skills/tree/main/skills/react-best-practices",
+      "dir": "react-best-practices",
+      "owner": "vercel-labs",
+      "repo": "agent-skills",
+      "ref": "main",
+      "path": "skills/react-best-practices",
+      "commit": "b8caa260a420a73042e35521de4b5c8baf6446cc"
+    },
+    {
+      "source_url": "https://github.com/vercel-labs/agent-skills/tree/main/skills/web-design-guidelines",
+      "dir": "web-design-guidelines",
+      "owner": "vercel-labs",
+      "repo": "agent-skills",
+      "ref": "main",
+      "path": "skills/web-design-guidelines",
+      "commit": "b8caa260a420a73042e35521de4b5c8baf6446cc"
+    }
+  ]
+}

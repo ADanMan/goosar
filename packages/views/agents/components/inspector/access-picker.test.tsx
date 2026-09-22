@@ -1,0 +1,142 @@
+// @vitest-environment jsdom
+
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import type { AgentInvocationTarget, MemberWithUser } from '@goosar/core/types';
+import { I18nProvider } from '@goosar/core/i18n/react';
+import enCommon from '../../../locales/en/common.json';
+import enAgents from '../../../locales/en/agents.json';
+import enIssues from '../../../locales/en/issues.json';
+
+import { AccessPicker } from './access-picker';
+
+vi.mock('../../../common/actor-avatar', () => ({
+  ActorAvatar: () => null,
+}));
+
+const TEST_RESOURCES = {
+  en: { common: enCommon, agents: enAgents, issues: enIssues },
+};
+
+const MEMBERS = [
+  { user_id: 'u1', name: 'Alice', role: 'member' },
+  { user_id: 'u2', name: 'Bob', role: 'member' },
+] as unknown as MemberWithUser[];
+
+function renderPicker(props: Partial<React.ComponentProps<typeof AccessPicker>> = {}) {
+  const onChange = vi.fn();
+  const utils = render(
+    <I18nProvider locale="en" resources={TEST_RESOURCES}>
+      <AccessPicker
+        permissionMode="private"
+        invocationTargets={[]}
+        visibility="private"
+        members={MEMBERS}
+        canEdit
+        onChange={onChange}
+        {...props}
+      />
+    </I18nProvider>,
+  );
+  return { ...utils, onChange };
+}
+
+describe('AccessPicker owner-only editing (MUL-3963)', () => {
+  beforeEach(() => cleanup());
+  afterEach(() => cleanup());
+
+  it('renders a static, non-interactive read-only state for non-owners', () => {
+    const targets: AgentInvocationTarget[] = [{ target_type: 'workspace', target_id: 'ws-1' }];
+    renderPicker({
+      canEdit: false,
+      permissionMode: 'public_to',
+      invocationTargets: targets,
+      visibility: 'workspace',
+    });
+
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getByTestId('access-readonly')).toBeInTheDocument();
+    expect(screen.getByText('Workspace')).toBeInTheDocument();
+    expect(
+      screen.getByLabelText('Only the agent owner can change who can run this agent.'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders mutually exclusive access scopes for the owner', () => {
+    renderPicker({ canEdit: true });
+    expect(screen.getByRole('radio', { name: /^Only me/i })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /^Entire workspace/i })).not.toBeChecked();
+    expect(screen.getByRole('radio', { name: /^Specific people/i })).not.toBeChecked();
+  });
+
+  it('lets the owner grant the entire workspace access', () => {
+    const { onChange } = renderPicker({ canEdit: true });
+    fireEvent.click(screen.getByRole('radio', { name: /^Entire workspace/i }));
+    expect(onChange).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(onChange).toHaveBeenCalledWith({
+      permission_mode: 'public_to',
+      invocation_targets: [{ target_type: 'workspace' }],
+    });
+  });
+
+  it('reports an unsaved draft until the owner returns to the persisted mode', () => {
+    const onDirtyChange = vi.fn();
+    renderPicker({ canEdit: true, onDirtyChange });
+
+    fireEvent.click(screen.getByRole('radio', { name: /^Entire workspace/i }));
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+
+    fireEvent.click(screen.getByRole('radio', { name: /^Only me/i }));
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('owner can pick a specific member, emitting a public_to member target', () => {
+    const { onChange } = renderPicker({
+      canEdit: true,
+    });
+    fireEvent.click(screen.getByRole('radio', { name: /^Specific people/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Alice/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(onChange).toHaveBeenCalledWith({
+      permission_mode: 'public_to',
+      invocation_targets: [{ target_type: 'member', target_id: 'u1' }],
+    });
+  });
+
+  it('workspace scope removes redundant member grants', () => {
+    const { onChange } = renderPicker({
+      canEdit: true,
+      permissionMode: 'public_to',
+      invocationTargets: [{ target_type: 'member', target_id: 'u1' }],
+      visibility: 'private',
+    });
+    fireEvent.click(screen.getByRole('radio', { name: /^Entire workspace/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(onChange).toHaveBeenCalledWith({
+      permission_mode: 'public_to',
+      invocation_targets: [{ target_type: 'workspace' }],
+    });
+  });
+
+  it('renders without crashing when invocationTargets is undefined', () => {
+    expect(() =>
+      renderPicker({
+        invocationTargets: undefined as unknown as AgentInvocationTarget[],
+      }),
+    ).not.toThrow();
+    expect(screen.getByRole('radio', { name: /^Only me/i })).toBeChecked();
+  });
+
+  it('read-only mode: undefined invocationTargets does not crash for non-owners', () => {
+    expect(() =>
+      renderPicker({
+        canEdit: false,
+        permissionMode: 'public_to',
+        invocationTargets: undefined as unknown as AgentInvocationTarget[],
+        visibility: 'workspace',
+      }),
+    ).not.toThrow();
+    expect(screen.getByTestId('access-readonly')).toBeInTheDocument();
+  });
+});

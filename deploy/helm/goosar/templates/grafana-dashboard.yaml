@@ -1,0 +1,26 @@
+{{- if .Values.monitoring.dashboard.enabled }}
+# Grafana dashboard shipped as a ConfigMap for the Grafana sidecar (#396).
+#
+# The sidecar (grafana.sidecar.dashboards.enabled in the Grafana and
+# kube-prometheus-stack charts) watches every namespace for ConfigMaps carrying
+# the label below and drops their contents into Grafana's provisioning
+# directory. No Grafana restart, no manual import.
+#
+# The same JSON is mounted into the Compose overlay's Grafana; it lives in the
+# chart because .Files.Get cannot read outside the chart directory.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "goosar.backend.fullname" . }}-dashboard
+  labels:
+    {{- include "goosar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+    {{ .Values.monitoring.dashboard.label }}: {{ .Values.monitoring.dashboard.labelValue | quote }}
+  {{- with .Values.monitoring.dashboard.folderAnnotation }}
+  annotations:
+    grafana_folder: {{ . | quote }}
+  {{- end }}
+data:
+  goosar-overview.json: |
+{{ .Files.Get "dashboards/goosar-overview.json" | indent 4 }}
+{{- end }}

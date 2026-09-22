@@ -1,0 +1,20 @@
+node_modules
+dist
+out
+.DS_Store
+.eslintcache
+*.log*
+# CLI binary bundled at build time (from server/bin/)
+resources/bin/
+# Agent runtime artifact staged at build time (from hermes-agent dist/)
+resources-agent/
+resources-ca/
+# MCP servers staged at build time (from $GOOSAR_MCP_SERVERS_DIR)
+resources-mcp-servers/
+# Skills + shared Playwright/Chromium staged at build time (from
+# $GOOSAR_SKILLS_DIR / $GOOSAR_PLAYWRIGHT_BROWSERS_DIR)
+resources-skills/
+resources-playwright/
+# MCP preset provisioning overlay staged at build time (from $GOOSAR_PRESET_OVERLAY)
+resources-preset-overlay/
+resources-deployment/

@@ -1,0 +1,197 @@
+'use client';
+
+import { useRef, useState } from 'react';
+import { Bot, Camera, Loader2, Users, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { api } from '@goosar/core/api';
+import { useFileUpload } from '@goosar/core/hooks/use-file-upload';
+import { resolvePublicFileUrl } from '@goosar/core/workspace/avatar-url';
+import { parseAvatarEmoji } from '@goosar/ui/lib/avatar-emoji';
+import { cn } from '@goosar/ui/lib/utils';
+import { useT } from '../i18n';
+import { AvatarCropDialog } from './avatar-crop-dialog';
+
+export type AvatarUploadVariant = 'user' | 'agent' | 'squad' | 'workspace';
+
+interface AvatarUploadControlProps {
+  value: string | null;
+  variant: AvatarUploadVariant;
+  name?: string;
+  size?: number;
+  disabled?: boolean;
+  onUploaded: (url: string) => void | Promise<unknown>;
+  onClear?: () => void;
+  className?: string;
+  ariaLabel?: string;
+}
+
+function initialsOf(name: string): string {
+  return name
+    .split(' ')
+    .map((word) => word[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+}
+
+function AvatarFallback({
+  variant,
+  name,
+  size,
+}: {
+  variant: AvatarUploadVariant;
+  name: string;
+  size: number;
+}) {
+  if (variant === 'agent') {
+    return <Bot style={{ width: size * 0.5, height: size * 0.5 }} />;
+  }
+  if (variant === 'squad') {
+    return <Users style={{ width: size * 0.5, height: size * 0.5 }} />;
+  }
+  const text = variant === 'workspace' ? name.charAt(0).toUpperCase() : initialsOf(name);
+  return (
+    <span className="font-semibold" style={{ fontSize: size * 0.4 }}>
+      {text}
+    </span>
+  );
+}
+
+export function AvatarUploadControl({
+  value,
+  variant,
+  name = '',
+  size = 64,
+  disabled = false,
+  onUploaded,
+  onClear,
+  className,
+  ariaLabel,
+}: AvatarUploadControlProps) {
+  const { t } = useT('common');
+  const { upload } = useFileUpload(api);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pickedFile, setPickedFile] = useState<File | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [previewError, setPreviewError] = useState(false);
+
+  const emoji = parseAvatarEmoji(value);
+  const resolved = value && !emoji ? resolvePublicFileUrl(value) : null;
+  const hasImage = !!resolved && !previewError;
+  const hasAvatar = !!emoji || hasImage;
+
+  const handlePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; 
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error(t(($) => $.avatar_upload.select_image));
+      return;
+    }
+    setPreviewError(false);
+    setPickedFile(file);
+    setDialogOpen(true);
+  };
+
+  const handleCropped = async (cropped: File) => {
+    setBusy(true);
+    try {
+      const result = await upload(cropped);
+      if (!result) return;
+      await onUploaded(result.link);
+      setDialogOpen(false);
+      setPickedFile(null);
+      toast.success(t(($) => $.avatar_upload.updated));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t(($) => $.avatar_upload.failed));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <button
+        type="button"
+        onClick={() => fileInputRef.current?.click()}
+        disabled={disabled || busy}
+        aria-label={ariaLabel ?? t(($) => $.avatar_upload.change)}
+        className={cn(
+          'group relative h-full w-full overflow-hidden bg-muted text-muted-foreground outline-none',
+          'flex items-center justify-center',
+          'focus-visible:ring-2 focus-visible:ring-ring',
+          'disabled:cursor-not-allowed disabled:opacity-60',
+          'rounded-full',
+          className,
+        )}
+        style={{ width: size, height: size }}
+      >
+        {emoji ? (
+          <span
+            role="img"
+            aria-label={name}
+            className="select-none leading-none"
+            style={{ fontSize: size * 0.58 }}
+          >
+            {emoji}
+          </span>
+        ) : hasImage ? (
+          <img
+            src={resolved ?? undefined}
+            alt={name}
+            className="h-full w-full object-cover"
+            onError={() => setPreviewError(true)}
+          />
+        ) : (
+          <AvatarFallback variant={variant} name={name} size={size} />
+        )}
+
+        {!disabled && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+            {busy ? (
+              <Loader2 className="h-5 w-5 animate-spin text-white" />
+            ) : (
+              <Camera className="h-5 w-5 text-white" />
+            )}
+          </div>
+        )}
+      </button>
+
+      {onClear && hasAvatar && !busy && !disabled && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setPreviewError(false);
+            onClear();
+          }}
+          className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border bg-background text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
+          aria-label={t(($) => $.avatar_upload.remove)}
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handlePick}
+      />
+
+      <AvatarCropDialog
+        file={pickedFile}
+        open={dialogOpen}
+        busy={busy}
+        onOpenChange={(next) => {
+          if (busy) return;
+          setDialogOpen(next);
+          if (!next) setPickedFile(null);
+        }}
+        onCropped={handleCropped}
+      />
+    </div>
+  );
+}

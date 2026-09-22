@@ -1,0 +1,519 @@
+import { describe, expect, it } from 'vitest';
+import { deriveRuntimeState } from '@goosar/core/runtimes';
+import type { AgentRuntime } from '@goosar/core/types';
+import {
+  buildRuntimeMachines,
+  filterRuntimeMachines,
+  runtimeMachineCounts,
+  runtimeRowLabel,
+  sharedCustomName,
+  splitRuntimeName,
+} from './runtime-machines';
+
+const NOW = new Date('2026-05-17T12:00:00Z').getTime();
+
+function makeRuntime(overrides: Partial<AgentRuntime> = {}): AgentRuntime {
+  return {
+    id: 'runtime-1',
+    workspace_id: 'ws-1',
+    daemon_id: 'daemon-1',
+    name: 'Claude (dev-machine.local)',
+    runtime_mode: 'local',
+    provider: 'claude',
+    launch_header: '',
+    status: 'online',
+    device_info: 'dev-machine.local · claude 1.0.0',
+    metadata: { cli_version: '0.3.0' },
+    owner_id: 'user-1',
+    visibility: 'private',
+    last_seen_at: new Date(NOW - 10_000).toISOString(),
+    created_at: '2026-05-17T11:00:00Z',
+    updated_at: '2026-05-17T11:00:00Z',
+    ...overrides,
+  };
+}
+
+describe('runtime machine grouping', () => {
+  it('groups multiple provider runtimes by daemon id', () => {
+    const machines = buildRuntimeMachines(
+      [
+        makeRuntime({ id: 'rt-claude', provider: 'claude', name: 'Claude (dev.local)' }),
+        makeRuntime({ id: 'rt-codex', provider: 'codex', name: 'Codex (dev.local)' }),
+      ],
+      { now: NOW, localDaemonId: 'daemon-1' },
+    );
+
+    expect(machines).toHaveLength(1);
+    expect(machines[0]).toMatchObject({
+      id: 'local:daemon-1',
+      title: 'dev.local',
+      section: 'local',
+      isCurrent: true,
+      onlineCount: 2,
+      issueCount: 0,
+      providerNames: ['claude', 'codex'],
+    });
+  });
+
+  it('uses the online daemon CLI version instead of a stale offline report', () => {
+    const machines = buildRuntimeMachines(
+      [
+        makeRuntime({
+          id: 'rt-online',
+          provider: 'claude',
+          metadata: { cli_version: '0.4.0', launched_by: 'desktop' },
+        }),
+        makeRuntime({
+          id: 'rt-stale',
+          provider: 'copilot',
+          status: 'offline',
+          last_seen_at: new Date(NOW - 4 * 24 * 60 * 60_000).toISOString(),
+          metadata: { cli_version: '0.3.17', launched_by: 'desktop' },
+        }),
+      ],
+      { now: NOW },
+    );
+
+    expect(machines).toHaveLength(1);
+    expect(machines[0]?.cliVersion).toBe('0.4.0');
+    expect(machines[0]?.launchedBy).toBe('desktop');
+  });
+
+  it('uses a machine-wide custom name as the machine title, over the local name', () => {
+    const machines = buildRuntimeMachines(
+      [
+        makeRuntime({ id: 'rt-claude', provider: 'claude', custom_name: "Bohan's MacBook" }),
+        makeRuntime({ id: 'rt-codex', provider: 'codex', custom_name: "Bohan's MacBook" }),
+      ],
+      { now: NOW, localDaemonId: 'daemon-1', localMachineName: 'dev-machine.local' },
+    );
+
+    expect(machines).toHaveLength(1);
+    expect(machines[0]?.title).toBe("Bohan's MacBook");
+  });
+
+  it('ignores a one-off per-runtime custom name for the machine title', () => {
+    const machines = buildRuntimeMachines(
+      [
+        makeRuntime({ id: 'rt-claude', provider: 'claude', custom_name: 'just this one' }),
+        makeRuntime({ id: 'rt-codex', provider: 'codex' }),
+      ],
+      { now: NOW, localDaemonId: 'daemon-1' },
+    );
+
+    expect(machines[0]?.title).toBe('dev-machine.local');
+  });
+
+  it('counts machines with any offline runtime as issues', () => {
+    const machines = buildRuntimeMachines(
+      [
+        makeRuntime({ id: 'rt-online', provider: 'claude' }),
+        makeRuntime({
+          id: 'rt-offline',
+          provider: 'codex',
+          status: 'offline',
+          last_seen_at: new Date(NOW - 10 * 60_000).toISOString(),
+        }),
+      ],
+      { now: NOW },
+    );
+
+    expect(runtimeMachineCounts(machines)).toEqual({
+      all: 1,
+      online: 1,
+      issues: 1,
+    });
+    expect(filterRuntimeMachines(machines, '', 'issues')).toHaveLength(1);
+  });
+
+  it('does not surface agent CLI version branding as the machine subtitle', () => {
+    const machines = buildRuntimeMachines(
+      [
+        makeRuntime({
+          id: 'rt-claude',
+          provider: 'claude',
+          name: 'Claude (dev.local)',
+          device_info: 'dev.local · 2.1.5 (Claude Code)',
+        }),
+        makeRuntime({
+          id: 'rt-codex',
+          provider: 'codex',
+          name: 'Codex (dev.local)',
+          device_info: 'dev.local · codex-cli 0.118.0',
+        }),
+      ],
+      { now: NOW, localDaemonId: 'daemon-1' },
+    );
+
+    expect(machines).toHaveLength(1);
+    const subtitle = machines[0]?.subtitle ?? '';
+    expect(subtitle.toLowerCase()).not.toContain('claude code');
+    expect(subtitle.toLowerCase()).not.toContain('codex-cli');
+    expect(subtitle).toMatch(/^daemon /);
+  });
+
+  it('synthesizes a placeholder local machine when ensureLocalMachine is set and no runtime matches', () => {
+    const machines = buildRuntimeMachines(
+      [
+        makeRuntime({
+          id: 'rt-remote',
+          daemon_id: 'daemon-remote',
+          name: 'Claude (remote.box)',
+          device_info: 'remote.box',
+        }),
+      ],
+      {
+        now: NOW,
+        localDaemonId: null,
+        localMachineName: 'My Laptop',
+        ensureLocalMachine: true,
+      },
+    );
+
+    expect(machines).toHaveLength(2);
+    const local = machines.find((m) => m.isCurrent);
+    expect(local).toMatchObject({
+      title: 'My Laptop',
+      section: 'local',
+      isCurrent: true,
+      runtimes: [],
+    });
+  });
+
+  it('does not synthesize a placeholder when a real local runtime exists', () => {
+    const machines = buildRuntimeMachines([makeRuntime({ daemon_id: 'daemon-1' })], {
+      now: NOW,
+      localDaemonId: 'daemon-1',
+      ensureLocalMachine: true,
+    });
+
+    expect(machines).toHaveLength(1);
+    expect(machines[0]).toMatchObject({
+      isCurrent: true,
+      runtimes: expect.arrayContaining([expect.objectContaining({ daemon_id: 'daemon-1' })]),
+    });
+  });
+
+  it('treats a runtime with the local device name as the current machine', () => {
+    const machines = buildRuntimeMachines(
+      [
+        makeRuntime({
+          daemon_id: 'legacy-hostname',
+          name: 'Claude (My Laptop)',
+          device_info: 'My Laptop · claude 1.0.0',
+        }),
+      ],
+      {
+        now: NOW,
+        localDaemonId: 'daemon-uuid',
+        localMachineName: 'my laptop',
+        currentUserId: 'user-1',
+        ensureLocalMachine: true,
+      },
+    );
+
+    expect(machines).toHaveLength(1);
+    expect(machines[0]).toMatchObject({
+      title: 'my laptop',
+      section: 'local',
+      isCurrent: true,
+      daemonId: 'legacy-hostname',
+    });
+  });
+
+  it('does not treat a cloud runtime with the local device name as current', () => {
+    const machines = buildRuntimeMachines(
+      [
+        makeRuntime({
+          id: 'cloud-1',
+          daemon_id: null,
+          runtime_mode: 'cloud',
+          provider: 'codex',
+          name: 'Codex (My Laptop)',
+          device_info: 'My Laptop · codex 1.0.0',
+        }),
+      ],
+      {
+        now: NOW,
+        localDaemonId: 'daemon-uuid',
+        localMachineName: 'my laptop',
+        currentUserId: 'user-1',
+        ensureLocalMachine: true,
+      },
+    );
+
+    expect(machines).toHaveLength(2);
+    const cloud = machines.find((m) => m.id === 'cloud:device:My Laptop');
+    expect(cloud).toMatchObject({
+      title: 'My Laptop',
+      section: 'cloud',
+      isCurrent: false,
+    });
+    const local = machines.find((m) => m.isCurrent);
+    expect(local).toMatchObject({
+      title: 'my laptop',
+      section: 'local',
+      runtimes: [],
+    });
+  });
+
+  it('consolidates an out-of-band local daemon (WSL2) by host name and suppresses the placeholder', () => {
+    const machines = buildRuntimeMachines(
+      [
+        makeRuntime({
+          id: 'rt-wsl2',
+          daemon_id: 'wsl2-daemon-uuid',
+          name: 'Claude (KIKI-PC)',
+          device_info: 'KIKI-PC · claude 1.0.0',
+          owner_id: 'user-1',
+        }),
+      ],
+      {
+        now: NOW,
+        localDaemonId: 'desktop-daemon-uuid',
+        localMachineName: 'KIKI-PC',
+        currentUserId: 'user-1',
+        ensureLocalMachine: true,
+      },
+    );
+
+    expect(machines).toHaveLength(1);
+    expect(machines[0]).toMatchObject({
+      title: 'KIKI-PC',
+      section: 'local',
+      isCurrent: true,
+      daemonId: 'wsl2-daemon-uuid',
+    });
+  });
+
+  it("does not claim another user's identically-named machine as current", () => {
+    const machines = buildRuntimeMachines(
+      [
+        makeRuntime({
+          id: 'rt-other',
+          daemon_id: 'other-daemon-uuid',
+          name: 'Claude (KIKI-PC)',
+          device_info: 'KIKI-PC · claude 1.0.0',
+          owner_id: 'user-2',
+        }),
+      ],
+      {
+        now: NOW,
+        localDaemonId: 'desktop-daemon-uuid',
+        localMachineName: 'KIKI-PC',
+        currentUserId: 'user-1',
+        ensureLocalMachine: true,
+      },
+    );
+
+    expect(machines).toHaveLength(2);
+    const other = machines.find((m) => m.id === 'local:other-daemon-uuid');
+    expect(other).toMatchObject({ section: 'remote', isCurrent: false });
+    const local = machines.find((m) => m.isCurrent);
+    expect(local).toMatchObject({ section: 'local', runtimes: [] });
+  });
+
+  it('keeps a machine online while telling the truth about a runtime bound to another device (#22)', () => {
+    const siblingLastSeen = new Date(NOW - 10_000).toISOString();
+    const machines = buildRuntimeMachines(
+      [
+        makeRuntime({
+          id: 'rt-builtin',
+          provider: 'claude',
+          status: 'online',
+          last_seen_at: siblingLastSeen,
+        }),
+        makeRuntime({
+          id: 'rt-custom-failed',
+          provider: 'codex',
+          status: 'offline',
+          profile_id: 'profile-1',
+          last_seen_at: new Date(NOW - 1_000).toISOString(),
+          metadata: {
+            runtime_profile_registration_error: true,
+            runtime_profile_failure_reason: 'command not found on PATH: hermes',
+            command_name: 'hermes',
+          },
+        }),
+      ],
+      { now: NOW, localDaemonId: 'daemon-1' },
+    );
+
+    expect(machines).toHaveLength(1);
+    const machine = machines[0]!;
+
+    expect(machine.health).toBe('online');
+    expect(machine.onlineCount).toBe(1);
+    expect(machine.issueCount).toBe(0);
+    expect(machine.lastSeenAt).toBe(siblingLastSeen);
+
+    const failed = machine.runtimes.find((r) => r.id === 'rt-custom-failed')!;
+    expect(deriveRuntimeState(failed, NOW).availability).toBe('unavailable_here');
+  });
+
+  it('does not let a healthy sibling hide a runtime in a hard error state', () => {
+    const machines = buildRuntimeMachines(
+      [
+        makeRuntime({ id: 'rt-online', provider: 'claude', status: 'online' }),
+        makeRuntime({
+          id: 'rt-broken',
+          provider: 'codex',
+          status: 'offline',
+          last_seen_at: new Date(NOW - 3 * 60 * 60_000).toISOString(),
+        }),
+      ],
+      { now: NOW, localDaemonId: 'daemon-1' },
+    );
+
+    const machine = machines[0]!;
+    expect(machine.health).toBe('offline');
+    expect(machine.onlineCount).toBe(1);
+    expect(machine.issueCount).toBe(1);
+  });
+
+  it('reports the worst state when every runtime on the machine has failed', () => {
+    const machines = buildRuntimeMachines(
+      [
+        makeRuntime({
+          id: 'rt-a',
+          provider: 'claude',
+          status: 'offline',
+          last_seen_at: new Date(NOW - 30 * 60_000).toISOString(),
+        }),
+        makeRuntime({
+          id: 'rt-b',
+          provider: 'codex',
+          status: 'offline',
+          last_seen_at: new Date(NOW - 6.5 * 24 * 3600_000).toISOString(),
+        }),
+      ],
+      { now: NOW, localDaemonId: 'daemon-1' },
+    );
+
+    const machine = machines[0]!;
+    expect(machine.health).toBe('about_to_gc');
+    expect(machine.onlineCount).toBe(0);
+    expect(machine.issueCount).toBe(2);
+  });
+
+  it("never inherits a sibling's heartbeat for a machine whose runtimes were never seen", () => {
+    const machines = buildRuntimeMachines(
+      [
+        makeRuntime({
+          id: 'rt-custom-failed',
+          provider: 'codex',
+          status: 'offline',
+          profile_id: 'profile-1',
+          last_seen_at: new Date(NOW - 1_000).toISOString(),
+          metadata: {
+            runtime_profile_registration_error: true,
+            runtime_profile_failure_reason: 'command not found on PATH: hermes',
+            command_name: 'hermes',
+          },
+        }),
+      ],
+      { now: NOW, localDaemonId: 'daemon-1' },
+    );
+
+    const machine = machines[0]!;
+    expect(machine.lastSeenAt).toBeNull();
+    expect(machine.onlineCount).toBe(0);
+    expect(machine.issueCount).toBe(0);
+    expect(machine.health).toBe('offline');
+  });
+
+  it('keeps cloud runtimes as cloud workers when they have no daemon', () => {
+    const machines = buildRuntimeMachines(
+      [
+        makeRuntime({
+          id: 'cloud-1',
+          daemon_id: null,
+          runtime_mode: 'cloud',
+          provider: 'codex',
+          name: 'Codex cloud',
+          device_info: '',
+        }),
+      ],
+      { now: NOW },
+    );
+
+    expect(machines[0]).toMatchObject({
+      id: 'cloud:runtime:cloud-1',
+      title: 'Codex cloud',
+      subtitle: 'Cloud worker',
+      section: 'cloud',
+    });
+  });
+});
+
+describe('splitRuntimeName', () => {
+  it('separates daemon host suffix from provider name', () => {
+    expect(splitRuntimeName('Claude (build-server-01)')).toEqual({
+      base: 'Claude',
+      hostname: 'build-server-01',
+    });
+  });
+
+  it('falls back to the full name when no host suffix exists', () => {
+    expect(splitRuntimeName('Codex cloud')).toEqual({
+      base: 'Codex cloud',
+      hostname: null,
+    });
+  });
+});
+
+describe('sharedCustomName', () => {
+  it('returns the name when every runtime shares one non-empty custom_name', () => {
+    expect(
+      sharedCustomName([
+        makeRuntime({ id: 'a', custom_name: "Bohan's MacBook" }),
+        makeRuntime({ id: 'b', custom_name: "Bohan's MacBook" }),
+      ]),
+    ).toBe("Bohan's MacBook");
+  });
+
+  it('returns null when only some runtimes are named (a lone per-runtime name is not the machine name)', () => {
+    expect(
+      sharedCustomName([
+        makeRuntime({ id: 'a', custom_name: 'just this one' }),
+        makeRuntime({ id: 'b', custom_name: null }),
+      ]),
+    ).toBeNull();
+  });
+
+  it('returns null when the names disagree, or the set is empty', () => {
+    expect(
+      sharedCustomName([
+        makeRuntime({ id: 'a', custom_name: 'Air' }),
+        makeRuntime({ id: 'b', custom_name: 'Pro' }),
+      ]),
+    ).toBeNull();
+    expect(sharedCustomName([])).toBeNull();
+  });
+});
+
+describe('runtimeRowLabel', () => {
+  it('falls back to the provider base when no alias is set', () => {
+    expect(
+      runtimeRowLabel(makeRuntime({ name: 'Codex (dev.local)', custom_name: null }), 'dev.local'),
+    ).toBe('Codex');
+  });
+
+  it('collapses a machine-level alias (shared with the title) to the base', () => {
+    expect(
+      runtimeRowLabel(
+        makeRuntime({ name: 'Codex (dev.local)', custom_name: 'Dev Box' }),
+        'Dev Box',
+      ),
+    ).toBe('Codex');
+  });
+
+  it('shows a per-runtime alias that differs from the machine title', () => {
+    expect(
+      runtimeRowLabel(
+        makeRuntime({ name: 'Codex (dev.local)', custom_name: 'just this one' }),
+        'Dev Box',
+      ),
+    ).toBe('just this one');
+  });
+});

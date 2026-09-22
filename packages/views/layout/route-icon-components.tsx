@@ -1,0 +1,55 @@
+import {
+  Inbox,
+  MessageSquare,
+  CircleUser,
+  ListTodo,
+  FolderKanban,
+  Zap,
+  Bot,
+  Users,
+  BarChart3,
+  Monitor,
+  Server,
+  BookOpenText,
+  Settings,
+  Sparkles,
+  File,
+  FileText,
+  FileImage,
+  FileCode,
+  FileArchive,
+  FileAudio,
+  FileVideo,
+  FileQuestion,
+  type LucideIcon,
+} from 'lucide-react';
+import { resolveRouteIconName, type RouteIconName } from '@goosar/core/paths';
+
+export const ROUTE_ICON_COMPONENTS: Record<RouteIconName, LucideIcon> = {
+  Inbox,
+  MessageSquare,
+  CircleUser,
+  ListTodo,
+  FolderKanban,
+  Zap,
+  Bot,
+  Users,
+  BarChart3,
+  Monitor,
+  Server,
+  BookOpenText,
+  Settings,
+  Sparkles,
+  File,
+  FileText,
+  FileImage,
+  FileCode,
+  FileArchive,
+  FileAudio,
+  FileVideo,
+  FileQuestion,
+};
+
+export function routeIconForPath(path: string): LucideIcon {
+  return ROUTE_ICON_COMPONENTS[resolveRouteIconName(path)];
+}

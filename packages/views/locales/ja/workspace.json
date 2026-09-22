@@ -1,0 +1,106 @@
+{
+  "create_form": {
+    "name_label": "ワークスペース名",
+    "name_placeholder": "マイワークスペース",
+    "url_label": "ワークスペースURL",
+    "url_placeholder": "my-workspace",
+    "template_label": "ワークスペーステンプレート",
+    "template_none": "テンプレートなし",
+    "template_none_description": "空の状態で開始 — パッケージやプリセットは後から追加できます。",
+    "submit": "ワークスペースを作成",
+    "submitting": "作成中...",
+    "errors": {
+      "slug_format": "小文字、数字、ハイフンのみ使用できます",
+      "slug_taken": "このワークスペースURLはすでに使用されています。",
+      "slug_reserved": "このワークスペースURLは予約されているため使用できません。",
+      "slug_conflict_toast": "別のワークスペースURLを選択してください",
+      "create_failed": "ワークスペースを作成できませんでした"
+    }
+  },
+  "new_page": {
+    "back": "戻る",
+    "log_out": "ログアウト",
+    "title": "Goosarへようこそ",
+    "description": "あなたとAIの仲間が同じコンテキストを共有しながら、イシューを引き受け、コメントを残し、隣り合って作業する1つのワークスペースです。",
+    "invite_hint": "ワークスペースの準備ができたら、仲間を招待できます。",
+    "join_instead": "組織が用意したワークスペースに参加する"
+  },
+  "join_page": {
+    "title": "ワークスペースを選ぶ",
+    "description": "組織では役割ごとにワークスペースが用意されています。自分のものを選んでください。中身はすぐに使える状態です。",
+    "loading": "役割を読み込んでいます…",
+    "empty": "参加できる役割はまだありません。自分でワークスペースを作成するか、管理者に招待を依頼してください。",
+    "members_other": "メンバー {{count}} 人",
+    "join": "参加する",
+    "joining": "参加しています…",
+    "failed": "参加できませんでした。もう一度お試しください。",
+    "create_instead": "自分のワークスペースを作成する"
+  },
+  "creation_disabled": {
+    "title": "ワークスペースの作成が無効になっています",
+    "description": "このGoosar instanceでは新しいワークスペースを作成できません。既存のワークスペースへの招待を管理者に依頼してください。"
+  },
+  "no_access": {
+    "title": "ワークスペースを利用できません",
+    "description": "このワークスペースは存在しないか、アクセス権がありません。",
+    "go_to_workspaces": "マイワークスペースへ移動",
+    "sign_in_different": "別のユーザーでログイン"
+  },
+  "capabilities": {
+    "title": "ここでできること",
+    "lede": "アシスタントが日々の仕事でどう役立つかを手短にご紹介します。やってほしいことを、普段の言葉で伝えるだけです。",
+    "role_eyebrow": "ワークスペースの役割",
+    "role_no_detail_note": "この役割でアシスタントが具体的に何をしてくれるかは、まだ書かれていません。以下は、どの仕事でもできることです。",
+    "no_role_note": "このワークスペースは特定の役割に結びついていません。以下は全員が使える内容です。",
+    "baseline_heading": "どの役割でも",
+    "baseline_ask_title": "普段の言葉で頼む",
+    "baseline_ask_body": "やってほしいことを普通の言葉で書くだけです。内部の仕組みを覚える必要はありません。",
+    "baseline_docs_title": "書類を仕上げる",
+    "baseline_docs_body": "文書・表・スライドの作成、書き直し、読み合わせを行います。",
+    "baseline_find_title": "調べてまとめる",
+    "baseline_find_body": "散らばった情報を一つの分かりやすい答えにまとめ、出典も示します。",
+    "baseline_track_title": "仕事を見える形に",
+    "baseline_track_body": "依頼・回答・できあがったファイルが一か所に残るので、いつでも戻れます。",
+    "boundary_heading": "だれが何を設定するか",
+    "boundary_admin_title": "ワークスペース全体の設定",
+    "boundary_admin_body": "AI 接続、アシスタント、業務ツールへのアクセスは設定済みです。ここで理解したり設定したりすることはありません。",
+    "boundary_admin_body_unconfirmed": "AI 接続、アシスタント、業務ツールへのアクセスは、ワークスペース全体で一度だけ設定します。通常は管理者が行います。",
+    "boundary_you_title": "あなたが行うこと",
+    "boundary_you_body": "業務ツールの個人キーです。あなたの名前で動き、あなたに開かれているものだけを開きます。だから入力できるのはあなただけです。",
+    "llm_ready": "AI 接続は設定済みです",
+    "services_heading": "あなたの業務ツール",
+    "badge_admin_provided": "管理者が設定済み",
+    "badge_admin_off": "管理者が今はオフにしています",
+    "badge_you_missing": "あなたのキーが必要です",
+    "badge_you_filled": "キー入力済み",
+    "badge_you_none": "キーは不要です",
+    "saved_not_verified": "「キー入力済み」は値が保存されたという意味です。実際に動くかどうかは、サービスのカードで「アクセスの取り方」を開き、「動作の確認方法」をご覧ください。",
+    "open_setup": "キーを入力する場所",
+    "sample_tasks_heading": "いま試してみる",
+    "sample_tasks_lede": "これはデモではありません。クリックすると実際のタスクが作られ、アシスタントが着手し、結果は新しいタブで開きます。",
+    "sample_task_run": "実行する",
+    "sample_task_run_again": "もう一度実行する",
+    "sample_task_created": "タスク {{identifier}} を作成しました。アシスタントが着手しています。",
+    "sample_task_failed": "タスクを作成できませんでした。もう一度お試しください。",
+    "sample_task_needs_key": "あなたのキーが必要です: {{services}}",
+    "sample_task_needs_key_body": "あなたの名前でサービスにサインインできるようになるまで、アシスタントはこの作業を行えません。キーを入力するのはあなたです。取得方法は手順に書かれています。",
+    "sample_task_no_helper": "この空間のアシスタントはまだ準備できていません。準備ができ次第、ここから実行できます。"
+  },
+  "credentials_banner": {
+    "title": "業務ツールのキーがまだ不足しています",
+    "body": "アシスタントはまだ次を扱えません: {{services}}。これらのキーを入力できるのはあなただけです。入手方法は手順に書かれています。",
+    "action": "手順を見る",
+    "dismiss": "閉じる"
+  },
+  "role_setup": {
+    "title": "役割のセットアップ",
+    "autopilots_title_other": "自動化（{{count}}）：有効にする",
+    "autopilots_body": "役割には自動化が付属します。あなたが決めるまで動かないよう、一時停止で用意されています。",
+    "autopilots_action": "有効にする",
+    "autopilots_enabling": "有効にしています…",
+    "autopilots_enabled": "自動化を有効にしました",
+    "autopilots_partial_other": "{{count}} 件の自動化を有効にできませんでした",
+    "runtime_title": "エージェントにマシンがありません",
+    "runtime_body": "マシンを接続してワークスペースに公開するまで、何も実行できません。"
+  }
+}

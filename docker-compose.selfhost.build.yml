@@ -1,0 +1,24 @@
+# Development override: build the backend/web images from the current checkout
+# instead of pulling the official GHCR images.
+
+services:
+  backend:
+    image: goosar-backend:dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+        COMMIT: ${COMMIT:-unknown}
+        DATE: ${DATE:-unknown}
+
+  frontend:
+    image: goosar-web:dev
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        NEXT_PUBLIC_APP_VERSION: dev
+        # Stamps for the CLI this image cross-compiles and serves at /cli/*.
+        COMMIT: ${COMMIT:-unknown}
+        DATE: ${DATE:-unknown}

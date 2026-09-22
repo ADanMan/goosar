@@ -1,0 +1,145 @@
+# Outbound-host allowlist (#436).
+#
+# Every `https://<host>` literal that scripts/egress-inventory.sh finds in the
+# shipped source must appear here with a line saying what it is. The gate is
+# `bash scripts/egress-inventory.sh --check`; CI runs it, so a new destination
+# cannot land undocumented.
+#
+# Being on this list is NOT permission to call out. It only records that
+# somebody looked. The operator-facing answer — what is called, why, and which
+# switch turns it off — is the egress table in SELF_HOSTING.md
+# («Профиль доставки и исходящий трафик»), and the personal-data consequences are in
+# docs/compliance/data-map.md.
+#
+# Three kinds of entry, marked in the comment:
+#   [call]    the product opens this connection itself
+#   [link]    a URL the product renders for a human to click, or a browser asset
+#   [text]    a documentation URL in a comment, error message or lockfile —
+#             nothing connects to it at runtime
+#
+# A line prefixed with `~` is a destination that does NOT appear as a literal in
+# this repository — it is reached from inside a dependency — so the scan cannot
+# find it and the diff must ignore it. Those entries exist because the gate is
+# only as honest as its blind spots: a destination that moves into an SDK does
+# not stop being a destination. Add one whenever an outbound call's host is
+# chosen by a library rather than by our source.
+
+# --- product egress, gated by GOOSAR_DELIVERY_PROFILE ---------------------
+# [call] skill catalog search/import; user's query is sent verbatim.
+#        Off on perimeter (GOOSAR_SKILL_SOURCES).
+clawhub.ai
+# [call] skill import from a repository, release polling by the daemon, the
+#        CLI/desktop self-update, and the web /download asset list.
+#        Off on perimeter; /download has GOOSAR_DOWNLOAD_GITHUB_RELEASES=off.
+api.github.com
+raw.githubusercontent.com
+github.com
+www.github.com
+# [call] skills.sh slug resolution (resolves through api.github.com).
+#        Off on perimeter (GOOSAR_SKILL_SOURCES).
+skills.sh
+# [call] managed-cloud origins: cloud profile endpoints, marketing/download
+#        pages, static assets. A perimeter deployment points at its own host.
+goosar.ru
+www.goosar.ru
+static.goosar.ru
+# [call] Cloud Fleet PAT verifier. nil unless FleetBaseURL is configured
+#        (server/internal/auth/cloud_pat.go).
+fleet.goosar.cloud
+
+# --- product egress, off unless the operator configures it -----------------
+# [call] product analytics. Off unless POSTHOG_API_KEY is set;
+#        GOOSAR_ANALYTICS_DISABLED forces the no-op client.
+us.i.posthog.com
+# [call] Composio tool proxy and connected accounts.
+#        Off unless COMPOSIO_API_KEY is set.
+backend.composio.dev
+# [link] toolkit icons fetched by the OPERATOR'S BROWSER on the Composio and
+#        agent MCP tabs. Only blockable at the network edge.
+logos.composio.dev
+# [call] provisioning packages pulled from an OCI registry
+#        (GOOSAR_PROVISIONING_OCI_URL). Point it at an in-perimeter registry,
+#        or use the local store (offline/load-provisioning-packages.sh).
+ghcr.io
+# [call] attachment storage. Off unless S3_BUCKET is set; the example bucket
+#        host is the URL shape in server/internal/storage/s3.go.
+my-bucket.s3.us-east-1.amazonaws.com
+# [call] login-code delivery through the Resend SDK (github.com/resend/resend-go).
+#        Off when RESEND_API_KEY is empty; SMTP_HOST + SMTP_FROM_EMAIL send
+#        through an internal relay instead (server/internal/service/email.go).
+#        The perimeter configuration should use the relay. The host lives in the
+#        SDK, not in our source, so it is documented here but not diffed.
+~api.resend.com
+
+# --- browser assets on pages the product serves ----------------------------
+# [link] video embeds on the documentation site: the READER'S BROWSER loads an
+#        iframe from the player host when a docs page uses <VideoEmbed>
+#        (apps/docs/components/video-embed.tsx). The watch hosts are the
+#        fallback links next to the player. Nothing on the server calls them;
+#        the only reliable block is at the network edge, or serving docs
+#        without video pages.
+player.bilibili.com
+www.bilibili.com
+www.youtube-nocookie.com
+www.youtube.com
+# [link] JSON-LD @context on the landing layout. A vocabulary identifier;
+#        the page does not fetch it.
+schema.org
+# [link] development-only React inspector, loaded only when NODE_ENV is
+#        development AND VITE_REACT_GRAB is set. Never in a release build.
+www.react-grab.com
+
+# --- links the UI renders for a human --------------------------------------
+# [link] "get your key here" targets on the runtime/onboarding screens and the
+#        Slack settings tab. The operator's browser opens them; the server
+#        never does.
+platform.claude.com
+app.slack.com
+openai.com
+developers.openai.com
+www.kimi.com
+code.kimi.com
+api-docs.deepseek.com
+docs.z.ai
+llm.example.com
+
+# --- documentation URLs in comments, errors and lockfiles ------------------
+# [text] agent CLI vendor documentation, quoted next to the code that detects
+#        or configures each runtime. Nothing here is fetched: these runtimes
+#        talk to their vendors from the daemon machine over their OWN
+#        configuration, which Goosar cannot gate (see data-map.md).
+docs.x.ai
+docs.trae.cn
+opencode.ai
+antigravity.google
+www.codebuddy.ai
+gitcode.com
+moonshotai.github.io
+agentclientprotocol.com
+api.openai.com
+# [text] tool and library documentation cited in comments, build scripts and
+#        the migration runner's error text.
+nodejs.org
+www.npmjs.com
+www.postgresql.org
+docs.docker.com
+docs.expo.dev
+docs.composio.dev
+nextjs.org
+shiki.style
+diceui.com
+tkdodo.eu
+www.aiuxdesign.guide
+twitter.com
+# [text] placeholder URLs in `goosar setup` help text and examples.
+test.x
+api.internal.co
+app.internal.co
+api-staging.co
+# [text] Kubernetes apiVersion / label namespaces in the Helm chart
+#        (deploy/helm/goosar); nothing connects to them.
+kubernetes.io
+prometheus-operator.dev
+# [text] Trivy documentation cited by scripts/sbom-scan.sh and the release
+#        pipeline; the scanner itself is invoked locally.
+trivy.dev

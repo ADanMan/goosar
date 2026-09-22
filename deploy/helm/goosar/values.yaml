@@ -1,0 +1,470 @@
+# -----------------------------------------------------------------------------
+# Container images
+# -----------------------------------------------------------------------------
+images:
+  backend:
+    repository: ghcr.io/adanman/goosar-backend
+    # Empty defaults to Chart.appVersion. Released OCI charts set appVersion to
+    # the Git tag (for example v0.3.5), so installs use matching app images.
+    tag: ""
+    pullPolicy: IfNotPresent
+  frontend:
+    repository: ghcr.io/adanman/goosar-web
+    # Empty defaults to Chart.appVersion. Set explicitly to override.
+    tag: ""
+    pullPolicy: IfNotPresent
+  postgres:
+    repository: pgvector/pgvector
+    tag: pg17
+    # Pinned by digest (supply-chain: a tag is mutable, a digest is not — see
+    # #137). MUST match the pgvector digest in docker-compose.selfhost.yml —
+    # offline/offline-kit.test.sh asserts the two delivery paths cannot
+    # silently drift. To update: `docker buildx imagetools inspect
+    # pgvector/pgvector:pg17` (multi-arch index digest) and update both files
+    # together. Leave empty to fall back to a bare repository:tag pull.
+    digest: sha256:cf134a767f474095eeba57e0117be8e568e011a63f33fbf252f14c9b760f8e6f
+    pullPolicy: IfNotPresent
+
+# -----------------------------------------------------------------------------
+# Pre-created Secret with sensitive values. Create it before `helm install`:
+#
+# Built-in postgres (default):
+#   kubectl -n <namespace> create secret generic goosar-secrets \
+#     --from-literal=JWT_SECRET="$(openssl rand -hex 32)" \
+#     --from-literal=GOOSAR_MCP_SECRET_KEY="$(openssl rand -base64 32)" \
+#     --from-literal=POSTGRES_PASSWORD="$(openssl rand -hex 16)" \
+#     --from-literal=RESEND_API_KEY="" \
+#     --from-literal=CLOUDFRONT_PRIVATE_KEY="" \
+#     --from-literal=GOOSAR_DEV_VERIFICATION_CODE="" \
+#     --from-literal=GOOSAR_LLM_API_KEY=""
+#
+# External postgres (postgres.external.enabled=true):
+#   Replace POSTGRES_PASSWORD with DATABASE_URL pointing at your external cluster.
+#   kubectl -n <namespace> create secret generic goosar-secrets \
+#     --from-literal=JWT_SECRET="$(openssl rand -hex 32)" \
+#     --from-literal=GOOSAR_MCP_SECRET_KEY="$(openssl rand -base64 32)" \
+#     --from-literal=DATABASE_URL="postgres://user:pass@host:5432/goosar?sslmode=require" \
+#     --from-literal=RESEND_API_KEY="" \
+#     --from-literal=CLOUDFRONT_PRIVATE_KEY="" \
+#     --from-literal=GOOSAR_DEV_VERIFICATION_CODE="" \
+#     --from-literal=GOOSAR_LLM_API_KEY=""
+#
+# The chart references this Secret by name; it does not template it, so real
+# values never need to land in git.
+# -----------------------------------------------------------------------------
+existingSecret: goosar-secrets
+
+# -----------------------------------------------------------------------------
+# PostgreSQL (pgvector)
+# -----------------------------------------------------------------------------
+postgres:
+  # Set external.enabled=true to skip the built-in postgres Deployment/PVC and
+  # supply DATABASE_URL directly via the existingSecret instead. When true,
+  # the postgres Deployment, PVC, and Service are not created.
+  # Add DATABASE_URL to your existingSecret pointing at the external cluster.
+  # The HA path (#397): the in-chart postgres is a single Deployment on one
+  # PVC — no replication, no failover, and `helm upgrade` restarts it. A
+  # deployment with an availability target runs Postgres OUTSIDE the chart
+  # (a managed service, or an operator such as CloudNativePG) and points
+  # DATABASE_URL at it. Require TLS on that hop: append ?sslmode=require, or
+  # ?sslmode=verify-full with the CA mounted.
+  # https://www.postgresql.org/docs/17/libpq-connect.html#LIBPQ-CONNECT-SSLMODE
+  external:
+    enabled: false
+  database: goosar
+  user: goosar
+  # TLS on the hop to the built-in postgres Deployment (#386). The chart's
+  # postgres pod runs the stock pgvector image with no certificates, so the
+  # default stays "disable" — both pods sit inside the cluster network and
+  # flipping this without server-side TLS would break every install.
+  # For an EXTERNAL database (external.enabled=true) this value is ignored:
+  # you supply the whole DATABASE_URL through existingSecret, with
+  # ?sslmode=require or ?sslmode=verify-full there.
+  sslMode: disable
+  persistence:
+    size: 10Gi
+    # Leave empty to use the cluster's default StorageClass.
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  # Pod/container hardening (#520, trivy KSV-0014 + KSV-0118). uid/gid 999 is
+  # the `postgres` account inside the pgvector/postgres image; fsGroup hands
+  # the data PVC to it, which is what lets the container start without the
+  # root-then-drop dance the image entrypoint would otherwise do. The root
+  # filesystem is read-only — the socket directory and /tmp are emptyDir
+  # volumes mounted by templates/postgres.yaml, and PGDATA is the PVC.
+  #
+  # An upgrade onto a volume whose files are owned by another uid needs either
+  # a one-off chown or these two blocks set to {} for that release.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+  # Standard Kubernetes scheduling constraints for the postgres Deployment.
+  affinity: {}
+  tolerations: []
+
+# -----------------------------------------------------------------------------
+# Backend (Go API + WS server)
+# -----------------------------------------------------------------------------
+backend:
+  # Horizontal scale of the API/WS server (#397). 1 is the default and what a
+  # single-node install wants.
+  #
+  # replicas > 1 REQUIRES redis.url (or REDIS_URL in existingSecret): the
+  # backend refuses to start otherwise, because without shared Redis every pod
+  # keeps its own rate-limit budget and its own realtime hub. It also requires
+  # storage every pod can reach — S3 (backend.config.s3Bucket) or a
+  # ReadWriteMany uploads PVC; the default ReadWriteOnce PVC cannot attach to a
+  # second pod. See SELF_HOSTING.md «Высокая доступность» for the full
+  # picture: external Postgres, rolling upgrades, and the honest limits.
+  replicas: 1
+  # PodDisruptionBudget. Node drains and cluster upgrades evict pods; without a
+  # budget the kubelet may take the last backend pod down.
+  # https://kubernetes.io/docs/tasks/run-application/configure-pdb/
+  podDisruptionBudget:
+    # "auto" creates the PDB only when replicas > 1 — a PDB with minAvailable 1
+    # over a single replica blocks every voluntary drain forever, which is
+    # worse than no PDB. true/false force it on or off.
+    enabled: auto
+    minAvailable: 1
+  # Soft anti-affinity so replicas do not all land on one node. Applied only
+  # when replicas > 1 and backend.affinity is empty; set backend.affinity to
+  # take full control (a hard requiredDuringScheduling rule, for example).
+  spreadReplicas: true
+  # Standard topologySpreadConstraints, passed through verbatim. Use this for
+  # zone spreading on a multi-AZ cluster, e.g.
+  #   - maxSkew: 1
+  #     topologyKey: topology.kubernetes.io/zone
+  #     whenUnsatisfiable: ScheduleAnyway
+  #     labelSelector:
+  #       matchLabels:
+  #         app.kubernetes.io/component: backend
+  topologySpreadConstraints: []
+  uploads:
+    persistence:
+      # When true (default) the chart provisions a PersistentVolumeClaim for
+      # /app/data/uploads and mounts it into the backend pod. The backend only
+      # uses this directory when S3 is NOT configured (`backend.config.s3Bucket`
+      # empty) — see server/cmd/server/router.go for the storage selection.
+      #
+      # Set to false when you have configured S3/CloudFront and don't want the
+      # chart to declare the uploads PVC at all. The default access mode is
+      # ReadWriteOnce, which prevents `backend.replicas > 1` from scheduling a
+      # second pod (Multi-Attach error); disabling persistence — or switching
+      # accessModes to a ReadWriteMany class — removes that constraint on the
+      # storage side. Note: backend startup migrations are not yet serialized
+      # across pods, so multi-replica still requires care beyond the chart.
+      enabled: true
+      size: 5Gi
+      # Leave empty to use the cluster's default StorageClass.
+      storageClass: ""
+      # PVC accessModes. Defaults to [ReadWriteOnce] to match the typical
+      # local-path / hostPath / EBS StorageClass on a single-node setup. Switch
+      # to [ReadWriteMany] (with a compatible StorageClass such as NFS, EFS,
+      # CephFS) if you intend to share the uploads volume across multiple
+      # backend replicas without S3.
+      accessModes:
+        - ReadWriteOnce
+  # All non-secret backend env. Secret values come from `existingSecret`.
+  config:
+    appEnv: production
+    # Log format (json|text) and level (debug|info|warn|error). Empty level =
+    # the built-in default, which is info while appEnv is production (#434).
+    logFormat: json
+    logLevel: ""
+    appUrl: http://goosar.dev.lan
+    frontendOrigin: http://goosar.dev.lan
+    corsAllowedOrigins: ""
+    cookieDomain: ""
+    resendFromEmail: noreply@goosar.ru
+    allowSignup: true
+    allowedEmails: ""
+    allowedEmailDomains: ""
+    # Self-host gate (#3433): set true to make POST /api/workspaces 403 for
+    # every caller. Bootstrap the workspace with this false, then flip to
+    # true so users can only join via invitation.
+    disableWorkspaceCreation: false
+    # Self-host-only VCS integration (Forgejo / Gitea / GitLab). The official
+    # chart enables the product surface by default; operators must also provide
+    # GOOSAR_VCS_SECRET_KEY through existingSecret before connections work.
+    # Set false to hide and reject the integration for this deployment.
+    vcsIntegrationEnabled: true
+    s3Bucket: ""
+    # No default region: when s3Bucket is set, the backend refuses to start
+    # unless the destination is explicit — AWS_ENDPOINT_URL (via extra env)
+    # for S3-compatible storage, or s3Region for real AWS S3.
+    s3Region: ""
+    cloudfrontDomain: ""
+    cloudfrontKeyPairId: ""
+    localUploadBaseUrl: http://api.goosar.dev.lan
+    # Package provisioning store (#231): "" disables it, "local" serves
+    # packages loaded into the uploads volume, "oci" pulls from a registry.
+    provisioningStore: ""
+    provisioningLocalPrefix: ""
+    provisioningOciUrl: ""
+    provisioningOciRepository: ""
+    provisioningOciUsername: ""
+    # Deployment administrators (#213): comma-separated emails of existing
+    # users. Seeds the deployment_admin role only while its table is empty
+    # (first deployment); afterwards the database is authoritative and a
+    # diverging list is only logged.
+    deploymentAdminEmails: ""
+    deploymentJiraUrl: ""  # базовый адрес Jira заказчика (deployment-defaults, #493)
+    deploymentConfluenceUrl: ""  # базовый адрес Confluence
+    deploymentEwsUrl: ""  # адрес EWS (Exchange)
+    deploymentBitrix24Url: ""  # адрес Bitrix24 (webhook base, #642)
+    deploymentMcpGatewayUrl: ""  # адрес mcp-gateway (#642)
+    deploymentMailDomain: ""  # почтовый домен сотрудников (плейсхолдер логина)
+    deploymentLlmApiBase: ""  # LLM-шлюз контура для пресета «Контур»
+    deploymentLlmModel: ""  # модель по умолчанию у LLM-шлюза контура
+    # Real LLM gateway wiring for GET /api/deployment/client-secrets. Base URL
+    # and model are non-secret config; the key (GOOSAR_LLM_API_KEY) goes in
+    # existingSecret instead — see the Secret example above.
+    llmBaseUrl: ""
+    llmDefaultModel: ""
+    # Corporate sign-in (#394). Comma-separated list of email, oidc, ldap;
+    # empty means email, the only door this product had before #394.
+    # Design and rationale: docs/auth/corporate-auth.md
+    #
+    # The two secrets do NOT live here. Put GOOSAR_OIDC_CLIENT_SECRET and
+    # GOOSAR_LDAP_BIND_PASSWORD into backend.existingSecret: a ConfigMap is
+    # readable by anything with get on the namespace, and an LDAP bind
+    # password is a credential for the customer's own directory.
+    authMethods: ""
+    # Second factor (#391): the name an authenticator app shows for this stand.
+    # Empty falls back to "Goosar".
+    totpIssuer: ""
+    oidcIssuer: ""
+    oidcClientId: ""
+    oidcRedirectUrl: ""
+    oidcScopes: ""
+    # Both must be set for the admin mapping to exist. A match files a PENDING
+    # deployment_admin request (#426) an operator confirms on the server; it
+    # never grants the role.
+    oidcAdminClaim: ""
+    oidcAdminValue: ""
+    oidcDisplayName: ""
+    # ldaps://host:636, or ldap://host:389 with ldapStartTls: true. Plain
+    # ldap:// without StartTLS is refused outright — a simple bind puts the
+    # domain password on the wire in the clear (RFC 4513 §3).
+    ldapUrl: ""
+    ldapStartTls: false
+    ldapBindDn: ""
+    ldapBaseDn: ""
+    ldapUserFilter: ""
+    ldapEmailAttr: ""
+    ldapNameAttr: ""
+    ldapAdminGroup: ""
+    ldapDisplayName: ""
+    # Role workspaces (#484): "auto" (default when empty) provisions one
+    # workspace per enabled workspace_template row on every start; "off"
+    # leaves roles to the operator. Any other value refuses startup.
+    roleWorkspaces: ""
+    # Deployment profile (ADR-0015): "" (= perimeter), demo, dev or local.
+    # What the stand is allowed to switch on for the operator; separate from
+    # the delivery/egress profile.
+    deploymentProfile: ""
+    # Rate limits, empty = the in-binary defaults. The ADR-0015 `dev` profile
+    # uses 6000 / 100; on any other stand leave them alone.
+    rateLimitApi: ""
+    rateLimitAuth: ""
+    # Soft heap target for the Go GC (#439), ~90% of the memory limit below.
+    # Raise both together; the compose stack uses the same pair
+    # (BACKEND_GOMEMLIMIT / BACKEND_MEM_LIMIT).
+    goMemLimit: 900MiB
+    # Day-2 retention (#439). Empty = the in-binary defaults, which are 720h
+    # (30 days) of sys_cron_executions audit rows, a 168h (7 day) grace before an
+    # attachment bound to no issue/comment/chat message is reclaimed, and an
+    # hourly sweep. Go duration syntax — "d" is not a unit.
+    schedulerAuditRetention: ""
+    uploadGcGrace: ""
+    hygieneSweepInterval: ""
+    # Oldest goosar CLI / daemon allowed to take tasks (#439). Empty = the
+    # built-in floor (0.2.21); "none" disables the gate. Raise it after an
+    # upgrade that changes the task contract.
+    minDaemonVersion: ""
+  # Memory/CPU limits (#439). The compose stack's defaults are kept in step
+  # with these (BACKEND_MEM_LIMIT / POSTGRES_MEM_LIMIT / FRONTEND_MEM_LIMIT),
+  # so a stand behaves the same on either runtime.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  # Pod/container hardening (#384). The backend image runs as uid 1001 and the
+  # only paths it writes are the uploads mount and /tmp (multipart uploads over
+  # the in-memory limit spool through os.TempDir()), so the root filesystem can
+  # be read-only. fsGroup makes the uploads PVC group-writable for that uid on
+  # storage classes that honor it.
+  #
+  # UPGRADE NOTE: an uploads PVC written by a pre-#384 (root) backend is
+  # root-owned. On a storage class that ignores fsGroup, fix it once with a
+  # throwaway root pod, or set backend.podSecurityContext to {} until you do.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    fsGroup: 1001
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+  # Standard Kubernetes scheduling constraints for the backend Deployment.
+  affinity: {}
+  tolerations: []
+
+# -----------------------------------------------------------------------------
+# Frontend (Next.js standalone)
+# -----------------------------------------------------------------------------
+frontend:
+  replicas: 1
+  config:
+    # Backend origin used by the frontend runtime proxy for /api, /auth,
+    # /uploads, and /ws. Empty defaults to this release's backend Service.
+    remoteApiUrl: ""
+    # Optional docs origin used by the frontend runtime proxy for /docs.
+    docsUrl: ""
+    # Optional browser-visible split-origin overrides. Leave empty for the
+    # default same-origin frontend proxy.
+    publicApiUrl: ""
+    publicWsUrl: ""
+    # Node heap cap (#439), ~90% of frontend.resources.limits.memory below.
+    # V8 derives its default heap from host RAM, not the cgroup, so without
+    # this the pod is OOM-killed rather than collecting. Raise both together;
+    # empty leaves NODE_OPTIONS unset.
+    nodeOptions: "--max-old-space-size=900"
+  # Compatibility shim for legacy goosar-web images built before runtime
+  # URL rewrites. New images do not need this unprefixed Service.
+  compatibility:
+    # When true the chart creates an ExternalName Service literally named
+    # "backend" for old images that baked REMOTE_API_URL=http://backend:8080.
+    # Because that name is unprefixed, only ONE such release can run per
+    # namespace. Keep false for current images.
+    backendAlias: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  # Pod/container hardening (#384, #520). The web image already runs as uid
+  # 1001. The root filesystem is read-only (trivy KSV-0014): the two paths the
+  # Next.js standalone server writes — its fetch/ISR cache and the temp dir —
+  # are emptyDir volumes mounted by templates/frontend.yaml.
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+    runAsGroup: 1001
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+  # Standard Kubernetes scheduling constraints for the frontend Deployment.
+  affinity: {}
+  tolerations: []
+
+# -----------------------------------------------------------------------------
+# Redis
+# -----------------------------------------------------------------------------
+# Shared state for a multi-replica backend (#397): realtime relay between
+# pods, cross-pod rate-limit budgets, cross-pod connection revocation, and the
+# runtime liveness/cache stores. Optional and unused at replicas: 1.
+#
+# The chart does NOT ship a Redis: a single in-chart Redis pod would be one
+# more single point of failure in the middle of the HA story. Run a managed
+# Redis, or install one (bitnami/redis, the Redis Operator) alongside this
+# release and point `url` at its Service.
+#
+# A URL with a password does not belong in a ConfigMap — leave this empty and
+# put REDIS_URL into existingSecret instead; envFrom applies the Secret after
+# the ConfigMap, so the Secret wins.
+redis:
+  url: ""
+
+# -----------------------------------------------------------------------------
+# Ingress
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: traefik
+  annotations: {}
+  frontend:
+    host: goosar.dev.lan
+  backend:
+    host: api.goosar.dev.lan
+  # tls:
+  #   - hosts: [goosar.dev.lan, api.goosar.dev.lan]
+  #     secretName: goosar-tls
+
+# -----------------------------------------------------------------------------
+# Monitoring
+# -----------------------------------------------------------------------------
+monitoring:
+  # Master switch for the metrics listener itself. Off keeps the backend's
+  # behaviour byte-for-byte identical to a chart without this section: no
+  # METRICS_ADDR, no listener, no scrape annotations. Everything below is
+  # inert while this is false.
+  #
+  # The listener binds 0.0.0.0 inside the pod deliberately — Prometheus
+  # scrapes it across the pod network. It is NOT added to the backend Service
+  # or the Ingress, so it stays inside the cluster; restrict it further with a
+  # NetworkPolicy if the cluster is shared.
+  enabled: false
+  port: 9090
+  # Annotations for Prometheus installs that discover pods by annotation
+  # instead of by ServiceMonitor (kube-prometheus without the Operator, the
+  # stock Helm prometheus chart, VictoriaMetrics vmagent). Harmless when a
+  # ServiceMonitor is used as well.
+  podAnnotations: true
+  serviceMonitor:
+    # Requires the Prometheus Operator CRD (monitoring.coreos.com/v1). Kept
+    # disabled by default so minimal self-host installs without that CRD still
+    # render and install.
+    enabled: false
+    # Extra labels for the Operator's serviceMonitorSelector. kube-prometheus-stack
+    # commonly wants `release: <its own release name>`.
+    additionalLabels: {}
+    interval: 30s
+    scrapeTimeout: 10s
+  prometheusRule:
+    # Same CRD requirement as serviceMonitor above.
+    enabled: false
+    additionalLabels: {}
+    samplerQueryErrorsFor: 5m
+    samplerQueryLatencyFor: 10m
+    severity: warning
+  dashboard:
+    # Ships deploy/helm/goosar/dashboards/goosar-overview.json as a
+    # ConfigMap. Grafana's sidecar (grafana.sidecar.dashboards.enabled in the
+    # Grafana / kube-prometheus-stack chart) picks it up by label.
+    enabled: false
+    label: grafana_dashboard
+    labelValue: "1"
+    # Grafana folder the sidecar files it under; empty means the sidecar default.
+    folderAnnotation: Goosar

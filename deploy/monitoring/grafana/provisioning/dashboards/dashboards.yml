@@ -1,0 +1,17 @@
+# Grafana dashboard provisioning for the Compose monitoring overlay (#396).
+#
+# The JSON lives in the Helm chart (deploy/helm/goosar/dashboards) so the
+# chart's .Files.Get can embed the same file in a ConfigMap — Helm cannot read
+# outside its chart directory, and one dashboard maintained twice drifts.
+apiVersion: 1
+
+providers:
+  - name: goosar
+    orgId: 1
+    folder: Goosar
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

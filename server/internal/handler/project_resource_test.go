@@ -1,0 +1,1024 @@
+package handler
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestProjectResourceLifecycle(t *testing.T) {
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/projects?workspace_id="+testWorkspaceID, map[string]any{
+		"title": "Resource lifecycle project",
+	})
+	testHandler.CreateProject(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateProject: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var project ProjectResponse
+	if err := json.NewDecoder(w.Body).Decode(&project); err != nil {
+		t.Fatalf("decode CreateProject: %v", err)
+	}
+	defer func() {
+		req := newRequest("DELETE", "/api/projects/"+project.ID, nil)
+		req = withURLParam(req, "id", project.ID)
+		testHandler.DeleteProject(httptest.NewRecorder(), req)
+	}()
+
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/projects/"+project.ID+"/resources", map[string]any{
+		"resource_type": "github_repo",
+		"resource_ref": map[string]any{
+			"url": "https://github.com/adanman/goosar",
+			"ref": "release/v2",
+		},
+	})
+	req = withURLParam(req, "id", project.ID)
+	testHandler.CreateProjectResource(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateProjectResource: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var created ProjectResourceResponse
+	if err := json.NewDecoder(w.Body).Decode(&created); err != nil {
+		t.Fatalf("decode CreateProjectResource: %v", err)
+	}
+	if created.ResourceType != "github_repo" {
+		t.Errorf("created.ResourceType = %q, want github_repo", created.ResourceType)
+	}
+	var ref struct {
+		URL string `json:"url"`
+		Ref string `json:"ref"`
+	}
+	if err := json.Unmarshal(created.ResourceRef, &ref); err != nil {
+		t.Fatalf("decode resource_ref: %v", err)
+	}
+	if ref.URL != "https://github.com/adanman/goosar" {
+		t.Errorf("created.ResourceRef.url = %q", ref.URL)
+	}
+	if ref.Ref != "release/v2" {
+		t.Errorf("created.ResourceRef.ref = %q, want release/v2", ref.Ref)
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("GET", "/api/projects/"+project.ID+"/resources", nil)
+	req = withURLParam(req, "id", project.ID)
+	testHandler.ListProjectResources(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("ListProjectResources: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var listResp struct {
+		Resources []ProjectResourceResponse `json:"resources"`
+		Total     int                       `json:"total"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&listResp); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	if listResp.Total != 1 || len(listResp.Resources) != 1 {
+		t.Fatalf("list returned %d resources, want 1", listResp.Total)
+	}
+	if listResp.Resources[0].ID != created.ID {
+		t.Errorf("list[0].ID = %q, want %q", listResp.Resources[0].ID, created.ID)
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/projects/"+project.ID+"/resources", map[string]any{
+		"resource_type": "github_repo",
+		"resource_ref": map[string]any{
+			"url": "https://github.com/adanman/goosar",
+			"ref": "release/v2",
+		},
+	})
+	req = withURLParam(req, "id", project.ID)
+	testHandler.CreateProjectResource(w, req)
+	if w.Code != http.StatusConflict {
+		t.Errorf("duplicate CreateProjectResource: expected 409, got %d: %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/projects/"+project.ID+"/resources", map[string]any{
+		"resource_type": "github_repo",
+		"resource_ref":  map[string]any{"url": "not-a-url"},
+	})
+	req = withURLParam(req, "id", project.ID)
+	testHandler.CreateProjectResource(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("invalid URL: expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/projects/"+project.ID+"/resources", map[string]any{
+		"resource_type": "unknown_type",
+		"resource_ref":  map[string]any{"foo": "bar"},
+	})
+	req = withURLParam(req, "id", project.ID)
+	testHandler.CreateProjectResource(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("unknown type: expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("DELETE", "/api/projects/"+project.ID+"/resources/"+created.ID, nil)
+	req = withURLParams(req, "id", project.ID, "resourceId", created.ID)
+	testHandler.DeleteProjectResource(w, req)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("DeleteProjectResource: expected 204, got %d: %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("GET", "/api/projects/"+project.ID+"/resources", nil)
+	req = withURLParam(req, "id", project.ID)
+	testHandler.ListProjectResources(w, req)
+	if err := json.NewDecoder(w.Body).Decode(&listResp); err != nil {
+		t.Fatalf("decode post-delete list: %v", err)
+	}
+	if listResp.Total != 0 {
+		t.Errorf("post-delete list: total = %d, want 0", listResp.Total)
+	}
+}
+
+func TestProjectResourceAcceptsSSHRepoURLs(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/projects?workspace_id="+testWorkspaceID, map[string]any{
+		"title": "SSH repo URL acceptance",
+	})
+	testHandler.CreateProject(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateProject: %d %s", w.Code, w.Body.String())
+	}
+	var project ProjectResponse
+	if err := json.NewDecoder(w.Body).Decode(&project); err != nil {
+		t.Fatalf("decode CreateProject: %v", err)
+	}
+	defer func() {
+		r := newRequest("DELETE", "/api/projects/"+project.ID, nil)
+		r = withURLParam(r, "id", project.ID)
+		testHandler.DeleteProject(httptest.NewRecorder(), r)
+	}()
+
+	cases := []struct {
+		name string
+		url  string
+	}{
+		{"scp-like", "git@github.com:adanman/goosar.git"},
+		{"ssh-scheme", "ssh://git@github.com/adanman/goosar.git"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			req := newRequest("POST", "/api/projects/"+project.ID+"/resources", map[string]any{
+				"resource_type": "github_repo",
+				"resource_ref":  map[string]any{"url": tc.url},
+			})
+			req = withURLParam(req, "id", project.ID)
+			testHandler.CreateProjectResource(w, req)
+			if w.Code != http.StatusCreated {
+				t.Fatalf("CreateProjectResource(%s): expected 201, got %d: %s", tc.url, w.Code, w.Body.String())
+			}
+			var created ProjectResourceResponse
+			if err := json.NewDecoder(w.Body).Decode(&created); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			var ref struct {
+				URL string `json:"url"`
+			}
+			if err := json.Unmarshal(created.ResourceRef, &ref); err != nil {
+				t.Fatalf("decode resource_ref: %v", err)
+			}
+			if ref.URL != tc.url {
+				t.Errorf("ref.url = %q, want %q", ref.URL, tc.url)
+			}
+		})
+	}
+}
+
+func TestIsValidGitRepoURL(t *testing.T) {
+	good := []string{
+		"https://github.com/adanman/goosar",
+		"https://github.com/adanman/goosar.git",
+		"http://github.example.com/x/y",
+		"ssh://git@github.com/adanman/goosar.git",
+		"ssh://git@github.com:22/adanman/goosar.git",
+		"git@github.com:adanman/goosar.git",
+		"git@gitlab.example.com:group/sub/repo.git",
+	}
+	bad := []string{
+		"",
+		"not-a-url",
+		"github.com/adanman/goosar",
+		"https://",
+		"git@github.com",
+		"git@:foo/bar",
+		"git@github.com:",
+		"ftp://example.com/repo",
+		"file:///tmp/repo",
+		"some random text with spaces",
+		"github.com:org/repo@branch",
+		"foo:bar@baz",
+		":foo/bar",
+	}
+	for _, s := range good {
+		if !isValidGitRepoURL(s) {
+			t.Errorf("isValidGitRepoURL(%q) = false, want true", s)
+		}
+	}
+	for _, s := range bad {
+		if isValidGitRepoURL(s) {
+			t.Errorf("isValidGitRepoURL(%q) = true, want false", s)
+		}
+	}
+}
+
+func TestProjectResourceLocalDirectoryLifecycle(t *testing.T) {
+	createProject := func(title string) ProjectResponse {
+		w := httptest.NewRecorder()
+		req := newRequest("POST", "/api/projects?workspace_id="+testWorkspaceID, map[string]any{
+			"title": title,
+		})
+		testHandler.CreateProject(w, req)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("CreateProject(%s): %d %s", title, w.Code, w.Body.String())
+		}
+		var p ProjectResponse
+		if err := json.NewDecoder(w.Body).Decode(&p); err != nil {
+			t.Fatalf("decode CreateProject: %v", err)
+		}
+		return p
+	}
+	deleteProject := func(id string) {
+		r := newRequest("DELETE", "/api/projects/"+id, nil)
+		r = withURLParam(r, "id", id)
+		testHandler.DeleteProject(httptest.NewRecorder(), r)
+	}
+
+	projectA := createProject("Local directory project A")
+	defer deleteProject(projectA.ID)
+	projectB := createProject("Local directory project B")
+	defer deleteProject(projectB.ID)
+
+	const (
+		daemonID  = "daemon-aaaa-bbbb-cccc"
+		localPath = "/Users/foo/work/my-game"
+	)
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/projects/"+projectA.ID+"/resources", map[string]any{
+		"resource_type": "local_directory",
+		"resource_ref": map[string]any{
+			"local_path": localPath,
+			"daemon_id":  daemonID,
+			"label":      "Game Repo",
+		},
+	})
+	req = withURLParam(req, "id", projectA.ID)
+	testHandler.CreateProjectResource(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateProjectResource: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var created ProjectResourceResponse
+	if err := json.NewDecoder(w.Body).Decode(&created); err != nil {
+		t.Fatalf("decode CreateProjectResource: %v", err)
+	}
+	if created.ResourceType != "local_directory" {
+		t.Errorf("ResourceType = %q, want local_directory", created.ResourceType)
+	}
+	var ref struct {
+		LocalPath string `json:"local_path"`
+		DaemonID  string `json:"daemon_id"`
+		Label     string `json:"label"`
+	}
+	if err := json.Unmarshal(created.ResourceRef, &ref); err != nil {
+		t.Fatalf("decode resource_ref: %v", err)
+	}
+	if ref.LocalPath != localPath || ref.DaemonID != daemonID || ref.Label != "Game Repo" {
+		t.Errorf("ref = %+v, want {%q, %q, Game Repo}", ref, localPath, daemonID)
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("GET", "/api/projects/"+projectA.ID+"/resources", nil)
+	req = withURLParam(req, "id", projectA.ID)
+	testHandler.ListProjectResources(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("ListProjectResources: %d %s", w.Code, w.Body.String())
+	}
+	var listResp struct {
+		Resources []ProjectResourceResponse `json:"resources"`
+		Total     int                       `json:"total"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&listResp); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	if listResp.Total != 1 || listResp.Resources[0].ID != created.ID {
+		t.Fatalf("list mismatch: %+v", listResp)
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/projects/"+projectB.ID+"/resources", map[string]any{
+		"resource_type": "local_directory",
+		"resource_ref": map[string]any{
+			"local_path": localPath,
+			"daemon_id":  daemonID,
+		},
+	})
+	req = withURLParam(req, "id", projectB.ID)
+	testHandler.CreateProjectResource(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("same path on project B: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/projects/"+projectA.ID+"/resources", map[string]any{
+		"resource_type": "local_directory",
+		"resource_ref": map[string]any{
+			"local_path": localPath,
+			"daemon_id":  daemonID,
+			"label":      "Game Repo",
+		},
+	})
+	req = withURLParam(req, "id", projectA.ID)
+	testHandler.CreateProjectResource(w, req)
+	if w.Code != http.StatusConflict {
+		t.Errorf("duplicate on same project: expected 409, got %d: %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("DELETE", "/api/projects/"+projectA.ID+"/resources/"+created.ID, nil)
+	req = withURLParams(req, "id", projectA.ID, "resourceId", created.ID)
+	testHandler.DeleteProjectResource(w, req)
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("DeleteProjectResource: expected 204, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestProjectResourceLocalDirectoryValidation(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/projects?workspace_id="+testWorkspaceID, map[string]any{
+		"title": "Local directory validation",
+	})
+	testHandler.CreateProject(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateProject: %d %s", w.Code, w.Body.String())
+	}
+	var project ProjectResponse
+	if err := json.NewDecoder(w.Body).Decode(&project); err != nil {
+		t.Fatalf("decode CreateProject: %v", err)
+	}
+	defer func() {
+		r := newRequest("DELETE", "/api/projects/"+project.ID, nil)
+		r = withURLParam(r, "id", project.ID)
+		testHandler.DeleteProject(httptest.NewRecorder(), r)
+	}()
+
+	cases := []struct {
+		name string
+		ref  any
+	}{
+		{"missing local_path", map[string]any{"daemon_id": "d1"}},
+		{"blank local_path", map[string]any{"local_path": "   ", "daemon_id": "d1"}},
+		{"relative local_path", map[string]any{"local_path": "work/my-game", "daemon_id": "d1"}},
+		{"home-shorthand path", map[string]any{"local_path": "~/work/my-game", "daemon_id": "d1"}},
+		{"missing daemon_id", map[string]any{"local_path": "/Users/foo/work"}},
+		{"blank daemon_id", map[string]any{"local_path": "/Users/foo/work", "daemon_id": ""}},
+		{"wrong type in payload", map[string]any{"local_path": 42, "daemon_id": "d1"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			req := newRequest("POST", "/api/projects/"+project.ID+"/resources", map[string]any{
+				"resource_type": "local_directory",
+				"resource_ref":  tc.ref,
+			})
+			req = withURLParam(req, "id", project.ID)
+			testHandler.CreateProjectResource(w, req)
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestIsAbsoluteLocalPath(t *testing.T) {
+	good := []string{
+		"/Users/foo/work",
+		"/",
+		"/a",
+		`C:\Users\foo`,
+		`C:/Users/foo`,
+		`d:\code\repo`,
+		`\\server\share\path`,
+	}
+	bad := []string{
+		"",
+		"work/my-game",
+		"./relative",
+		"../relative",
+		"~/work",
+		"C:relative",
+		"C:",
+		`\foo`,
+		"file:///tmp",
+	}
+	for _, s := range good {
+		if !isAbsoluteLocalPath(s) {
+			t.Errorf("isAbsoluteLocalPath(%q) = false, want true", s)
+		}
+	}
+	for _, s := range bad {
+		if isAbsoluteLocalPath(s) {
+			t.Errorf("isAbsoluteLocalPath(%q) = true, want false", s)
+		}
+	}
+}
+
+func TestCreateProjectAttachesResources(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/projects?workspace_id="+testWorkspaceID, map[string]any{
+		"title": "Project with bundled resources",
+		"resources": []map[string]any{
+			{
+				"resource_type": "github_repo",
+				"resource_ref":  map[string]any{"url": "https://github.com/adanman/goosar"},
+			},
+		},
+	})
+	testHandler.CreateProject(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateProject with resources: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		ID        string                    `json:"id"`
+		Resources []ProjectResourceResponse `json:"resources"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	defer func() {
+		r := newRequest("DELETE", "/api/projects/"+resp.ID, nil)
+		r = withURLParam(r, "id", resp.ID)
+		testHandler.DeleteProject(httptest.NewRecorder(), r)
+	}()
+
+	if len(resp.Resources) != 1 || resp.Resources[0].ResourceType != "github_repo" {
+		t.Fatalf("response resources mismatch: %+v", resp.Resources)
+	}
+}
+
+func TestProjectResourceCountBreadcrumb(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/projects?workspace_id="+testWorkspaceID, map[string]any{
+		"title": "Resource count breadcrumb",
+	})
+	testHandler.CreateProject(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateProject: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var project ProjectResponse
+	if err := json.NewDecoder(w.Body).Decode(&project); err != nil {
+		t.Fatalf("decode CreateProject: %v", err)
+	}
+	defer func() {
+		r := newRequest("DELETE", "/api/projects/"+project.ID, nil)
+		r = withURLParam(r, "id", project.ID)
+		testHandler.DeleteProject(httptest.NewRecorder(), r)
+	}()
+
+	getCount := func() int64 {
+		w := httptest.NewRecorder()
+		req := newRequest("GET", "/api/projects/"+project.ID, nil)
+		req = withURLParam(req, "id", project.ID)
+		testHandler.GetProject(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("GetProject: %d %s", w.Code, w.Body.String())
+		}
+		var resp ProjectResponse
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatalf("decode GetProject: %v", err)
+		}
+		return resp.ResourceCount
+	}
+	if got := getCount(); got != 0 {
+		t.Errorf("initial GetProject ResourceCount = %d, want 0", got)
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/projects/"+project.ID+"/resources", map[string]any{
+		"resource_type": "github_repo",
+		"resource_ref":  map[string]any{"url": "https://github.com/adanman/breadcrumb"},
+	})
+	req = withURLParam(req, "id", project.ID)
+	testHandler.CreateProjectResource(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateProjectResource: %d %s", w.Code, w.Body.String())
+	}
+
+	if got := getCount(); got != 1 {
+		t.Errorf("after attach GetProject ResourceCount = %d, want 1", got)
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("GET", "/api/projects?workspace_id="+testWorkspaceID, nil)
+	testHandler.ListProjects(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("ListProjects: %d %s", w.Code, w.Body.String())
+	}
+	var list struct {
+		Projects []ProjectResponse `json:"projects"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&list); err != nil {
+		t.Fatalf("decode ListProjects: %v", err)
+	}
+	found := false
+	for _, p := range list.Projects {
+		if p.ID == project.ID {
+			found = true
+			if p.ResourceCount != 1 {
+				t.Errorf("ListProjects[%s].ResourceCount = %d, want 1", p.ID, p.ResourceCount)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("project %s not found in ListProjects response", project.ID)
+	}
+
+	var number int
+	if err := testPool.QueryRow(context.Background(), `
+		UPDATE workspace
+		SET issue_counter = GREATEST(issue_counter, (SELECT COALESCE(MAX(number), 0) FROM issue WHERE workspace_id = $1)) + 1
+		WHERE id = $1 RETURNING issue_counter
+	`, testWorkspaceID).Scan(&number); err != nil {
+		t.Fatalf("next issue number: %v", err)
+	}
+	var issueID string
+	if err := testPool.QueryRow(context.Background(), `
+		INSERT INTO issue (
+			workspace_id, creator_type, creator_id, title, status, priority,
+			project_id, number, position
+		)
+		VALUES ($1, 'member', $2, 'Project update stats breadcrumb', 'done', 'none', $3, $4, 0)
+		RETURNING id
+	`, testWorkspaceID, testUserID, project.ID, number).Scan(&issueID); err != nil {
+		t.Fatalf("create project issue: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM issue WHERE id = $1`, issueID)
+	})
+
+	w = httptest.NewRecorder()
+	req = newRequest("PUT", "/api/projects/"+project.ID, map[string]any{
+		"title": "Resource count breadcrumb (updated)",
+	})
+	req = withURLParam(req, "id", project.ID)
+	testHandler.UpdateProject(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("UpdateProject: %d %s", w.Code, w.Body.String())
+	}
+	var updated ProjectResponse
+	if err := json.NewDecoder(w.Body).Decode(&updated); err != nil {
+		t.Fatalf("decode UpdateProject: %v", err)
+	}
+	if updated.ResourceCount != 1 {
+		t.Errorf("UpdateProject ResourceCount = %d, want 1", updated.ResourceCount)
+	}
+	if updated.IssueCount != 1 || updated.DoneCount != 1 {
+		t.Errorf("UpdateProject issue stats = %d/%d, want 1/1", updated.DoneCount, updated.IssueCount)
+	}
+}
+
+func TestCreateProjectWithResourcesEchoesCount(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/projects?workspace_id="+testWorkspaceID, map[string]any{
+		"title": "Create echo with resource_count",
+		"resources": []map[string]any{
+			{
+				"resource_type": "github_repo",
+				"resource_ref":  map[string]any{"url": "https://github.com/adanman/echo-count"},
+			},
+		},
+	})
+	testHandler.CreateProject(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateProject with resources: %d %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		ID            string                    `json:"id"`
+		ResourceCount int64                     `json:"resource_count"`
+		Resources     []ProjectResourceResponse `json:"resources"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode CreateProject: %v", err)
+	}
+	defer func() {
+		r := newRequest("DELETE", "/api/projects/"+resp.ID, nil)
+		r = withURLParam(r, "id", resp.ID)
+		testHandler.DeleteProject(httptest.NewRecorder(), r)
+	}()
+	if resp.ResourceCount != 1 || len(resp.Resources) != 1 {
+		t.Errorf("CreateProject echo: resource_count=%d resources=%d, want 1/1", resp.ResourceCount, len(resp.Resources))
+	}
+}
+
+func TestCreateProjectRollsBackOnInvalidResource(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/projects?workspace_id="+testWorkspaceID, map[string]any{
+		"title": "Project that should not exist",
+		"resources": []map[string]any{
+			{
+				"resource_type": "github_repo",
+				"resource_ref":  map[string]any{"url": "not-a-url"},
+			},
+		},
+	})
+	testHandler.CreateProject(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("CreateProject with invalid resource: expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("GET", "/api/projects?workspace_id="+testWorkspaceID, nil)
+	testHandler.ListProjects(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("ListProjects: %d %s", w.Code, w.Body.String())
+	}
+	var list struct {
+		Projects []ProjectResponse `json:"projects"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&list); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	for _, p := range list.Projects {
+		if p.Title == "Project that should not exist" {
+			t.Errorf("invalid resource should have rolled back project create, but found %s", p.ID)
+		}
+	}
+}
+
+func TestProjectResourceUpdateLifecycle(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/projects?workspace_id="+testWorkspaceID, map[string]any{
+		"title": "Update lifecycle project",
+	})
+	testHandler.CreateProject(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateProject: %d %s", w.Code, w.Body.String())
+	}
+	var project ProjectResponse
+	if err := json.NewDecoder(w.Body).Decode(&project); err != nil {
+		t.Fatalf("decode CreateProject: %v", err)
+	}
+	defer func() {
+		r := newRequest("DELETE", "/api/projects/"+project.ID, nil)
+		r = withURLParam(r, "id", project.ID)
+		testHandler.DeleteProject(httptest.NewRecorder(), r)
+	}()
+
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/projects/"+project.ID+"/resources", map[string]any{
+		"resource_type": "local_directory",
+		"resource_ref": map[string]any{
+			"local_path": "/Users/foo/work/a",
+			"daemon_id":  "d1",
+			"label":      "A",
+		},
+		"label": "outer",
+	})
+	req = withURLParam(req, "id", project.ID)
+	testHandler.CreateProjectResource(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateProjectResource: %d %s", w.Code, w.Body.String())
+	}
+	var created ProjectResourceResponse
+	if err := json.NewDecoder(w.Body).Decode(&created); err != nil {
+		t.Fatalf("decode CreateProjectResource: %v", err)
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("PUT", "/api/projects/"+project.ID+"/resources/"+created.ID, map[string]any{
+		"label": "renamed",
+	})
+	req = withURLParams(req, "id", project.ID, "resourceId", created.ID)
+	testHandler.UpdateProjectResource(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("UpdateProjectResource label-only: %d %s", w.Code, w.Body.String())
+	}
+	var updated ProjectResourceResponse
+	if err := json.NewDecoder(w.Body).Decode(&updated); err != nil {
+		t.Fatalf("decode UpdateProjectResource: %v", err)
+	}
+	if updated.Label == nil || *updated.Label != "renamed" {
+		t.Errorf("after label edit: label = %v, want renamed", updated.Label)
+	}
+	var ref localDirectoryRef
+	if err := json.Unmarshal(updated.ResourceRef, &ref); err != nil {
+		t.Fatalf("decode resource_ref: %v", err)
+	}
+	if ref.LocalPath != "/Users/foo/work/a" || ref.DaemonID != "d1" || ref.Label != "A" {
+		t.Errorf("label-only update leaked into resource_ref: %+v", ref)
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("PUT", "/api/projects/"+project.ID+"/resources/"+created.ID, map[string]any{
+		"resource_ref": map[string]any{
+			"local_path": "/Users/foo/work/b",
+			"daemon_id":  "d2",
+			"label":      "B",
+		},
+		"position": 5,
+	})
+	req = withURLParams(req, "id", project.ID, "resourceId", created.ID)
+	testHandler.UpdateProjectResource(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("UpdateProjectResource ref+position: %d %s", w.Code, w.Body.String())
+	}
+	if err := json.NewDecoder(w.Body).Decode(&updated); err != nil {
+		t.Fatalf("decode UpdateProjectResource: %v", err)
+	}
+	if err := json.Unmarshal(updated.ResourceRef, &ref); err != nil {
+		t.Fatalf("decode resource_ref: %v", err)
+	}
+	if ref.LocalPath != "/Users/foo/work/b" || ref.DaemonID != "d2" || ref.Label != "B" {
+		t.Errorf("ref-update mismatch: %+v", ref)
+	}
+	if updated.Position != 5 {
+		t.Errorf("position = %d, want 5", updated.Position)
+	}
+	if updated.Label == nil || *updated.Label != "renamed" {
+		t.Errorf("label should survive ref edit, got %v", updated.Label)
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("PUT", "/api/projects/"+project.ID+"/resources/"+created.ID, map[string]any{
+		"label": nil,
+	})
+	req = withURLParams(req, "id", project.ID, "resourceId", created.ID)
+	testHandler.UpdateProjectResource(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("UpdateProjectResource label=null: %d %s", w.Code, w.Body.String())
+	}
+	if err := json.NewDecoder(w.Body).Decode(&updated); err != nil {
+		t.Fatalf("decode UpdateProjectResource: %v", err)
+	}
+	if updated.Label != nil {
+		t.Errorf("label should be cleared, got %v", *updated.Label)
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("PUT", "/api/projects/"+project.ID+"/resources/"+created.ID, map[string]any{
+		"resource_ref": map[string]any{"local_path": "relative/path", "daemon_id": "d3"},
+	})
+	req = withURLParams(req, "id", project.ID, "resourceId", created.ID)
+	testHandler.UpdateProjectResource(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("relative path: expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("PUT", "/api/projects/"+project.ID+"/resources/00000000-0000-0000-0000-000000000000", map[string]any{
+		"label": "ghost",
+	})
+	req = withURLParams(req, "id", project.ID, "resourceId", "00000000-0000-0000-0000-000000000000")
+	testHandler.UpdateProjectResource(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Errorf("missing resource: expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestProjectResourceLocalDirectoryDaemonScopedConflict(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/projects?workspace_id="+testWorkspaceID, map[string]any{
+		"title": "Local dir daemon-scoped conflict",
+	})
+	testHandler.CreateProject(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateProject: %d %s", w.Code, w.Body.String())
+	}
+	var project ProjectResponse
+	if err := json.NewDecoder(w.Body).Decode(&project); err != nil {
+		t.Fatalf("decode CreateProject: %v", err)
+	}
+	defer func() {
+		r := newRequest("DELETE", "/api/projects/"+project.ID, nil)
+		r = withURLParam(r, "id", project.ID)
+		testHandler.DeleteProject(httptest.NewRecorder(), r)
+	}()
+
+	const (
+		daemonID    = "d-scoped"
+		otherDaemon = "d-other"
+		localPath   = "/Users/foo/work/scoped"
+	)
+
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/projects/"+project.ID+"/resources", map[string]any{
+		"resource_type": "local_directory",
+		"resource_ref": map[string]any{
+			"local_path": localPath,
+			"daemon_id":  daemonID,
+			"label":      "first",
+		},
+	})
+	req = withURLParam(req, "id", project.ID)
+	testHandler.CreateProjectResource(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("first attach: %d %s", w.Code, w.Body.String())
+	}
+	var first ProjectResourceResponse
+	if err := json.NewDecoder(w.Body).Decode(&first); err != nil {
+		t.Fatalf("decode first: %v", err)
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/projects/"+project.ID+"/resources", map[string]any{
+		"resource_type": "local_directory",
+		"resource_ref": map[string]any{
+			"local_path": localPath,
+			"daemon_id":  daemonID,
+			"label":      "different label",
+		},
+	})
+	req = withURLParam(req, "id", project.ID)
+	testHandler.CreateProjectResource(w, req)
+	if w.Code != http.StatusConflict {
+		t.Errorf("same daemon same path create: expected 409, got %d: %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/projects/"+project.ID+"/resources", map[string]any{
+		"resource_type": "local_directory",
+		"resource_ref": map[string]any{
+			"local_path": "/Users/foo/work/other",
+			"daemon_id":  daemonID,
+			"label":      "other path",
+		},
+	})
+	req = withURLParam(req, "id", project.ID)
+	testHandler.CreateProjectResource(w, req)
+	if w.Code != http.StatusConflict {
+		t.Errorf("same daemon different path create: expected 409, got %d: %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/projects/"+project.ID+"/resources", map[string]any{
+		"resource_type": "local_directory",
+		"resource_ref": map[string]any{
+			"local_path": localPath,
+			"daemon_id":  otherDaemon,
+			"label":      "other-machine",
+		},
+	})
+	req = withURLParam(req, "id", project.ID)
+	testHandler.CreateProjectResource(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("other daemon attach: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var second ProjectResourceResponse
+	if err := json.NewDecoder(w.Body).Decode(&second); err != nil {
+		t.Fatalf("decode other-daemon row: %v", err)
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("PUT", "/api/projects/"+project.ID+"/resources/"+second.ID, map[string]any{
+		"resource_ref": map[string]any{
+			"local_path": localPath,
+			"daemon_id":  daemonID,
+			"label":      "fresh",
+		},
+	})
+	req = withURLParams(req, "id", project.ID, "resourceId", second.ID)
+	testHandler.UpdateProjectResource(w, req)
+	if w.Code != http.StatusConflict {
+		t.Errorf("update onto existing daemon: expected 409, got %d: %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("PUT", "/api/projects/"+project.ID+"/resources/"+first.ID, map[string]any{
+		"resource_ref": map[string]any{
+			"local_path": localPath,
+			"daemon_id":  daemonID,
+			"label":      "renamed inline",
+		},
+	})
+	req = withURLParams(req, "id", project.ID, "resourceId", first.ID)
+	testHandler.UpdateProjectResource(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("in-place rename: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestCreateProjectBundledLocalDirectoryDaemonConflict(t *testing.T) {
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/projects?workspace_id="+testWorkspaceID, map[string]any{
+		"title": "Bundled label shadow",
+		"resources": []map[string]any{
+			{
+				"resource_type": "local_directory",
+				"resource_ref": map[string]any{
+					"local_path": "/Users/foo/work/dup",
+					"daemon_id":  "d-bundle",
+					"label":      "first",
+				},
+			},
+			{
+				"resource_type": "local_directory",
+				"resource_ref": map[string]any{
+					"local_path": "/Users/foo/work/dup",
+					"daemon_id":  "d-bundle",
+					"label":      "second label",
+				},
+			},
+		},
+	})
+	testHandler.CreateProject(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("bundled label shadow: expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("GET", "/api/projects?workspace_id="+testWorkspaceID, nil)
+	testHandler.ListProjects(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("ListProjects: %d %s", w.Code, w.Body.String())
+	}
+	var list struct {
+		Projects []ProjectResponse `json:"projects"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&list); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	for _, p := range list.Projects {
+		if p.Title == "Bundled label shadow" {
+			t.Errorf("expected no project to survive bundled-create rejection, but found %s", p.ID)
+		}
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/projects?workspace_id="+testWorkspaceID, map[string]any{
+		"title": "Bundled distinct paths same daemon",
+		"resources": []map[string]any{
+			{
+				"resource_type": "local_directory",
+				"resource_ref": map[string]any{
+					"local_path": "/Users/foo/work/a",
+					"daemon_id":  "d-bundle",
+					"label":      "A",
+				},
+			},
+			{
+				"resource_type": "local_directory",
+				"resource_ref": map[string]any{
+					"local_path": "/Users/foo/work/b",
+					"daemon_id":  "d-bundle",
+					"label":      "B",
+				},
+			},
+		},
+	})
+	testHandler.CreateProject(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("distinct-paths same daemon bundle: expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/projects?workspace_id="+testWorkspaceID, map[string]any{
+		"title": "Bundled per-daemon rows",
+		"resources": []map[string]any{
+			{
+				"resource_type": "local_directory",
+				"resource_ref": map[string]any{
+					"local_path": "/Users/foo/work/a",
+					"daemon_id":  "d-bundle-1",
+					"label":      "A",
+				},
+			},
+			{
+				"resource_type": "local_directory",
+				"resource_ref": map[string]any{
+					"local_path": "/Users/foo/work/b",
+					"daemon_id":  "d-bundle-2",
+					"label":      "B",
+				},
+			},
+		},
+	})
+	testHandler.CreateProject(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("per-daemon bundle: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		ID        string                    `json:"id"`
+		Resources []ProjectResourceResponse `json:"resources"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	defer func() {
+		r := newRequest("DELETE", "/api/projects/"+resp.ID, nil)
+		r = withURLParam(r, "id", resp.ID)
+		testHandler.DeleteProject(httptest.NewRecorder(), r)
+	}()
+	if len(resp.Resources) != 2 {
+		t.Errorf("per-daemon bundle: expected 2 resources, got %d", len(resp.Resources))
+	}
+}

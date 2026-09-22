@@ -1,0 +1,121 @@
+{
+  "bubble_menu": {
+    "bold": "Полужирный",
+    "italic": "Курсив",
+    "strikethrough": "Зачёркнутый",
+    "code": "Код",
+    "highlight": "Выделение",
+    "link": "Ссылка",
+    "list": "Список",
+    "task_list": "Список задач",
+    "quote": "Цитата",
+    "url_aria_label": "URL",
+    "heading_dropdown": {
+      "text": "Текст",
+      "normal_text": "Обычный текст",
+      "heading_1": "Заголовок 1",
+      "heading_2": "Заголовок 2",
+      "heading_3": "Заголовок 3"
+    },
+    "list_dropdown": {
+      "bullet_list": "Маркированный список",
+      "ordered_list": "Нумерованный список",
+      "task_list": "Список задач"
+    },
+    "sub_issue": {
+      "tooltip": "Создать дочерний issue из выделенного",
+      "created": "Создан {{identifier}}",
+      "create_failed": "Не удалось создать дочерний issue"
+    }
+  },
+  "image": {
+    "view": "Открыть изображение",
+    "download": "Скачать",
+    "copy_link": "Скопировать ссылку",
+    "delete": "Удалить",
+    "link_copied": "Ссылка скопирована",
+    "copy_link_failed": "Не удалось скопировать ссылку",
+    "canvas_label": "Холст с изображением. Перетаскивайте, чтобы двигать, колесо — масштаб, двойной клик — реальный размер."
+  },
+  "blocked_image": {
+    "aria_label": "Заблокированное внешнее изображение",
+    "text": "Внешнее изображение заблокировано",
+    "title": "Внешнее изображение заблокировано политикой изображений этого развёртывания"
+  },
+  "canvas": {
+    "zoom_in": "Приблизить",
+    "zoom_out": "Отдалить",
+    "zoom_fit": "Вписать в окно",
+    "zoom_actual": "Реальный размер"
+  },
+  "attachment": {
+    "download_failed": "Не удалось получить ссылку на скачивание. Попробуйте ещё раз чуть позже.",
+    "preview": "Предпросмотр",
+    "preview_loading": "Готовим предпросмотр…",
+    "preview_failed": "Не удалось загрузить предпросмотр",
+    "preview_too_large": "Файл слишком большой для предпросмотра — скачайте его.",
+    "preview_unsupported": "Для этого типа файлов предпросмотр недоступен.",
+    "close": "Закрыть",
+    "open_in_new_tab": "Открыть в новой вкладке",
+    "remove": "Убрать вложение"
+  },
+  "link_hover": {
+    "copy_link": "Скопировать ссылку",
+    "open_link": "Открыть ссылку",
+    "link_copied": "Ссылка скопирована",
+    "copy_failed": "Не удалось скопировать"
+  },
+  "mention": {
+    "group_users": "Пользователи",
+    "group_issues": "Issues",
+    "all_members": "Все участники",
+    "searching": "Ищем...",
+    "no_results": "Ничего не найдено",
+    "group_current": "Текущая страница",
+    "group_recent": "Недавно открытые",
+    "group_search": "Результаты поиска"
+  },
+  "slash_command": {
+    "no_skills_configured": "Нет настроенных skill",
+    "no_results": "Подходящих skill нет",
+    "commands": {
+      "note": "Добавить заметку — агенты не сработают"
+    }
+  },
+  "code_block": {
+    "copy_code": "Скопировать код",
+    "show_preview": "Показать предпросмотр",
+    "show_source": "Показать исходник",
+    "fullscreen": "Во весь экран"
+  },
+  "file_card": {
+    "uploading": "Загружаем {{filename}}"
+  },
+  "upload": {
+    "failed": "Не удалось загрузить {{filename}}: {{reason}}",
+    "in_progress": "Загружаем…",
+    "interrupted": "Загрузка прервалась — файл не сохранён. Прикрепите его ещё раз.",
+    "remove": "Убрать",
+    "uploading_label": "Загружаем {{filename}}…",
+    "failed_label": "Не удалось загрузить {{filename}}"
+  },
+  "title_editor": {
+    "title_aria_label": "Заголовок"
+  },
+  "mermaid": {
+    "render_error": "Не удалось построить диаграмму Mermaid.",
+    "rendering": "Строим диаграмму…",
+    "viewer_title": "Диаграмма",
+    "canvas_label": "Холст с диаграммой. Перетаскивайте, чтобы двигать, колесо — масштаб.",
+    "open_viewer": "Открыть диаграмму",
+    "close_viewer": "Закрыть",
+    "copy_source": "Копировать исходник диаграммы",
+    "show_source": "Показать исходник",
+    "show_diagram": "Показать диаграмму",
+    "export": "Экспорт",
+    "export_png": "Скачать PNG",
+    "export_svg": "Скачать SVG",
+    "export_source": "Скачать .mmd",
+    "frame_title": "Диаграмма Mermaid"
+  }
+}

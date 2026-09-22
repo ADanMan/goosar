@@ -1,0 +1,149 @@
+{
+  "page": {
+    "title": "Команды",
+    "new_button": "Новая команда",
+    "empty_no_squads": "Команд пока нет. Создайте первую.",
+    "empty_no_match": "Под фильтры не подошла ни одна команда.",
+    "table": {
+      "name": "Команда",
+      "leader": "Лидер",
+      "members": "Участники",
+      "creator": "Автор",
+      "created": "Создана"
+    },
+    "no_matches": "Ничего не найдено",
+    "row_menu": "Действия с командой",
+    "archive_action": "Архивировать"
+  },
+  "inspector": {
+    "details_section": "Подробности",
+    "archive_button": "Архивировать",
+    "row_leader": "Лидер",
+    "row_members": "Участники",
+    "row_created_by": "Автор",
+    "row_created": "Создана",
+    "row_updated": "Обновлена"
+  },
+  "archive_dialog": {
+    "title": "Архивировать команду?",
+    "description": "Команда «{{name}}» уйдёт в архив. Issue, назначенные на неё, перейдут к лидеру. Отменить это нельзя — если такое распределение задач понадобится снова, создайте новую команду.",
+    "cancel": "Отмена",
+    "confirm": "Архивировать",
+    "archiving": "Архивируем…",
+    "success": "Команда в архиве"
+  },
+  "name_editor": {
+    "cancel": "Отмена",
+    "title": "Переименовать команду",
+    "placeholder": "Название команды",
+    "required_error": "Укажите название",
+    "save": "Сохранить"
+  },
+  "add_member_dialog": {
+    "title": "Добавить участника",
+    "description": "Добавьте в команду агента или участника рабочего пространства.",
+    "label_member": "Участник",
+    "label_role": "Роль",
+    "label_optional": "(необязательно)",
+    "placeholder_role_inline": "Добавить роль…",
+    "cancel": "Отмена",
+    "select_target": "Выберите участника или агента",
+    "search_placeholder": "Поиск по участникам и агентам…",
+    "section_members": "Участники",
+    "section_agents": "Агенты",
+    "role_placeholder": "Например: ревьюер, фронтенд-лид",
+    "role_input_placeholder": "Роль (например, ревьюер)",
+    "add_button": "Добавить"
+  },
+  "description_dialog": {
+    "title": "Изменить описание",
+    "placeholder_empty": "Добавьте описание",
+    "cancel": "Отмена",
+    "input_placeholder": "За что отвечает эта команда?",
+    "save": "Сохранить"
+  },
+  "discard_changes_dialog": {
+    "title": "Отменить несохранённые изменения?",
+    "description": "На этой вкладке есть несохранённые изменения. Если перейти на другую, они пропадут.",
+    "keep_editing": "Остаться",
+    "discard_button": "Отменить изменения"
+  },
+  "members_tab": {
+    "section_title": "Участники",
+    "section_count_one": "{{count}} участник в команде",
+    "section_count_few": "{{count}} участника в команде",
+    "section_count_many": "{{count}} участников в команде",
+    "section_count_other": "{{count}} участника в команде",
+    "add_member_button": "Добавить участника",
+    "create_agent_button": "Создать агента",
+    "leader_chip": "Лидер",
+    "view_agent_tooltip": "Открыть карточку агента",
+    "make_leader_tooltip": "Сделать лидером команды",
+    "remove_member_tooltip": "Убрать из команды",
+    "status_working": "В работе",
+    "status_idle": "Свободен",
+    "status_offline": "Офлайн",
+    "status_unstable": "Нестабильно",
+    "status_archived": "В архиве",
+    "issue_status_blocked": "заблокирован",
+    "active_issue_more": "и ещё {{count}}",
+    "last_active_label": "последняя активность: {{time}}"
+  },
+  "profile_card": {
+    "unavailable": "Команда недоступна",
+    "detail_link": "Подробнее →",
+    "archived": "В архиве",
+    "member_count_one": "{{count}} участник",
+    "member_count_few": "{{count}} участника",
+    "member_count_many": "{{count}} участников",
+    "member_count_other": "{{count}} участника",
+    "members_section": "Участники",
+    "more_members_one": "+{{count}}",
+    "more_members_few": "+{{count}}",
+    "more_members_many": "+{{count}}",
+    "more_members_other": "+{{count}}"
+  },
+  "instructions_tab": {
+    "description": "Инструкции команды подставляются в промпт лидера каждый раз, когда команда получает issue. Здесь стоит записать общие договорённости, правила работы и всё, чему лидер должен следовать в каждой задаче.",
+    "unsaved_changes": "Не сохранено",
+    "save_button": "Сохранить",
+    "placeholder": "Например: начинайте с падающего теста, коммиты держите маленькими и атомарными."
+  },
+  "scope": {
+    "mine": "Мои",
+    "all": "Все"
+  },
+  "toolbar": {
+    "display": "Вид",
+    "sort_by": "Сортировка",
+    "direction_asc": "По возрастанию",
+    "direction_desc": "По убыванию",
+    "section_columns": "Столбцы",
+    "result_count_title": "Найдено команд / всего команд",
+    "filter_label": "Фильтр",
+    "filter_active_count_one": "{{count}} фильтр",
+    "filter_active_count_few": "{{count}} фильтра",
+    "filter_active_count_many": "{{count}} фильтров",
+    "filter_active_count_other": "{{count}} фильтра",
+    "clear_filters": "Сбросить фильтры"
+  },
+  "toasts": {
+    "member_added": "Участник добавлен",
+    "member_add_failed": "Не удалось добавить участника",
+    "member_removed": "Участник убран из команды",
+    "member_remove_failed": "Не удалось убрать участника",
+    "role_updated": "Роль обновлена",
+    "role_update_failed": "Не удалось обновить роль",
+    "leader_updated": "Лидер назначен",
+    "leader_update_failed": "Не удалось сменить лидера",
+    "squad_archived": "Команда в архиве",
+    "squad_archive_failed": "Не удалось архивировать команду",
+    "instructions_saved": "Инструкции сохранены",
+    "saved": "Сохранено",
+    "save_failed": "Не удалось сохранить"
+  },
+  "tabs": {
+    "members": "Участники",
+    "instructions": "Инструкции"
+  }
+}

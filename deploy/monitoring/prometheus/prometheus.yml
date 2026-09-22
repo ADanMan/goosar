@@ -1,0 +1,22 @@
+# Prometheus for the Compose monitoring overlay (#396).
+#
+# Scrapes the backend over the private compose network only. The backend's
+# METRICS_ADDR is set to 0.0.0.0:9090 by the overlay so this container can
+# reach it; that port is deliberately NOT published to the host — /metrics
+# reveals internal routes, traffic volume and dependency state.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: goosar-backend
+    static_configs:
+      - targets: ["backend:9090"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

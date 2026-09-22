@@ -1,0 +1,201 @@
+/* Goosar design tokens — shared across Web + Desktop */
+
+@theme inline {
+    --font-heading: var(--font-heading);
+    --font-sans: var(--font-sans);
+    /* `font-serif` is the editorial headline slot; it carries the same display
+       face as `font-heading`. Each app defines both in its own globals.css. */
+    --font-serif: var(--font-serif);
+    --font-mono: var(--font-mono);
+    --color-app-shell: var(--app-shell);
+    --color-page-canvas: var(--page-canvas);
+    --color-surface: var(--surface);
+    --color-surface-foreground: var(--surface-foreground);
+    --color-surface-raised: var(--surface-raised);
+    --color-surface-hover: var(--surface-hover);
+    --color-surface-selected: var(--surface-selected);
+    --color-surface-selected-foreground: var(--surface-selected-foreground);
+    --color-surface-border: var(--surface-border);
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-success: var(--success);
+    --color-warning: var(--warning);
+    --color-info: var(--info);
+    --color-brand: var(--brand);
+    --color-brand-foreground: var(--brand-foreground);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* Palette: snow white + charcoal with a single live accent — warm orange
+   (#F97316 = oklch(0.705 0.187 47.6)). Neutrals carry a barely-there warm tint
+   (hue 60) so they sit well next to the accent. The accent is reserved for the
+   brand mark, focus rings, selection markers, and chart series 1; buttons and
+   text stay charcoal. Text placed on the accent uses the charcoal foreground
+   for contrast (white on #F97316 is below AA). */
+:root {
+    color-scheme: light;
+    /* Surface system: the app shell is the quiet outer frame; the page canvas
+       is where lists, boards, and conversations live; surfaces are reserved
+       for bounded content groups; raised surfaces are ephemeral overlays. */
+    --app-shell: oklch(0.965 0.002 60);
+    --page-canvas: oklch(0.99 0.001 60);
+    --surface: oklch(1 0 0);
+    --surface-foreground: oklch(0.2 0.004 60);
+    --surface-raised: oklch(1 0 0);
+    --surface-hover: oklch(0.965 0.002 60);
+    --surface-selected: oklch(0.95 0.004 60);
+    --surface-selected-foreground: oklch(0.2 0.004 60);
+    --surface-border: oklch(0.92 0.003 60);
+    --surface-shadow: 0 1px 2px rgb(28 25 23 / 0.05), 0 1px 1px rgb(28 25 23 / 0.03);
+    --floating-shadow: 0 16px 40px rgb(28 25 23 / 0.14), 0 3px 10px rgb(28 25 23 / 0.08);
+    /* Menus (dropdown/context/select/popover) hover just above their trigger,
+       so they carry a lighter shadow than window-level overlays (dialogs,
+       sheets), which keep --floating-shadow. */
+    --menu-shadow: 0 8px 24px rgb(28 25 23 / 0.08), 0 2px 6px rgb(28 25 23 / 0.05);
+    --background: var(--page-canvas);
+    --foreground: oklch(0.2 0.004 60);
+    --card: var(--surface);
+    --card-foreground: oklch(0.2 0.004 60);
+    --popover: var(--surface-raised);
+    --popover-foreground: oklch(0.2 0.004 60);
+    --primary: oklch(0.24 0.004 60);
+    --primary-foreground: oklch(0.99 0 0);
+    --secondary: oklch(0.965 0.002 60);
+    --secondary-foreground: oklch(0.24 0.004 60);
+    --muted: oklch(0.965 0.002 60);
+    --muted-foreground: oklch(0.5 0.008 60);
+    --accent: oklch(0.965 0.002 60);
+    --accent-foreground: oklch(0.24 0.004 60);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.93 0.003 60);
+    --input: oklch(0.91 0.004 60);
+    --ring: oklch(0.705 0.187 47.6);
+    /* Accent gradient (h=48 = brand hue). chart-1 equals brand so the most
+       important series visually anchors to the product colour; chart-2..5 step
+       lighter + less saturated so a stacked bar reads "primary → secondary →
+       tertiary" at a glance instead of five equally-weighted colours. */
+    --chart-1: oklch(0.705 0.187 47.6);
+    --chart-2: oklch(0.77 0.15 55);
+    --chart-3: oklch(0.83 0.11 63);
+    --chart-4: oklch(0.89 0.07 70);
+    --chart-5: oklch(0.94 0.035 75);
+    --radius: 0.625rem;
+    --sidebar: oklch(0.965 0.002 60);
+    --sidebar-foreground: oklch(0.2 0.004 60);
+    --sidebar-primary: oklch(0.705 0.187 47.6);
+    --sidebar-primary-foreground: oklch(0.2 0.004 60);
+    --sidebar-accent: oklch(0.935 0.003 60);
+    --sidebar-accent-foreground: oklch(0.24 0.004 60);
+    --sidebar-border: oklch(0.92 0.003 60);
+    --sidebar-ring: oklch(0.705 0.187 47.6);
+    --brand: oklch(0.705 0.187 47.6);
+    --brand-foreground: oklch(0.2 0.004 60);
+    --success: oklch(0.55 0.16 145);
+    --warning: oklch(0.75 0.16 85);
+    /* With one live accent the informational tone stays neutral. */
+    --info: oklch(0.45 0.01 60);
+    --scrollbar-thumb: oklch(0 0 0 / 10%);
+    --scrollbar-thumb-hover: oklch(0 0 0 / 18%);
+    --scrollbar-track: transparent;
+    /* In-page find (Cmd/Ctrl+F) match tints, painted via the CSS Custom
+       Highlight API. Bright fill + dark text so matches stay legible in
+       both themes; the active match steps to orange. */
+    --find-match: oklch(0.92 0.15 100);
+    --find-match-active: oklch(0.82 0.17 62);
+    --find-match-foreground: oklch(0.22 0.03 92);
+}
+
+.dark {
+    color-scheme: dark;
+    --app-shell: oklch(0.155 0.003 60);
+    --page-canvas: oklch(0.18 0.003 60);
+    --surface: oklch(0.21 0.004 60);
+    --surface-foreground: oklch(0.985 0 0);
+    --surface-raised: oklch(0.235 0.005 60);
+    --surface-hover: oklch(0.274 0.005 60);
+    --surface-selected: oklch(0.3 0.006 60);
+    --surface-selected-foreground: oklch(0.985 0 0);
+    --surface-border: oklch(1 0 0 / 10%);
+    --surface-shadow: 0 1px 2px rgb(0 0 0 / 0.2), 0 1px 1px rgb(0 0 0 / 0.16);
+    --floating-shadow: 0 20px 48px rgb(0 0 0 / 0.46), 0 4px 12px rgb(0 0 0 / 0.28);
+    --menu-shadow: 0 10px 28px rgb(0 0 0 / 0.3), 0 2px 8px rgb(0 0 0 / 0.18);
+    --background: var(--page-canvas);
+    --foreground: oklch(0.985 0 0);
+    --card: var(--surface);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: var(--surface-raised);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.94 0.003 60);
+    --primary-foreground: oklch(0.21 0.004 60);
+    --secondary: oklch(0.274 0.005 60);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.274 0.005 60);
+    --muted-foreground: oklch(0.72 0.01 60);
+    --accent: oklch(0.274 0.005 60);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 6%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.705 0.187 47.6);
+    /* Dark mode keeps the accent at full strength for series 1 (it pops on the
+       dark canvas) and darkens the trailing series progressively. */
+    --chart-1: oklch(0.705 0.187 47.6);
+    --chart-2: oklch(0.6 0.15 50);
+    --chart-3: oklch(0.5 0.11 52);
+    --chart-4: oklch(0.41 0.07 55);
+    --chart-5: oklch(0.32 0.035 58);
+    --sidebar: oklch(0.21 0.004 60);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.705 0.187 47.6);
+    --sidebar-primary-foreground: oklch(0.2 0.004 60);
+    --sidebar-accent: oklch(0.274 0.005 60);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.705 0.187 47.6);
+    --brand: oklch(0.705 0.187 47.6);
+    --brand-foreground: oklch(0.2 0.004 60);
+    --success: oklch(0.65 0.15 145);
+    --warning: oklch(0.70 0.16 85);
+    --info: oklch(0.72 0.01 60);
+    --scrollbar-thumb: oklch(1 0 0 / 8%);
+    --scrollbar-thumb-hover: oklch(1 0 0 / 18%);
+    --scrollbar-track: transparent;
+    --find-match: oklch(0.82 0.16 100);
+    --find-match-active: oklch(0.76 0.18 60);
+    --find-match-foreground: oklch(0.18 0.02 92);
+}

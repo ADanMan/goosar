@@ -1,0 +1,259 @@
+---
+title: Быстрый старт self-host
+description: Поднимите Goosar на своём сервере или машине через Docker Compose (или Helm в Kubernetes) и подключите к нему демон.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+На этой странице вы запустите **сервер** Goosar (бэкенд, фронтенд и PostgreSQL) на своей машине. Данные — рабочие пространства, issue, комментарии, настройки агентов — остаются полностью под вашим контролем.
+
+Выполнение агентов при этом по-прежнему идёт на машине пользователя: там работает демон и стоят ИИ-инструменты для кода. Развёртывание не поднимает собственную среду выполнения, потому что у контейнера рядом с бэкендом нет ни ваших репозиториев, ни ваших инструментов и учётных данных. Self-host заменяет серверный слой, а не слой исполнения.
+
+Полный справочник (профили развёртывания, вход через OIDC и LDAP, MFA, журнал аудита, мониторинг, высокая доступность, офлайн-поставка) — в файле `SELF_HOSTING.md` в репозитории.
+
+## Что понадобится [#prerequisites]
+
+- **Docker** с командой `docker compose`.
+- **Git**, чтобы клонировать репозиторий: развёртывание запускается из его копии.
+- Машина, которая может работать постоянно (локальная, во внутренней сети или облачная).
+- Хотя бы один ИИ-инструмент для кода на **машине, где работает демон**. Это не обязательно сервер: подойдёт ноутбук разработчика. Как их устанавливать, описано в [Установке среды выполнения для агента](/install-agent-runtime).
+
+<Callout type="info">
+Образы `ghcr.io/adanman/goosar-backend` и `goosar-web` лежат в закрытом реестре GHCR. Пока вы не войдёте в него, `docker compose pull` завершится ошибкой `denied` или `unauthorized`. Войдите один раз на машине, используя классический Personal Access Token с правом `read:packages`: `read -rs PAT && echo "$PAT" | docker login ghcr.io -u <имя-на-github> --password-stdin`. Если образы релиза уже загружены локально, вход не нужен.
+</Callout>
+
+## Запустите сервер [#start-server]
+
+```bash
+git clone https://github.com/adanman/goosar.git
+cd goosar
+make selfhost
+```
+
+`make selfhost`:
+
+1. Создаёт `.env` из `.env.example`, если файла ещё нет, и генерирует случайные `JWT_SECRET`, `POSTGRES_PASSWORD`, `GOOSAR_VCS_SECRET_KEY` и `GOOSAR_MCP_SECRET_KEY`. Тег образов `GOOSAR_IMAGE_TAG` закрепляется на релизе, который вы ставите.
+2. Скачивает образы (PostgreSQL, бэкенд, фронтенд) и поднимает стек из `docker-compose.selfhost.yml`.
+3. Ждёт, пока бэкенд ответит на `/health`.
+
+Миграции базы выполняются автоматически при старте контейнера бэкенда, отдельной команды для них нет. Так же обрабатываются и обновления версий. Для постоянной проверки работоспособности используйте `/readyz`: в отличие от `/health` он падает при проблемах с базой или миграциями.
+
+После запуска:
+
+- **Фронтенд**: `http://localhost:3001`
+- **Бэкенд**: `http://localhost:8081`
+
+Если образы нужной версии ещё не опубликованы, соберите их из исходников командой `make selfhost-build`. Набор переменных для конкретного сценария выбирается так: `PROFILE=<perimeter|demo|dev|local|cloud> make selfhost`.
+
+<Callout type="warning">
+**Сохраните `GOOSAR_MCP_SECRET_KEY` и `GOOSAR_VCS_SECRET_KEY` вместе с резервными копиями базы.** Они шифруют все сохранённые учётные данные интеграций, и дамп, восстановленный без них, прочитать нельзя.
+</Callout>
+
+<Callout type="info">
+**Порты слушают только `127.0.0.1`.** `docker-compose.selfhost.yml` привязывает каждый опубликованный порт к loopback, и снаружи сервисы недоступны намеренно: секреты и учётные данные Postgres не должны оказаться в открытом интернете. Для доступа с других машин поставьте перед стеком [обратный прокси](#reverse-proxy) с TLS. Не меняйте привязку на `0.0.0.0`: Docker обходит файрвол хоста.
+</Callout>
+
+## Оставьте защиту production включённой [#production-safety]
+
+`docker-compose.selfhost.yml` по умолчанию задаёт `APP_ENV=production` и оставляет `GOOSAR_DEV_VERIFICATION_CODE` пустым, так что фиксированного кода входа нет.
+
+<Callout type="warning">
+Задавайте `GOOSAR_DEV_VERIFICATION_CODE` только для локальной или закрытой тестовой автоматизации и только при `APP_ENV`, отличном от production. Если фиксированный код включён вне production, любой, кто может запросить код, войдёт по этому значению. Перед публичным развёртыванием проверьте, что в `.env` стоит `APP_ENV=production`, а `GOOSAR_DEV_VERIFICATION_CODE` пуст. Подробнее — в [настройке входа](/auth-setup).
+</Callout>
+
+## Настройте почту [#email]
+
+Коды входа уходят по почте. Транспорт выбирается тем, какие переменные заданы в `.env`:
+
+| Транспорт | Переменные | Где уместен |
+|---|---|---|
+| Ваш SMTP-релей | `SMTP_HOST`, `SMTP_PORT`, `SMTP_TLS`, `SMTP_FROM_EMAIL`, `SMTP_EHLO_NAME`, `SMTP_USERNAME`, `SMTP_PASSWORD` | любое развёртывание; единственный транспорт для контура (`perimeter`) |
+| Resend | `RESEND_API_KEY`, `RESEND_FROM_EMAIL` | только demo, dev и local |
+| Без почты | `APP_ENV=development` | только разработка: код печатается в лог бэкенда |
+
+Resend — внешний сервис, поэтому в контуре его использовать нельзя. Если заданы оба транспорта, бэкенд выбирает SMTP; настраивайте один.
+
+Пример для внутреннего релея с авторизацией на порту 587 (STARTTLS включается автоматически, когда релей его объявляет):
+
+```bash
+SMTP_HOST=smtp.example.local
+SMTP_PORT=587
+SMTP_USERNAME=goosar
+SMTP_PASSWORD=...
+SMTP_FROM_EMAIL=noreply@example.local
+SMTP_TLS_INSECURE=false   # true только для частного CA или самоподписанных сертификатов
+```
+
+Что важно знать:
+
+- Для анонимного релея на порту 25 оставьте `SMTP_USERNAME` и `SMTP_PASSWORD` пустыми.
+- Порт `465` включает неявный TLS сам. На нестандартном порту SMTPS задайте `SMTP_TLS=implicit`.
+- Строгие релеи отклоняют приветствие по умолчанию. Тогда задайте в `SMTP_EHLO_NAME` полное доменное имя, которое релей принимает.
+- `SMTP_HOST` без отправителя (`SMTP_FROM_EMAIL`) не запустится: сервер откажется стартовать.
+
+Перезапустите бэкенд: `docker compose -f docker-compose.selfhost.yml restart backend`. В логе он напишет, какой транспорт выбран; учётные данные там не печатаются, так что эту строку безопасно показывать при обращении за помощью.
+
+Без настроенной почты при `APP_ENV=production` вход отклоняется (`503 email_not_configured`). Для разового теста на одной машине задайте `APP_ENV=development`: тогда код можно получить командой `make selfhost-code`.
+
+## Первый вход и рабочее пространство [#first-login]
+
+Откройте `http://localhost:3001`, введите email и код из почты, затем создайте первое рабочее пространство. Ограничение регистрации и другие параметры входа — на странице [настройки входа](/auth-setup). Изменения `ALLOW_SIGNUP` и `DISABLE_WORKSPACE_CREATION` вступают в силу после перезапуска бэкенда, пересборка веб-части не нужна.
+
+## Подключите CLI к своему серверу [#install-cli]
+
+Работающее развёртывание само раздаёт установщик (`/install.sh`) и бинарники CLI, поэтому ни GitHub, ни Homebrew не нужны:
+
+```bash
+curl -fsSL http://localhost:3001/install.sh | bash -s -- \
+  --app-url http://localhost:3001 \
+  --server-url http://localhost:8081
+```
+
+Со скриптом стоит сначала ознакомиться: скачайте его (`curl -fsSLO .../install.sh`), прочитайте и запустите `bash install.sh ...`. На Windows развёртывание отдаёт зеркало `/install.ps1` и архив `windows/amd64` (PowerShell 5.1 или 7).
+
+По умолчанию установщик ставит только CLI `goosar`, без среды выполнения агента. Она выбирается флагом `--runner <none|hermes>` (переменная `GOOSAR_RUNNER`); без явного выбора не ставится ничего.
+
+Затем настройте CLI, пройдите вход в браузере и запустите демон:
+
+```bash
+goosar setup self-host --port 8081 --frontend-port 3001
+```
+
+Порты нужно указать явно: значения CLI по умолчанию (8080 и 3000) стек не использует. Команда направляет CLI на локальный сервер, открывает браузер для входа, находит ваши рабочие пространства, сохраняет токен и **сама запускает демон**. Проверить его можно командой `goosar daemon status`.
+
+## Доступ с других машин: обратный прокси [#reverse-proxy]
+
+Стек слушает только `127.0.0.1`, поэтому демон на другой машине не достучится до `http://<ip-сервера>:8081`, и это правильно. Поставьте на сервере обратный прокси с TLS, который проксирует на `127.0.0.1:8081` (бэкенд) и `127.0.0.1:3001` (фронтенд), и направьте CLI на публичный HTTPS-адрес:
+
+```bash
+goosar setup self-host \
+  --server-url https://goosar.example.local \
+  --app-url https://goosar.example.local
+```
+
+Вместо флагов можно задать `GOOSAR_SERVER_URL` и `GOOSAR_APP_URL`; флаг приоритетнее переменной.
+
+Минимальный Caddyfile для одного имени хоста. WebSocket нужен и демону, и веб-приложению:
+
+```text
+goosar.example.local {
+    # WebSocket: этот блок должен идти раньше остальных
+    @ws path /ws /ws/*
+    handle @ws {
+        reverse_proxy 127.0.0.1:8081 {
+            flush_interval -1
+        }
+    }
+
+    # API бэкенда
+    handle /api/* {
+        reverse_proxy 127.0.0.1:8081
+    }
+
+    # Всё остальное — фронтенд
+    reverse_proxy 127.0.0.1:3001
+}
+```
+
+Для публичных развёртываний задайте в `.env` один публичный хост `PUBLIC_HOST=goosar.example.local`: `make selfhost` выведет из него `FRONTEND_ORIGIN`, `GOOSAR_APP_URL`, `GOOSAR_PUBLIC_URL` и `CORS_ALLOWED_ORIGINS`. Без корректного `FRONTEND_ORIGIN` проверка origin у WebSocket отклонит браузер. `GOOSAR_TRUSTED_PROXIES` (список CIDR вашего прокси) задаётся вручную. Подойдёт и Nginx, и туннель Cloudflare: главное — терминировать TLS и пробрасывать заголовок `Upgrade` на `/ws`.
+
+## Создайте агента и назначьте первую задачу [#first-agent]
+
+1. Убедитесь, что на машине с демоном установлен хотя бы один ИИ-инструмент ([как их установить](/install-agent-runtime)).
+2. В веб-приложении откройте раздел **Среды выполнения**: ваша машина должна быть в списке.
+3. Создайте агента в разделе **Агенты**.
+4. Создайте issue и назначьте его агенту: он возьмёт задачу сам.
+
+Инструмент с нестандартной командой запуска можно подключить как [пользовательскую среду выполнения](/custom-runtimes). Что агент может делать на машине и кто это ограничивает — на странице [Безопасность: граница исполнения агента](/security).
+
+## Обновление [#upgrading]
+
+Миграции идут только вперёд, откат образов схему не откатывает. Поэтому перед обновлением всегда делайте резервную копию:
+
+```bash
+bash scripts/backup.sh                 # запишет ./backups/goosar-<метка UTC>/
+bash scripts/backup.sh --out /srv/backups
+```
+
+Стек при этом можно не останавливать. Копия состоит из `db.dump`, `uploads.tar` и `manifest.json`. Каталог с суффиксом `.partial` означает, что копия не удалась. Восстановление: `bash scripts/restore.sh <каталог-копии> --confirm`. Подробности, расписание и проверка копии — в разделе «Резервное копирование и восстановление» файла `SELF_HOSTING.md`.
+
+Затем обновите файлы и образы:
+
+```bash
+cd goosar
+git pull
+grep GOOSAR_IMAGE_TAG .env
+docker compose -f docker-compose.selfhost.yml pull
+docker compose -f docker-compose.selfhost.yml up -d
+```
+
+Два момента, на которых спотыкаются чаще всего:
+
+- **`git pull` не обновляет версию Goosar.** Он обновляет сам `docker-compose.selfhost.yml` (новые переменные, сервисы, проверки). Версию определяет `docker compose pull`.
+- **Закреплённый `GOOSAR_IMAGE_TAG` блокирует обновление.** `make selfhost` при создании `.env` фиксирует тег на новейшем релизе клона, и если `.env` закреплён на точной версии, `pull` заново скачает тот же тег без ошибок и предупреждений. Поэтому перед обновлением проверьте значение (команда `grep` выше) и при необходимости измените его на нужный релиз: `GOOSAR_IMAGE_TAG=vX.Y.Z make selfhost`.
+
+Существующий `.env` не перезаписывается: `make selfhost` создаёт его только при отсутствии. Данные лежат в именованных томах, которые переживают `docker compose down`, но не `down -v`.
+
+Проверьте результат через `/readyz`, а не `/health`:
+
+```bash
+curl -s localhost:8081/readyz
+# {"status":"ok","checks":{"db":"ok","migrations":"ok"}}
+```
+
+Всё, кроме HTTP 200 с обоими `ok`, означает, что миграции не завершились: смотрите `docker compose -f docker-compose.selfhost.yml logs -f backend`, прежде чем пускать трафик.
+
+Остановить стек: `make selfhost-stop`.
+
+## Kubernetes: Helm-чарт [#kubernetes]
+
+Если у вас есть кластер Kubernetes, вместо Compose можно поставить Helm-чарт `oci://ghcr.io/adanman/charts/goosar` (исходники — `deploy/helm/goosar/`). Нужны Ingress-контроллер и StorageClass по умолчанию с `ReadWriteOnce`. Чарт не хранит секреты: он ссылается на Secret `goosar-secrets`, который вы создаёте один раз:
+
+```bash
+kubectl create namespace goosar
+
+kubectl -n goosar create secret generic goosar-secrets \
+  --from-literal=JWT_SECRET="$(openssl rand -hex 32)" \
+  --from-literal=POSTGRES_PASSWORD="$(openssl rand -hex 16)" \
+  --from-literal=GOOSAR_MCP_SECRET_KEY="$(openssl rand -base64 32)" \
+  --from-literal=GOOSAR_VCS_SECRET_KEY="$(openssl rand -base64 32)" \
+  --from-literal=RESEND_API_KEY="" \
+  --from-literal=CLOUDFRONT_PRIVATE_KEY="" \
+  --from-literal=GOOSAR_DEV_VERIFICATION_CODE=""
+```
+
+Оба ключа шифрования должны декодироваться ровно в 32 байта, иначе бэкенд не запустится. Сохраните их вместе с резервными копиями базы.
+
+Экспортируйте значения чарта, отредактируйте и установите:
+
+```bash
+helm show values oci://ghcr.io/adanman/charts/goosar --version <версия-чарта> > my-values.yaml
+# задайте хосты Ingress: ingress.frontend.host и ingress.backend.host,
+# а также backend.config.appUrl, frontendOrigin и localUploadBaseUrl
+helm install goosar oci://ghcr.io/adanman/charts/goosar \
+  --version <версия-чарта> -n goosar -f my-values.yaml
+```
+
+Имена хостов должны разрешаться на машинах пользователей и на машине с демоном (DNS или `/etc/hosts`), например `app.example.local` и `api.example.local`. На холодном кластере бэкенд может несколько минут оставаться `Running`, но не `Ready`, пока ждёт Postgres и выполняет миграции. После этого `/healthz` вернёт `{"status":"ok","checks":{"db":"ok","migrations":"ok"}}`, а CLI подключается так:
+
+```bash
+goosar setup self-host \
+  --server-url http://api.example.local \
+  --app-url http://app.example.local
+```
+
+Обновление — это `helm upgrade` на нужную версию чарта (или другие теги образов в values). Рекомендуется `--atomic --timeout 15m`. `kubectl rollout restart` версию не меняет: политика `pullPolicy: IfNotPresent` возьмёт образ из кэша узла. Миграции при этом откатить нельзя, так что перед обновлением снимите дамп базы. `helm -n goosar uninstall goosar` убирает рабочие нагрузки, но оставляет PVC и Secret, а `kubectl delete namespace goosar` удаляет всё.
+
+## Частые проблемы [#common-issues]
+
+- **Бэкенд не стартует.** Посмотрите `docker compose -f docker-compose.selfhost.yml logs backend`. Обычно дело в неверных `DATABASE_URL` или `JWT_SECRET` в `.env`, либо в неполной паре настроек (`SMTP_HOST` без `SMTP_FROM_EMAIL`, `GOOSAR_LLM_API_KEY` без `GOOSAR_LLM_BASE_URL`).
+- **Не приходит код входа.** Транспорт почты не настроен, а `APP_ENV=production`: вход отклоняется. Настройте SMTP либо, для теста, включите `APP_ENV=development` и запустите `make selfhost-code`.
+- **WebSocket не подключается.** Для публичного развёртывания `FRONTEND_ORIGIN` должен совпадать с реальным адресом фронтенда, а прокси должен пробрасывать `Upgrade` на `/ws`.
+- **Демон на другой машине не видит сервер.** Порты открыты только на `127.0.0.1`: нужен обратный прокси и `goosar setup self-host` с публичными адресами.
+
+## Дальше [#next]
+
+- [Настройка входа](/auth-setup) — почта, ограничение регистрации, тестовые коды
+- [Токены и аутентификация](/auth-tokens) — как устроены токены CLI и демона
+- [Установка среды выполнения для агента](/install-agent-runtime) — какие ИИ-инструменты поддерживаются
+- [Безопасность: граница исполнения агента](/security) — что нужно сделать оператору

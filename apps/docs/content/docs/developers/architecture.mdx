@@ -1,0 +1,76 @@
+---
+title: Архитектура
+description: Техническая архитектура платформы Goosar.
+---
+
+## Обзор [#overview]
+
+Goosar — это бэкенд на Go и монорепозиторий фронтенда (pnpm workspaces + Turborepo) с общими пакетами.
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────────┐
+│   Next.js    │────>│  Go-бэкенд   │────>│   PostgreSQL     │
+│   фронтенд   │<────│  (Chi + WS)  │<────│   (pgvector)     │
+└──────────────┘     └──────┬───────┘     └──────────────────┘
+                            │
+                     ┌──────┴───────┐
+                     │    Демон     │  (работает на вашей машине)
+                     │ ИИ-инструмент│
+                     │  для кода    │
+                     │    (x17)     │
+                     └──────────────┘
+```
+
+## Структура проекта [#project-structure]
+
+| Каталог | Назначение | Технологии |
+|---------|------------|------------|
+| `server/` | Бэкенд на Go | роутер Chi, sqlc для БД, gorilla/websocket |
+| `apps/web/` | Фронтенд на Next.js | App Router |
+| `apps/desktop/` | Десктопное приложение на Electron | electron-vite |
+| `apps/docs/` | Сайт документации | Fumadocs |
+| `packages/core/` | Headless-бизнес-логика | без react-dom, переиспользуется на всех платформах |
+| `packages/ui/` | Атомарные UI-компоненты | без бизнес-логики, на основе shadcn |
+| `packages/views/` | Общие бизнес-страницы | без `next/*` и `react-router` |
+| `packages/tsconfig/` | Общая конфигурация TypeScript | — |
+| `packages/eslint-config/` | Общая конфигурация ESLint | — |
+
+## Устройство бэкенда [#backend-structure]
+
+- **Точки входа** (`cmd/`): `server` (HTTP API), `goosar` (CLI и демон), `migrate`.
+- **Обработчики** (`internal/handler/`): один файл на домен (issue, comment, agent, auth, daemon).
+- **Реальное время** (`internal/realtime/`): хаб управляет WebSocket-клиентами, сервер рассылает события.
+- **Аутентификация** (`internal/auth/` и `internal/middleware/`): JWT (HS256); middleware выставляет заголовки `X-User-ID` и `X-User-Email`.
+- **Жизненный цикл задач** (`internal/service/task.go`): постановка в очередь → захват → запуск → завершение или сбой.
+- **Agent SDK** (`pkg/agent/`): единый интерфейс `Backend` для запуска промптов в любом поддерживаемом ИИ-инструменте для кода.
+- **Демон** (`internal/daemon/`): находит установленные CLI, регистрирует среды выполнения, опрашивает сервер в ожидании задач.
+- **База данных**: PostgreSQL 17 с pgvector; sqlc генерирует код из SQL в `pkg/db/queries/`.
+
+## Архитектура фронтенда [#frontend-architecture]
+
+### Внутренние пакеты [#internal-packages-pattern]
+
+Все общие пакеты экспортируют «сырые» файлы `.ts` и `.tsx`, без предварительной компиляции. Их собирает бандлер приложения-потребителя. Так работает HMR без дополнительной настройки, а переход к определению мгновенный.
+
+### Границы пакетов [#package-boundaries]
+
+- `packages/core/` — без react-dom, без `localStorage`, без UI-библиотек. Здесь живут все сторы Zustand.
+- `packages/ui/` — только UI-компоненты, без бизнес-логики.
+- `packages/views/` — без `next/*` и `react-router-dom`. Для навигации используется `NavigationAdapter`.
+
+### Управление состоянием [#state-management]
+
+- **TanStack Query** владеет всем серверным состоянием (issue, пользователи, рабочие пространства).
+- **Zustand** владеет всем клиентским состоянием (выбор в интерфейсе, фильтры, черновики).
+- **React Context** зарезервирован для сквозной инфраструктуры (`WorkspaceIdProvider`, `NavigationProvider`).
+
+### Поток данных [#data-flow]
+
+```
+Браузер → ApiClient (shared/api) → REST API (обработчики Chi) → запросы sqlc → PostgreSQL
+Браузер ← WSClient (shared/api) ← WebSocket ← Hub.Broadcast() ← обработчики / TaskService
+```
+
+## Мультиарендность [#multi-tenancy]
+
+Все запросы фильтруются по `workspace_id`. Доступ ограничивается проверкой членства. Заголовок `X-Workspace-ID` направляет запрос в нужное рабочее пространство.

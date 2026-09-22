@@ -1,0 +1,248 @@
+appId: ru.goosar.desktop
+productName: Goosar
+directories:
+  buildResources: build
+files:
+  - "!**/.vscode/*"
+  - "!src/*"
+  - "!electron.vite.config.*"
+  - "!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}"
+  - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}"
+  # Never repack the electron-builder output directory into the app.
+  # Multi-arch release builds (scripts/package.mjs) run each target in the
+  # same apps/desktop dir with per-arch output at dist/<platform>-<arch>.
+  # electron-builder only auto-excludes the *current* target's output dir,
+  # so the earlier arch's dist/ (its full .app + DMG + ZIP) would otherwise
+  # be pulled into the next arch's app.asar. That inflated v0.4.3/v0.4.4's
+  # Intel (x64) DMG until the HFS volume was full and the real
+  # `Electron Framework/Versions/A/Electron Framework` binary was dropped,
+  # so Intel Macs crashed on launch with a dyld missing-library error
+  # (github.com/adanman/goosar/issues/5595). Excluding all of dist/**
+  # fixes it regardless of build order; a pre-build clean alone does not,
+  # because the first arch writes into dist/ mid-run before the second is
+  # packaged.
+  - "!dist/**"
+  # The hermes agent runtime is shipped through `extraResources` below, not
+  # through this glob. Without this exclusion the ~334 MB artifact staged by
+  # scripts/bundle-agent.mjs would ALSO be packed into app.asar — the same
+  # oversized-payload failure class as the dist/** incident above, and it would
+  # double the size of every DMG/ZIP/NSIS artifact.
+  - "!resources-agent/**"
+  # Corporate CA bundles ship through `extraResources` too (tiny, but the same
+  # rule keeps them out of app.asar). Staged by scripts/bundle-ca.mjs.
+  - "!resources-ca/**"
+  # MCP servers ship through `extraResources` too, for the same reason as the
+  # agent runtime: each carries its own venv, so the trees are large and must
+  # not be doubled into app.asar. Staged by scripts/bundle-mcp-servers.mjs.
+  - "!resources-mcp-servers/**"
+  # Skills and the shared Playwright/Chromium ship through `extraResources` too
+  # (issue #156). A Chromium build alone is ~150 MB, so doubling it into
+  # app.asar is the same oversized-payload failure class as the agent runtime.
+  # Staged by scripts/bundle-skills.mjs.
+  - "!resources-skills/**"
+  - "!resources-playwright/**"
+  # The MCP preset provisioning overlay (issue #161) ships through
+  # `extraResources` too. It is tiny, but keeping it out of app.asar matches
+  # the sibling bundles. Staged by scripts/bundle-preset-overlay.mjs.
+  - "!resources-preset-overlay/**"
+  # Baked deployment defaults for desktop.json (issue #438) ship through
+  # `extraResources` too, for the same keep-it-out-of-app.asar reason as the
+  # preset overlay. Staged by scripts/bundle-deployment-defaults.mjs.
+  - "!resources-deployment/**"
+protocols:
+  - name: Goosar
+    schemes:
+      - goosar
+asarUnpack:
+  - resources/**
+# The self-contained hermes agent runtime (bundled CPython + venv, ~334 MB),
+# staged by scripts/bundle-agent.mjs. It lands at Contents/Resources/hermes on
+# macOS and resources/hermes elsewhere; src/main/agent-bootstrap.ts installs it
+# into ~/.hermes/runtime on first run.
+#
+# `extraResources`, deliberately, NOT resources/** + asarUnpack like the Go CLI:
+# an asarUnpack payload is packed into app.asar *and* unpacked beside it, so a
+# tree this size would be shipped twice in every artifact. The dist/** note
+# above is what that failure looks like in practice.
+#
+# bundle-agent.mjs always creates the staging directory (with a marker file
+# explaining the absence when no artifact was available), so `from` resolves
+# even on a build without the payload.
+extraResources:
+  - from: resources-agent/hermes
+    to: hermes
+  # Corporate CA bundles (issue #46): ca-bundle.pem + corp-ca.pem, staged by
+  # scripts/bundle-ca.mjs (or a marker file explaining their absence). Lands at
+  # Contents/Resources/ca on macOS; src/main/agent-bootstrap.ts materializes
+  # the PEMs into ~/.hermes/ on first run without overwriting existing files.
+  - from: resources-ca
+    to: ca
+  # Bundled MCP servers (issue #153): each is a self-contained directory with
+  # its own venv, staged by scripts/bundle-mcp-servers.mjs (or a marker file
+  # explaining their absence). Lands at Contents/Resources/mcp-servers on macOS;
+  # src/main/mcp-servers.ts copies each into ~/.hermes/mcp-servers/<name> on
+  # first run without overwriting a user-modified server.
+  - from: resources-mcp-servers
+    to: mcp-servers
+  # Bundled skills (issue #156): each is a self-contained directory with a
+  # SKILL.md, staged by scripts/bundle-skills.mjs (or a marker file explaining
+  # their absence). Lands at Contents/Resources/skills on macOS;
+  # src/main/skills.ts copies each into ~/.hermes/skills/<name> on first run
+  # without overwriting a user-modified skill.
+  - from: resources-skills
+    to: skills
+  # The ONE shared Playwright/Chromium the browser-driven skills use (issue
+  # #156), staged by scripts/bundle-skills.mjs (or a marker file). Lands at
+  # Contents/Resources/playwright on macOS; it is NOT copied per user — the
+  # daemon points PLAYWRIGHT_BROWSERS_PATH at it in place, so every skill's
+  # Playwright shares this one browser instead of shipping its own.
+  - from: resources-playwright
+    to: playwright
+  # MCP preset provisioning overlay (issue #161): a single JSON file staged by
+  # scripts/bundle-preset-overlay.mjs (or a marker file explaining its absence).
+  # Lands at Contents/Resources/preset-overlay on macOS; src/main/preset-overlay.ts
+  # reads it at boot and the renderer merges it over the placeholder presets.
+  - from: resources-preset-overlay
+    to: preset-overlay
+  # Baked deployment defaults (issue #438): a single JSON file shaped like
+  # ~/.goosar/desktop.json, staged by scripts/bundle-deployment-defaults.mjs
+  # (or a marker file explaining its absence). Lands at
+  # Contents/Resources/deployment on macOS; src/main/deployment-defaults.ts
+  # reads it at boot and loadRuntimeConfig merges it UNDER the user's own
+  # ~/.goosar/desktop.json, so an on-prem DMG knows its own server without
+  # anyone laying a file into every user's home.
+  - from: resources-deployment
+    to: deployment
+mac:
+  entitlementsInherit: build/entitlements.mac.plist
+  # DMG is NOT built here. electron-builder sized the image's HFS volume from a
+  # `du` estimate of the app with no headroom; a >2GB app overran it, the copy
+  # hit ENOSPC, the ~172MB Electron Framework binary silently never landed, and
+  # the build still exited 0 — shipping a DMG that aborts at launch (issue
+  # #186). scripts/build-mac-dmg.mjs builds it with headroom and verifies the
+  # copy inside the image, and scripts/package.mjs fails closed on a mismatch.
+  # `zip` stays: electron-updater's latest-mac.yml feed is built from it.
+  target:
+    - zip
+  # Hardcoded name avoids the `@goosar/desktop-*` subdirectory that
+  # `${name}` produces for scoped package names.
+  # Naming scheme: goosar-desktop-<version>-<platform>-<arch>.<ext>
+  # so the filename alone surfaces kind, version, platform, and CPU arch.
+  artifactName: goosar-desktop-${version}-mac-${arch}.${ext}
+  # Notarize via notarytool. Requires APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD
+  # + APPLE_TEAM_ID env vars at package time. Non-mac contributors are
+  # unaffected because `pnpm package` already requires the Developer ID
+  # signing cert — notarization is a strict superset.
+  notarize: true
+linux:
+  # Override the Linux executable name to avoid leaking the scoped npm
+  # package name (`@goosar/desktop`) into the installed binary, the
+  # `.desktop` file, and the hicolor icon filename. Without this override
+  # electron-builder defaults `executableName` to the package `name`,
+  # which after slash-stripping becomes `@goosardesktop` — producing
+  # `/usr/share/applications/@goosardesktop.desktop`,
+  # `Icon=@goosardesktop`, and
+  # `/usr/share/icons/hicolor/*/apps/@goosardesktop.png`. The leading `@`
+  # violates the freedesktop desktop-entry naming guidance, so GNOME /
+  # Ubuntu fail to associate the running window with the `.desktop` entry
+  # and fall back to the theme's default app icon (the Settings gear on
+  # Yaru).
+  #
+  # `goosar-desktop` (not `goosar`) so the deb/rpm/AppImage package never
+  # installs this Electron binary as `/usr/bin/goosar`. The Go CLI is a
+  # separate artifact (see CLI_INSTALL.md) that agents and scripts expect
+  # to find at `goosar` on PATH; when both packages are installed on the
+  # same box, a plain electron-builder default collides the two under one
+  # name. Whichever installs later — or wins the PATH lookup order — silently
+  # shadows the other. Hitting the Electron binary from a CLI call is the
+  # worst failure mode: it exits 0 with empty stdout (its own Chromium flags
+  # eat CLI args like `--output json`), which looks like a healthy CLI that
+  # returned nothing rather than "wrong binary" (github.com/adanman/goosar/issues/5481).
+  # `StartupWMClass=Goosar` (productName-derived) is unaffected by this
+  # rename — it comes from `app.getName()`, not `executableName`.
+  executableName: goosar-desktop
+  # Pin StartupWMClass to the WM_CLASS Electron emits on X11. Electron
+  # derives WM_CLASS from `app.getName()`, which reads the *packaged*
+  # ASAR's `package.json` — `productName` if present, otherwise `name`.
+  # PR #2437 assumed electron-builder.yml's productName fed app.getName()
+  # directly; it does not. With our source package.json carrying only
+  # `name: "@goosar/desktop"`, packaged Electron emitted
+  # `WM_CLASS=@goosar/desktop`, which broke association with this entry
+  # and reproduced #2515 on Ubuntu 0.2.31. The fix lives in two places
+  # outside this file — `productName: "Goosar"` on the source
+  # package.json (so the ASAR carries it) and `app.setName("Goosar")`
+  # in the production branch of `src/main/index.ts` (belt-and-braces).
+  # Keep `StartupWMClass: Goosar` pinned here so any future drift in
+  # those two anchors shows up as a diff against this declaration.
+  # Verification on a real Ubuntu install: `xprop WM_CLASS` on a running
+  # window prints `Goosar` for both fields.
+  desktop:
+    entry:
+      StartupWMClass: Goosar
+  # Point at pre-rendered hicolor sizes. electron-builder *can* generate
+  # 16/24/32/48/64/128/256/512 from a single build/icon.png, but the
+  # auto-generation silently shipped only the 1024×1024 source in our
+  # v0.2.31 .deb (#2515 reproduces this) — leaving GNOME's hicolor lookup
+  # with no usable size and falling back to the theme default. Shipping
+  # the sizes from source removes the toolchain dependency entirely.
+  icon: build/icons
+  target:
+    - AppImage
+    - deb
+    - rpm
+  artifactName: goosar-desktop-${version}-linux-${arch}.${ext}
+# `packageName` on both fpm targets, because electron-builder derives it from
+# the npm package name and ours is scoped: appInfo.linuxPackageName returns
+# `sanitizedProductName` for any name starting with `@`, and sanitizing
+# "Goosar" only strips filesystem-illegal characters — the SPACE
+# survives. fpm then emits `Name: Goosar` into the RPM spec and
+# rpmbuild rejects it outright:
+#
+#   error: line 1: Tag takes single token only: Name: Goosar
+#
+# That is the whole reason `desktop (ubuntu-latest, linux)` has been red on
+# every release tag (v0.2.2, v0.2.3-rc1, v0.2.4-rc1 — issue #15). AppImage and
+# .deb survived it and masked the cause: AppImage never uses fpm, and fpm
+# silently rewrites illegal Debian package names to lowercase-and-dashes.
+# Only RPM has no auto-repair, so only RPM failed.
+#
+# `goosar-desktop` matches `linux.executableName` above, and inherits its
+# reasoning: the Go CLI owns the name `goosar` (goreleaser `project_name:
+# goosar`), so the desktop package must never claim it.
+#
+# Set per target, not under `linux:` — `packageName` exists on
+# LinuxTargetSpecificOptions but NOT on LinuxConfiguration, and
+# electron-builder fails the build on an unknown option.
+deb:
+  packageName: goosar-desktop
+rpm:
+  packageName: goosar-desktop
+  # Disable RPM build-id symlinks. Electron apps embed the upstream Electron
+  # binary, whose GNU build-id is identical across every app shipping the same
+  # Electron version (Slack, VS Code, Discord, ...). Without this, our RPM
+  # would own /usr/lib/.build-id/<hash> paths and collide with any other
+  # Electron RPM already installed, breaking `dnf install` on Fedora/RHEL.
+  fpm:
+    - "--rpm-rpmbuild-define=_build_id_links none"
+win:
+  target:
+    - nsis
+  artifactName: goosar-desktop-${version}-windows-${arch}.${ext}
+publish:
+  provider: github
+  # Must be the real repository. `adanman/goosar` does not exist, so every
+  # `--publish always` build 404'd on
+  # `GET https://api.github.com/repos/adanman/goosar/releases` after producing
+  # a perfectly good installer — which is how the Windows release job failed
+  # (issue #15) even though NSIS packaging itself succeeded. The same address is
+  # baked into app-update.yml inside every shipped build, so a wrong value here
+  # also points installed clients' electron-updater feed at nothing.
+  owner: adanman
+  repo: goosar
+  # Align with our CLI release flow which pre-creates a *published* GitHub
+  # Release via `gh release create`. The electron-builder default of
+  # `releaseType: draft` conflicts with `existingType=release` and causes
+  # uploads of the DMG/ZIP/blockmaps/latest-mac.yml to be silently skipped,
+  # which breaks electron-updater auto-update on installed clients.
+  releaseType: release
+npmRebuild: false

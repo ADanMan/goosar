@@ -1,0 +1,57 @@
+/* =============================================================================
+ * Goosar Web — Custom styles (non-shadcn, web-only)
+ * Shared styles (shiki, entrance-spin, sidebar, sonner, scrollbar) are in
+ * @goosar/ui/styles/base.css
+ * ============================================================================= */
+
+/* The landing route tree is intentionally always-light (hero/cli/cloud
+ * sections use hardcoded dark/light palettes). Shared components rendered
+ * inside (e.g. CloudWaitlistExpand on /download) use semantic tokens that
+ * otherwise flip to dark values under the `.dark` class set by next-themes,
+ * producing a palette mismatch against the hardcoded section. Re-declare
+ * tokens to their light values so nested token-driven components stay in
+ * lockstep with the surrounding design. */
+.landing-light,
+.landing-light * {
+    color-scheme: light;
+}
+.landing-light {
+    --app-shell: oklch(0.965 0.002 60);
+    --page-canvas: oklch(0.99 0.001 60);
+    --surface: oklch(1 0 0);
+    --surface-foreground: oklch(0.2 0.004 60);
+    --surface-raised: oklch(1 0 0);
+    --surface-hover: oklch(0.965 0.002 60);
+    --surface-selected: oklch(0.95 0.004 60);
+    --surface-selected-foreground: oklch(0.2 0.004 60);
+    --surface-border: oklch(0.92 0.003 60);
+    --surface-shadow: 0 1px 2px rgb(28 25 23 / 0.05), 0 1px 1px rgb(28 25 23 / 0.03);
+    --floating-shadow: 0 16px 40px rgb(28 25 23 / 0.14), 0 3px 10px rgb(28 25 23 / 0.08);
+    --menu-shadow: 0 8px 24px rgb(28 25 23 / 0.08), 0 2px 6px rgb(28 25 23 / 0.05);
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.2 0.004 60);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.2 0.004 60);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.2 0.004 60);
+    --primary: oklch(0.24 0.004 60);
+    --primary-foreground: oklch(0.99 0 0);
+    --secondary: oklch(0.965 0.002 60);
+    --secondary-foreground: oklch(0.24 0.004 60);
+    --muted: oklch(0.965 0.002 60);
+    --muted-foreground: oklch(0.5 0.008 60);
+    --accent: oklch(0.965 0.002 60);
+    --accent-foreground: oklch(0.24 0.004 60);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.92 0.003 60);
+    --input: oklch(0.91 0.004 60);
+    --ring: oklch(0.705 0.187 47.6);
+    --brand: oklch(0.705 0.187 47.6);
+    --brand-foreground: oklch(0.2 0.004 60);
+    --success: oklch(0.55 0.16 145);
+    --warning: oklch(0.75 0.16 85);
+    --info: oklch(0.45 0.01 60);
+    --scrollbar-thumb: oklch(0 0 0 / 10%);
+    --scrollbar-thumb-hover: oklch(0 0 0 / 18%);
+    --scrollbar-track: transparent;
+}

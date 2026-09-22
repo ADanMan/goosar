@@ -1,0 +1,80 @@
+{
+  "nav": {
+    "inbox": "收件箱",
+    "chat": "聊天",
+    "my_issues": "我的 issue",
+    "issues": "Issues",
+    "projects": "项目",
+    "autopilots": "自动化",
+    "agents": "智能体",
+    "squads": "小队",
+    "usage": "用量",
+    "runtimes": "运行时",
+    "skills": "Skills",
+    "settings": "设置",
+    "capabilities": "你能做什么",
+    "go_back": "后退",
+    "go_forward": "前进"
+  },
+  "tab": {
+    "issue": "Issue",
+    "project": "项目",
+    "autopilot": "自动化",
+    "agent": "智能体",
+    "member": "成员",
+    "squad": "小队",
+    "skill": "Skill",
+    "machine": "机器",
+    "runtime": "运行时",
+    "attachment": "附件",
+    "create_agent": "创建智能体",
+    "unknown": "未知页面"
+  },
+  "help": {
+    "trigger": "帮助",
+    "docs": "文档",
+    "feedback": "反馈",
+    "replay_onboarding": "重新体验上手引导",
+    "server_version": "服务器版本 {{version}}",
+    "capabilities": "你在这里能做什么"
+  },
+  "realtime": {
+    "degraded": {
+      "title": "更新有延迟",
+      "detail": "应用已改为定期拉取，所以智能体和同事的改动会比平时晚一些出现；在连接中断期间则完全不会出现。",
+      "cause": "实时连接无法建立，多数情况是网络路由不允许。从这里看，服务器不可用也是同样的表现。"
+    }
+  },
+  "workspace_loader": {
+    "loading_workspace": "正在加载工作区...",
+    "loading_named_prefix": "正在加载"
+  },
+  "sidebar": {
+    "unpin_tooltip": "取消固定",
+    "workspaces_label": "工作区",
+    "create_workspace": "创建工作区",
+    "pending_invitations_label": "待处理的邀请",
+    "invitation_workspace_fallback": "工作区",
+    "invitation_join": "加入",
+    "invitation_decline": "拒绝",
+    "log_out": "退出登录",
+    "new_issue": "新建 issue",
+    "new_issue_shortcut": "C",
+    "pinned_label": "固定",
+    "workspace_group": "工作区",
+    "configure_group": "配置",
+    "unread_overflow": "99+"
+  },
+  "issue_window": {
+    "unavailable_title": "Issue 不可用",
+    "unavailable_description": "此工作区已不在你的账号中。",
+    "close_window": "关闭窗口",
+    "error_title": "出了点问题",
+    "unknown_error": "未知路由错误",
+    "reload": "重新加载"
+  },
+  "config_error": {
+    "title": "桌面端配置错误",
+    "description": "Goosar Desktop 无法加载 ~/.goosar/desktop.json。请修复或删除该文件后重启应用。"
+  }
+}
