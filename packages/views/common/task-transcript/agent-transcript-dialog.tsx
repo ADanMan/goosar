@@ -116,9 +116,9 @@ const colorClasses: Record<EventColor, { bg: string; bgActive: string; label: st
     label: 'bg-violet-500/20 text-violet-700 dark:text-violet-300',
   },
   tool: {
-    bg: 'bg-blue-400/60',
-    bgActive: 'bg-blue-500',
-    label: 'bg-blue-500/20 text-blue-700 dark:text-blue-300',
+    bg: 'bg-accent-beak/60',
+    bgActive: 'bg-accent-beak',
+    label: 'bg-accent-beak/20 text-accent-beak',
   },
   result: {
     bg: 'bg-slate-300/60 dark:bg-slate-600/60',
@@ -126,9 +126,9 @@ const colorClasses: Record<EventColor, { bg: string; bgActive: string; label: st
     label: 'bg-muted text-muted-foreground',
   },
   error: {
-    bg: 'bg-red-400/60',
-    bgActive: 'bg-red-500',
-    label: 'bg-red-500/20 text-red-700 dark:text-red-300',
+    bg: 'bg-destructive/60',
+    bgActive: 'bg-destructive',
+    label: 'bg-destructive/20 text-destructive',
   },
 };
 

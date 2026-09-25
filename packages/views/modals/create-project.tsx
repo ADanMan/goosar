@@ -735,7 +735,7 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
                       })}
                     </p>
                   ) : (
-                    <p className="text-[11px] text-amber-600 dark:text-amber-400">
+                    <p className="text-[11px] text-warning">
                       {t(($) => $.create_project.local_daemon_offline)}
                     </p>
                   )}

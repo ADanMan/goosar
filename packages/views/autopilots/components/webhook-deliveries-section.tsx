@@ -41,7 +41,7 @@ type StatusVisual = {
 };
 
 const STATUS_VISUAL: Record<WebhookDeliveryStatus, StatusVisual> = {
-  queued: { color: 'text-blue-500', icon: Loader2, spin: true },
+  queued: { color: 'text-accent-beak', icon: Loader2, spin: true },
   dispatched: { color: 'text-emerald-500', icon: CheckCircle2 },
   rejected: { color: 'text-destructive', icon: ShieldOff },
   ignored: { color: 'text-muted-foreground', icon: Ban },

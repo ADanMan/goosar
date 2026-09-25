@@ -158,7 +158,7 @@ function MembersList({
               />
               <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
               {isLeader && (
-                <span className="max-w-[4rem] shrink-0 truncate rounded-md bg-amber-100 px-1 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                <span className="max-w-[4rem] shrink-0 truncate rounded-md bg-warning/15 px-1 py-0.5 text-[10px] font-medium text-warning">
                   {t(($) => $.members_tab.leader_chip)}
                 </span>
               )}

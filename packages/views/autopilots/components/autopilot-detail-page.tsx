@@ -86,8 +86,8 @@ type RunStatus = 'issue_created' | 'running' | 'skipped' | 'completed' | 'failed
 
 const RUN_VISUAL: Record<RunStatus, { color: string; icon: typeof CheckCircle2; spin?: boolean }> =
   {
-    issue_created: { color: 'text-blue-500', icon: Clock },
-    running: { color: 'text-blue-500', icon: Loader2, spin: true },
+    issue_created: { color: 'text-accent-beak', icon: Clock },
+    running: { color: 'text-accent-beak', icon: Loader2, spin: true },
     skipped: { color: 'text-muted-foreground', icon: Ban },
     completed: { color: 'text-emerald-500', icon: CheckCircle2 },
     failed: { color: 'text-destructive', icon: XCircle },
@@ -794,7 +794,7 @@ export function AutopilotDetailPage({ autopilotId }: { autopilotId: string }) {
                   autopilot.status === 'active'
                     ? 'text-emerald-500'
                     : autopilot.status === 'paused'
-                      ? 'text-amber-500'
+                      ? 'text-warning'
                       : 'text-muted-foreground',
                 )}
               >

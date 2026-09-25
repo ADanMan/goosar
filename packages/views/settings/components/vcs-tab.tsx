@@ -186,7 +186,7 @@ export function VCSTab() {
               copyLabel={t(($) => $.vcs.copy)}
               mono
             />
-            <p className="text-xs text-amber-600 dark:text-amber-500">
+            <p className="text-xs text-warning">
               {t(($) => $.vcs.webhook_secret_warning)}
             </p>
           </CardContent>

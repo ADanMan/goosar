@@ -206,7 +206,7 @@ function AssignedRow({
         */}
         {missing.length > 0 ? (
           <div className="mt-1 space-y-0.5">
-            <p className="text-xs leading-5 text-amber-600 dark:text-amber-500">
+            <p className="text-xs leading-5 text-warning">
               {t(($) => $.shared_mcp.credentials_missing, {
                 name: server.name,
                 fields: missing.join(', '),
