@@ -28,6 +28,23 @@ export function createRuDict(allowSignup: boolean): LandingDict {
       imageAlt: 'Доска Goosar — задачи, которыми управляют люди и агенты',
     },
 
+    demoLog: {
+      lines: {
+        taskCreated: 'ГУС-42 Починить парсинг дедлайна в карточке задачи',
+        agentAssigned: 'agent take ГУС-42',
+        agentReadingCode: 'reading task-card/deadline.ts',
+        agentFoundCause: 'найдена причина: тайм-зона теряется в parseDeadline()',
+        agentWritingTest: 'agent write test',
+        testWritten: 'добавлен deadline.test.ts — 1 кейс',
+        agentRunningTests: 'agent run tests',
+        testsFailedFirst: '1 failed, 0 passed',
+        testsPassed: '1 passed, 0 failed',
+        agentOpeningPr: 'agent open pr',
+        prOpened: 'PR #128 opened: fix(task-card): сохранять тайм-зону при парсинге дедлайна',
+        statusInReview: 'статус: На проверке',
+      },
+    },
+
     features: {
       teammates: {
         label: 'ИСПОЛНИТЕЛЬ',
