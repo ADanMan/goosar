@@ -1,7 +1,7 @@
 {
   "name": "@goosar/desktop",
   "productName": "Goosar",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Goosar Desktop — native desktop client for the Goosar platform.",
   "homepage": "https://goosar.ru",
