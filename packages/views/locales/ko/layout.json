@@ -1,13 +1,13 @@
 {
   "nav": {
-    "inbox": "인박스",
+    "inbox": "피드",
     "chat": "채팅",
-    "my_issues": "내 이슈",
-    "issues": "이슈",
+    "my_issues": "내 작업",
+    "issues": "작업",
     "projects": "프로젝트",
     "autopilots": "오토파일럿",
-    "agents": "에이전트",
-    "squads": "스쿼드",
+    "agents": "실행자",
+    "squads": "분대",
     "usage": "사용량",
     "runtimes": "런타임",
     "skills": "스킬",
@@ -17,12 +17,12 @@
     "go_forward": "앞으로"
   },
   "tab": {
-    "issue": "이슈",
+    "issue": "작업",
     "project": "프로젝트",
     "autopilot": "오토파일럿",
     "agent": "에이전트",
     "member": "멤버",
-    "squad": "스쿼드",
+    "squad": "분대",
     "skill": "스킬",
     "machine": "머신",
     "runtime": "런타임",
@@ -58,7 +58,7 @@
     "invitation_join": "참가",
     "invitation_decline": "거절",
     "log_out": "로그아웃",
-    "new_issue": "새 이슈",
+    "new_issue": "새 작업",
     "new_issue_shortcut": "C",
     "pinned_label": "고정됨",
     "workspace_group": "워크스페이스",
@@ -66,7 +66,7 @@
     "unread_overflow": "99+"
   },
   "issue_window": {
-    "unavailable_title": "이슈를 사용할 수 없습니다",
+    "unavailable_title": "작업을 사용할 수 없습니다",
     "unavailable_description": "이 워크스페이스는 더 이상 계정에서 사용할 수 없습니다.",
     "close_window": "창 닫기",
     "error_title": "문제가 발생했습니다",

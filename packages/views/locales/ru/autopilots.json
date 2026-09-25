@@ -30,7 +30,7 @@
     "archived": "В архиве"
   },
   "execution_mode": {
-    "create_issue": "Создавать issue",
+    "create_issue": "Создавать задачи",
     "run_only": "Только запуск"
   },
   "relative_date": {
@@ -122,7 +122,7 @@
     "owner_note": "У автора и администраторов рабочего пространства доступ есть всегда."
   },
   "run_status": {
-    "issue_created": "Создан issue",
+    "issue_created": "Создана задача",
     "running": "Выполняется",
     "skipped": "Пропущен",
     "completed": "Завершён",
@@ -135,7 +135,7 @@
     "api": "API"
   },
   "run": {
-    "issue_linked": "Связанный issue",
+    "issue_linked": "Связанная задача",
     "view_log": "Посмотреть лог выполнения",
     "skipped_group": {
       "label": "Пропущенные",
@@ -283,7 +283,7 @@
     "no_project": "Без проекта",
     "section_output_mode": "Режим вывода",
     "section_subscribers": "Подписчики",
-    "subscribers_hint": "Автоматически подписываются на каждый issue, который создаёт этот автопилот",
+    "subscribers_hint": "Автоматически подписываются на каждую задачу, который создаёт этот автопилот",
     "subscribers_empty": "Подписчиков нет — добавьте коллег, чтобы они получали уведомления о каждом запуске",
     "subscribers_add": "Добавить подписчика",
     "subscribers_search_placeholder": "Поиск участников по имени…",
@@ -308,12 +308,12 @@
     "schedule_disabled_reason": "У этого автопилота несколько расписаний — правьте их на странице автопилота.",
     "output_modes": {
       "create_issue": {
-        "label": "Создавать issue",
-        "description": "Каждый запуск создаёт issue"
+        "label": "Создавать задачи",
+        "description": "Каждый запуск создаёт задачу"
       },
       "run_only": {
         "label": "Только запуск",
-        "description": "Тихий запуск, issue не создаётся"
+        "description": "Тихий запуск, задача не создаётся"
       }
     }
   },

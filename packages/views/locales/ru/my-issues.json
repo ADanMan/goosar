@@ -1,28 +1,28 @@
 {
   "page": {
-    "breadcrumb": "Мои issue",
+    "breadcrumb": "Мои задачи",
     "workspace_fallback": "Рабочее пространство",
-    "empty_title": "Вам не назначено ни одного issue",
-    "empty_description": "Здесь появятся issue, которые вы создали или которые назначены вам."
+    "empty_title": "Вам не назначено ни одной задачи",
+    "empty_description": "Здесь появятся задачи, которые вы создали или которые назначены вам."
   },
   "header": {
     "scope": {
       "all_label": "Все",
-      "all_description": "Назначенные вам, созданные вами, а также issue ваших агентов и команд",
+      "all_description": "Назначенные вам, созданные вами, а также задачи ваших агентов и команд",
       "assigned_label": "Назначенные",
-      "assigned_description": "Issue, назначенные вам",
+      "assigned_description": "Задача, назначенные вам",
       "created_label": "Созданные",
-      "created_description": "Issue, созданные вами",
+      "created_description": "Задача, созданные вами",
       "agents_label": "Агенты и команды",
-      "agents_description": "Issue, назначенные вашим агентам"
+      "agents_description": "Задача, назначенные вашим агентам"
     },
     "filter_button": "Фильтр",
     "filter_status": "Статус",
     "filter_priority": "Приоритет",
-    "issue_count_one": "{{count}} issue",
-    "issue_count_few": "{{count}} issue",
-    "issue_count_many": "{{count}} issue",
-    "issue_count_other": "{{count}} issue",
+    "issue_count_one": "{{count}} задача",
+    "issue_count_few": "{{count}} задачи",
+    "issue_count_many": "{{count}} задач",
+    "issue_count_other": "{{count}} задачи",
     "reset_filters": "Сбросить все фильтры",
     "display_settings": "Настройки отображения",
     "grouping": "Группировка",
@@ -42,6 +42,6 @@
     "sort_manual": "Вручную"
   },
   "errors": {
-    "move_failed": "Не удалось переместить issue"
+    "move_failed": "Не удалось переместить задачу"
   }
 }

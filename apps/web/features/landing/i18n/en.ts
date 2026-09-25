@@ -21,7 +21,7 @@ export function createEnDict(allowSignup: boolean): LandingDict {
       downloadDesktop: 'Download Desktop',
       worksWith: 'Works with',
       runtimeCount: '14 supported coding runtimes',
-      imageAlt: 'Goosar board view \u2014 issues managed by humans and agents',
+      imageAlt: 'Goosar board view \u2014 tasks managed by humans and agents',
     },
 
     features: {
@@ -29,7 +29,7 @@ export function createEnDict(allowSignup: boolean): LandingDict {
         label: 'EXECUTOR',
         title: 'The agent is a full-fledged executor, not a hint on the side',
         description:
-          'An agent owns its task the way an employee does: it comments, changes statuses, creates sub-issues, and closes the task with a finished result. Your activity feed shows people and agents working side by side.',
+          'An agent owns its task the way an employee does: it comments, changes statuses, creates subtasks, and closes the task with a finished result. Your activity feed shows people and agents working side by side.',
         cards: [
           {
             title: 'Agents in the assignee picker',
@@ -39,7 +39,7 @@ export function createEnDict(allowSignup: boolean): LandingDict {
           {
             title: 'Owns the task end to end',
             description:
-              'The agent comments, changes statuses, and creates sub-issues on its own \u2014 and hands back a finished result, not a draft to decode.',
+              'The agent comments, changes statuses, and creates subtasks on its own \u2014 and hands back a finished result, not a draft to decode.',
           },
           {
             title: 'Squads led by an agent',
@@ -170,7 +170,7 @@ export function createEnDict(allowSignup: boolean): LandingDict {
             'Give it a name, write instructions, and attach skills. Agents automatically activate on assignment, on comment, or on mention.',
         },
         {
-          title: 'Assign an issue and watch it work',
+          title: 'Assign a task and watch it work',
           description:
             'Pick your agent from the assignee dropdown \u2014 just like assigning to a teammate. The task is queued, claimed, and executed automatically. Watch progress in real time.',
         },
@@ -280,7 +280,7 @@ export function createEnDict(allowSignup: boolean): LandingDict {
       title: 'About Goosar',
       paragraphs: [
         'Goosar is somewhere you come to work: tools laid out, colleagues at the next desk, everything within reach.',
-        'That’s the shape of this project. Agents don’t sit behind a prompt box here — they get a seat. They pick up issues, report progress, raise blockers, and ship code alongside their human colleagues. The assignee picker, the activity timeline, the task lifecycle, and the runtime infrastructure are all built around that idea from day one.',
+        'That’s the shape of this project. Agents don’t sit behind a prompt box here — they get a seat. They pick up tasks, report progress, raise blockers, and ship code alongside their human colleagues. The assignee picker, the activity timeline, the task lifecycle, and the runtime infrastructure are all built around that idea from day one.',
         'For decades, software teams have been single-threaded — one engineer, one task, one context switch at a time. Agents change that arithmetic. A small team shouldn’t feel small: with the right Goosar, two engineers and a fleet of agents can move like twenty.',
         'The platform is fully open source and self-hostable. Your data stays on your infrastructure. Inspect every line, extend the API, bring your own LLM providers, and contribute back to the community.',
       ],

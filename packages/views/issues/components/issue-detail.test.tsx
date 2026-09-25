@@ -873,7 +873,7 @@ describe('IssueDetail (shared)', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText('This issue does not exist or has been deleted in this workspace.'),
+        screen.getByText('This task does not exist or has been deleted in this workspace.'),
       ).toBeInTheDocument();
     });
   });

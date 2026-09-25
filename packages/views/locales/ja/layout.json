@@ -1,12 +1,12 @@
 {
   "nav": {
-    "inbox": "インボックス",
+    "inbox": "フィード",
     "chat": "チャット",
-    "my_issues": "マイイシュー",
-    "issues": "イシュー",
+    "my_issues": "マイタスク",
+    "issues": "タスク",
     "projects": "プロジェクト",
     "autopilots": "オートパイロット",
-    "agents": "エージェント",
+    "agents": "実行者",
     "squads": "スクワッド",
     "usage": "使用量",
     "runtimes": "ランタイム",
@@ -17,7 +17,7 @@
     "go_forward": "進む"
   },
   "tab": {
-    "issue": "イシュー",
+    "issue": "タスク",
     "project": "プロジェクト",
     "autopilot": "オートパイロット",
     "agent": "エージェント",
@@ -58,7 +58,7 @@
     "invitation_join": "参加",
     "invitation_decline": "辞退",
     "log_out": "ログアウト",
-    "new_issue": "新規イシュー",
+    "new_issue": "新規タスク",
     "new_issue_shortcut": "C",
     "pinned_label": "ピン留め済み",
     "workspace_group": "ワークスペース",
@@ -66,7 +66,7 @@
     "unread_overflow": "99+"
   },
   "issue_window": {
-    "unavailable_title": "Issue を表示できません",
+    "unavailable_title": "タスク を表示できません",
     "unavailable_description": "このワークスペースはアカウントで利用できなくなりました。",
     "close_window": "ウィンドウを閉じる",
     "error_title": "問題が発生しました",

@@ -1,12 +1,12 @@
 {
   "nav": {
-    "inbox": "Inbox",
+    "inbox": "Feed",
     "chat": "Chat",
-    "my_issues": "My Issues",
-    "issues": "Issues",
+    "my_issues": "My Tasks",
+    "issues": "Tasks",
     "projects": "Projects",
     "autopilots": "Autopilot",
-    "agents": "Agents",
+    "agents": "Crew",
     "squads": "Squads",
     "usage": "Usage",
     "runtimes": "Runtimes",
@@ -17,7 +17,7 @@
     "go_forward": "Go forward"
   },
   "tab": {
-    "issue": "Issue",
+    "issue": "Task",
     "project": "Project",
     "autopilot": "Autopilot",
     "agent": "Agent",
@@ -58,7 +58,7 @@
     "invitation_join": "Join",
     "invitation_decline": "Decline",
     "log_out": "Log out",
-    "new_issue": "New Issue",
+    "new_issue": "New Task",
     "new_issue_shortcut": "C",
     "pinned_label": "Pinned",
     "workspace_group": "Workspace",
@@ -66,7 +66,7 @@
     "unread_overflow": "99+"
   },
   "issue_window": {
-    "unavailable_title": "Issue unavailable",
+    "unavailable_title": "Task unavailable",
     "unavailable_description": "This workspace is no longer available in your account.",
     "close_window": "Close window",
     "error_title": "Something went wrong",

@@ -1,23 +1,23 @@
 {
   "nav": {
-    "inbox": "收件箱",
+    "inbox": "动态",
     "chat": "聊天",
-    "my_issues": "我的 issue",
-    "issues": "Issues",
+    "my_issues": "我的 任务",
+    "issues": "任务",
     "projects": "项目",
     "autopilots": "自动化",
-    "agents": "智能体",
+    "agents": "执行者",
     "squads": "小队",
     "usage": "用量",
     "runtimes": "运行时",
-    "skills": "Skills",
+    "skills": "技能",
     "settings": "设置",
     "capabilities": "你能做什么",
     "go_back": "后退",
     "go_forward": "前进"
   },
   "tab": {
-    "issue": "Issue",
+    "issue": "任务",
     "project": "项目",
     "autopilot": "自动化",
     "agent": "智能体",
@@ -58,7 +58,7 @@
     "invitation_join": "加入",
     "invitation_decline": "拒绝",
     "log_out": "退出登录",
-    "new_issue": "新建 issue",
+    "new_issue": "新建 任务",
     "new_issue_shortcut": "C",
     "pinned_label": "固定",
     "workspace_group": "工作区",
@@ -66,7 +66,7 @@
     "unread_overflow": "99+"
   },
   "issue_window": {
-    "unavailable_title": "Issue 不可用",
+    "unavailable_title": "任务 不可用",
     "unavailable_description": "此工作区已不在你的账号中。",
     "close_window": "关闭窗口",
     "error_title": "出了点问题",

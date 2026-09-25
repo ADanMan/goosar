@@ -389,13 +389,7 @@ describe('the list the banner is built from', () => {
       B24_WEBHOOK_URL: 'https://b24.corp.example/rest/1/abc/',
       KB_API_TOKEN: 'kb',
     });
-    const servers = (config as { mcpServers: Record<string, { args?: string[] }> }).mcpServers;
-    servers['mcp-gateway'] = {
-      ...servers['mcp-gateway'],
-      args: (servers['mcp-gateway']?.args ?? []).map((a) =>
-        a === 'Bearer <token>' ? 'Bearer t' : a,
-      ),
-    };
+    config = withEnv(config, 'mcp-gateway', { API_ACCESS_TOKEN: 'real-token' });
     expect(
       missingPersonalCredentials(serviceCredentialStatuses(baseInput({ helperMcpConfig: config }))),
     ).toEqual([]);

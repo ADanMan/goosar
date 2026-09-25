@@ -154,9 +154,9 @@ describe('IssueActionsDropdown', () => {
     expect(screen.getByText('Due date')).toBeInTheDocument();
     expect(screen.getByText('Copy link')).toBeInTheDocument();
     expect(screen.getByText('Relations')).toBeInTheDocument();
-    expect(screen.getByText('Delete issue')).toBeInTheDocument();
+    expect(screen.getByText('Delete task')).toBeInTheDocument();
     expect(screen.queryByText('Create sub-issue')).not.toBeInTheDocument();
-    expect(screen.queryByText('Set parent issue...')).not.toBeInTheDocument();
+    expect(screen.queryByText('Set parent task...')).not.toBeInTheDocument();
     expect(screen.queryByText('Add sub-issue...')).not.toBeInTheDocument();
   });
 
@@ -192,7 +192,7 @@ describe('IssueActionsDropdown', () => {
     fireEvent.click(screen.getByTestId('trigger'));
     fireEvent.click(await screen.findByText('Relations'));
 
-    expect(await screen.findByText('Remove parent issue')).toBeInTheDocument();
+    expect(await screen.findByText('Remove parent task')).toBeInTheDocument();
   });
 
   it("hides 'Remove parent issue' when the issue has no parent", async () => {
@@ -208,8 +208,8 @@ describe('IssueActionsDropdown', () => {
     fireEvent.click(screen.getByTestId('trigger'));
     fireEvent.click(await screen.findByText('Relations'));
 
-    expect(await screen.findByText('Set parent issue...')).toBeInTheDocument();
-    expect(screen.queryByText('Remove parent issue')).not.toBeInTheDocument();
+    expect(await screen.findByText('Set parent task...')).toBeInTheDocument();
+    expect(screen.queryByText('Remove parent task')).not.toBeInTheDocument();
   });
 
   it('clicking Delete issue opens the delete-confirm modal', async () => {
@@ -224,7 +224,7 @@ describe('IssueActionsDropdown', () => {
     );
 
     fireEvent.click(screen.getByTestId('trigger'));
-    const del = await screen.findByText('Delete issue');
+    const del = await screen.findByText('Delete task');
     fireEvent.click(del);
 
     expect(mockOpenModal).toHaveBeenCalledWith('issue-delete-confirm', {
@@ -250,6 +250,6 @@ describe('IssueActionsContextMenu', () => {
     fireEvent.contextMenu(screen.getByTestId('row'));
 
     expect(await screen.findByText('Status')).toBeInTheDocument();
-    expect(screen.getByText('Delete issue')).toBeInTheDocument();
+    expect(screen.getByText('Delete task')).toBeInTheDocument();
   });
 });
