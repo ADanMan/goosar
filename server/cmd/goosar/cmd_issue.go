@@ -153,18 +153,18 @@ func fileWithinWorkingDir(filePath string) (bool, error) {
 
 var issueCmd = &cobra.Command{
 	Use:   "issue",
-	Short: "Работа с issue",
+	Short: "Работа с задачами",
 }
 
 var issueListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "Показать issue рабочего пространства",
+	Short: "Показать задачи рабочего пространства",
 	RunE:  runIssueList,
 }
 
 var issueGetCmd = &cobra.Command{
 	Use:   "get <id>",
-	Short: "Показать сведения об issue",
+	Short: "Показать сведения о задаче",
 	Args:  exactArgs(1),
 	RunE:  runIssueGet,
 }
@@ -172,7 +172,7 @@ var issueGetCmd = &cobra.Command{
 var issuePullRequestsCmd = &cobra.Command{
 	Use:     "pull-requests <id>",
 	Aliases: []string{"prs"},
-	Short:   "Показать pull request, связанные с issue",
+	Short:   "Показать pull request, связанные с задачей",
 	Args:    exactArgs(1),
 	RunE:    runIssuePullRequests,
 }
@@ -180,35 +180,35 @@ var issuePullRequestsCmd = &cobra.Command{
 var issueChildrenCmd = &cobra.Command{
 	Use:     "children <id>",
 	Aliases: []string{"subissues"},
-	Short:   "Показать дочерние issue, сгруппированные по этапам",
+	Short:   "Показать дочерние задачи, сгруппированные по этапам",
 	Args:    exactArgs(1),
 	RunE:    runIssueChildren,
 }
 
 var issueCreateCmd = &cobra.Command{
 	Use:   "create",
-	Short: "Создать issue",
+	Short: "Создать задачу",
 	RunE:  runIssueCreate,
 }
 
 var issueUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
-	Short: "Изменить issue",
+	Short: "Изменить задачу",
 	Args:  exactArgs(1),
 	RunE:  runIssueUpdate,
 }
 
 var issueAssignCmd = &cobra.Command{
 	Use:   "assign <id>",
-	Short: "Назначить issue участнику, агенту или команде",
+	Short: "Назначить задачу участнику, агенту или команде",
 	Args:  exactArgs(1),
 	RunE:  runIssueAssign,
 }
 
 var issueStatusCmd = &cobra.Command{
 	Use:   "status <id> <status>",
-	Short: "Изменить статус issue",
-	Long: "Меняет статус issue. Допустимые статусы: " +
+	Short: "Изменить статус задачи",
+	Long: "Меняет статус задачи. Допустимые статусы: " +
 		"backlog, todo, in_progress, in_review, done, blocked, cancelled.",
 	Args: exactArgs(2),
 	RunE: runIssueStatus,
@@ -216,8 +216,8 @@ var issueStatusCmd = &cobra.Command{
 
 var issueReorderCmd = &cobra.Command{
 	Use:   "reorder <id>",
-	Short: "Переместить issue внутри колонки статуса",
-	Long: "Меняет положение issue внутри текущей колонки статуса: вычисляет новую\n" +
+	Short: "Переместить задачу внутри колонки статуса",
+	Long: "Меняет положение задачи внутри текущей колонки статуса: вычисляет новую\n" +
 		"позицию, ту же самую, что задаёт перетаскивание на доске.\n\n" +
 		"Укажите ровно одну цель:\n" +
 		"  --before <id>  поставить прямо над другим issue той же колонки\n" +
@@ -232,19 +232,19 @@ var issueReorderCmd = &cobra.Command{
 
 var issueCommentCmd = &cobra.Command{
 	Use:   "comment",
-	Short: "Работа с комментариями к issue",
+	Short: "Работа с комментариями к задачам",
 }
 
 var issueCommentListCmd = &cobra.Command{
 	Use:   "list <issue-id>",
-	Short: "Показать комментарии к issue",
+	Short: "Показать комментарии к задаче",
 	Args:  exactArgs(1),
 	RunE:  runIssueCommentList,
 }
 
 var issueCommentAddCmd = &cobra.Command{
 	Use:   "add <issue-id>",
-	Short: "Добавить комментарий к issue",
+	Short: "Добавить комментарий к задаче",
 	Args:  exactArgs(1),
 	RunE:  runIssueCommentAdd,
 }
@@ -272,33 +272,33 @@ var issueCommentUnresolveCmd = &cobra.Command{
 
 var issueSubscriberCmd = &cobra.Command{
 	Use:   "subscriber",
-	Short: "Работа с подписчиками issue",
+	Short: "Работа с подписчиками задачи",
 }
 
 var issueSubscriberListCmd = &cobra.Command{
 	Use:   "list <issue-id>",
-	Short: "Показать подписчиков issue",
+	Short: "Показать подписчиков задачи",
 	Args:  exactArgs(1),
 	RunE:  runIssueSubscriberList,
 }
 
 var issueSubscriberAddCmd = &cobra.Command{
 	Use:   "add <issue-id>",
-	Short: "Подписать пользователя или агента на issue (по умолчанию — вызывающего)",
+	Short: "Подписать пользователя или агента на задачу (по умолчанию — вызывающего)",
 	Args:  exactArgs(1),
 	RunE:  runIssueSubscriberAdd,
 }
 
 var issueSubscriberRemoveCmd = &cobra.Command{
 	Use:   "remove <issue-id>",
-	Short: "Отписать пользователя или агента от issue (по умолчанию — вызывающего)",
+	Short: "Отписать пользователя или агента от задачи (по умолчанию — вызывающего)",
 	Args:  exactArgs(1),
 	RunE:  runIssueSubscriberRemove,
 }
 
 var issueRunsCmd = &cobra.Command{
 	Use:   "runs <issue-id>",
-	Short: "Показать историю запусков по issue",
+	Short: "Показать историю запусков по задаче",
 	Args:  exactArgs(1),
 	RunE:  runIssueRuns,
 }
@@ -312,14 +312,14 @@ var issueRunMessagesCmd = &cobra.Command{
 
 var issueUsageCmd = &cobra.Command{
 	Use:   "usage <issue-id>",
-	Short: "Показать суммарный расход токенов по issue",
+	Short: "Показать суммарный расход токенов по задаче",
 	Args:  exactArgs(1),
 	RunE:  runIssueUsage,
 }
 
 var issueRerunCmd = &cobra.Command{
 	Use:   "rerun <id>",
-	Short: "Поставить текущее назначение агента по issue в очередь как новую задачу",
+	Short: "Поставить текущее назначение агента по задаче в очередь как новую задачу",
 	Args:  exactArgs(1),
 	RunE:  runIssueRerun,
 }
@@ -336,7 +336,7 @@ var issueCancelTaskCmd = &cobra.Command{
 
 var issueSearchCmd = &cobra.Command{
 	Use:   "search <query>",
-	Short: "Найти issue по заголовку или описанию",
+	Short: "Найти задачу по заголовку или описанию",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runIssueSearch,
 }
@@ -417,7 +417,7 @@ func init() {
 	issueListCmd.Flags().String("assignee-id", "", "Фильтр по UUID исполнителя — участника, агента или команды (несовместимо с --assignee)")
 	issueListCmd.Flags().String("project", "", "Фильтр по ID проекта")
 	issueListCmd.Flags().StringSlice("metadata", nil, "Фильтр по metadata key=value (можно повторять; условия объединяются через AND). Значение разбирается как JSON: 'true'/'false' → bool, числа → number, остальное — строка. Чтобы значение, похожее на число, осталось строкой, оберните его так: '\"42\"'.")
-	issueListCmd.Flags().Int("limit", 50, "Максимальное число возвращаемых issue")
+	issueListCmd.Flags().Int("limit", 50, "Максимальное число возвращаемых задач")
 	issueListCmd.Flags().Int("offset", 0, "Сколько issue пропустить (для постраничного вывода)")
 	issueListCmd.Flags().String("sort", "", "Колонка сортировки: position (по умолчанию, ручной порядок на доске), title, created_at, start_date, due_date, priority")
 	issueListCmd.Flags().String("direction", "", "Направление сортировки (asc или desc); требует --sort с любой колонкой, кроме position (position всегда по возрастанию)")
@@ -434,11 +434,11 @@ func init() {
 	issueCreateCmd.Flags().Bool("description-stdin", false, "Прочитать описание issue из stdin (многострочный текст сохраняется без изменений)")
 	issueCreateCmd.Flags().String("description-file", "", "Прочитать описание issue из файла в UTF-8 (многострочный текст сохраняется без изменений; в Windows используйте это, если передача через stdin портит не-ASCII байты). Путь должен лежать внутри текущего рабочего каталога, если не задан --allow-external-file.")
 	issueCreateCmd.Flags().Bool("allow-external-file", false, "Разрешить --description-file / --attachment читать путь вне текущего рабочего каталога. По умолчанию выключено, чтобы случайно не подхватить устаревший файл из другого запуска или окружения (MUL-4252).")
-	issueCreateCmd.Flags().String("status", "", "Статус issue")
-	issueCreateCmd.Flags().String("priority", "", "Приоритет issue")
+	issueCreateCmd.Flags().String("status", "", "Статус задачи")
+	issueCreateCmd.Flags().String("priority", "", "Приоритет задачи")
 	issueCreateCmd.Flags().String("assignee", "", "Имя исполнителя (участник, агент или команда; нечёткое совпадение)")
 	issueCreateCmd.Flags().String("assignee-id", "", "UUID исполнителя — участника, агента или команды (несовместимо с --assignee)")
-	issueCreateCmd.Flags().String("parent", "", "ID родительского issue")
+	issueCreateCmd.Flags().String("parent", "", "ID родительской задачи")
 	issueCreateCmd.Flags().Int("stage", 0, "Номер этапа (>=1): объединяет дочерние issue родителя в упорядоченную группу-барьер; без флага этапа нет. Исполнитель родительского issue просыпается, только когда завершены все дочерние issue этапа.")
 	issueCreateCmd.Flags().String("project", "", "ID проекта")
 	issueCreateCmd.Flags().String("start-date", "", "Дата начала (календарный день, YYYY-MM-DD)")
@@ -493,11 +493,11 @@ func init() {
 	issueRerunCmd.Flags().String("output", "json", "Формат вывода: table или json")
 
 	issueCancelTaskCmd.Flags().String("output", "json", "Формат вывода: table или json")
-	issueCancelTaskCmd.Flags().String("issue", "", "ID или ключ issue, среди задач которого искать короткий префикс ID задачи")
+	issueCancelTaskCmd.Flags().String("issue", "", "ID или ключ задачи, среди задач которой искать короткий префикс ID задачи")
 
 	issueRunMessagesCmd.Flags().String("output", "json", "Формат вывода: table или json")
 	issueRunMessagesCmd.Flags().Int("since", 0, "Вернуть только сообщения после этого порядкового номера")
-	issueRunMessagesCmd.Flags().String("issue", "", "ID или ключ issue, среди задач которого искать короткий префикс ID задачи")
+	issueRunMessagesCmd.Flags().String("issue", "", "ID или ключ задачи, среди задач которой искать короткий префикс ID задачи")
 
 	issueCommentAddCmd.Flags().String("content", "", "Текст комментария для коротких однострочных сообщений (раскрывает \\n, \\r, \\t, \\\\). Для многострочного текста или текста от агента используйте --content-file <path>: он сохраняет обратные кавычки, $(), кавычки и обратные косые черты как есть.")
 	issueCommentAddCmd.Flags().Bool("content-stdin", false, "Прочитать текст комментария из stdin без изменений. Работает, только если эта же командная строка передаёт данные по конвейеру; голый --content-stdin в shell-инструменте агента читает пустой stdin и завершается ошибкой. Лучше используйте --content-file.")

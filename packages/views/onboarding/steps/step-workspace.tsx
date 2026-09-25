@@ -4,13 +4,11 @@ import { type ReactNode, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
-  BookOpenText,
   Bot,
   FolderKanban,
   Inbox,
   ListTodo,
   Lock,
-  MoreHorizontal,
   Monitor,
   Plus,
   Zap,
@@ -518,20 +516,10 @@ function WorkspacePreviewCard({ name, slug }: { name: string; slug: string }) {
           meta={t(($) => $.step_workspace.preview.autopilot_meta)}
         />
         <EntityRow
-          icon={<Monitor className="h-4 w-4" />}
-          label={t(($) => $.step_workspace.preview.runtimes_label)}
-          meta={t(($) => $.step_workspace.preview.runtimes_meta)}
-        />
-        <EntityRow
-          icon={<BookOpenText className="h-4 w-4" />}
-          label={t(($) => $.step_workspace.preview.skills_label)}
-          meta={t(($) => $.step_workspace.preview.skills_meta)}
-        />
-        <EntityRow
           dim
-          icon={<MoreHorizontal className="h-4 w-4" />}
-          label={t(($) => $.step_workspace.preview.more_label)}
-          meta={t(($) => $.step_workspace.preview.more_meta)}
+          icon={<Monitor className="h-4 w-4" />}
+          label={t(($) => $.step_workspace.preview.settings_label)}
+          meta={t(($) => $.step_workspace.preview.settings_meta)}
         />
       </div>
     </div>

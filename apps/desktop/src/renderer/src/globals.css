@@ -81,3 +81,13 @@ html[lang|="ja"] {
 [data-slot="sidebar-container"] {
   padding: 0 !important;
 }
+
+/* macOS only (T-014): `titleBarStyle: 'hiddenInset'` draws the traffic-light
+   buttons over the window content at y:17 with ~13px radius, so they overlap
+   the top of the nav rail. Push the rail's content down so its first item
+   (workspace switcher) clears them; other platforms keep their native title
+   bar and get no extra offset. `data-os` is set from App.tsx via
+   window.desktopAPI.appInfo.os. */
+html[data-os="macos"] .bg-rail {
+  padding-top: 22px;
+}
