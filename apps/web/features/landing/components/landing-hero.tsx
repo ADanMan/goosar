@@ -1,20 +1,27 @@
 'use client';
 
-import Image from 'next/image';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Download } from 'lucide-react';
 import { useAuthStore } from '@goosar/core/auth';
+import { AnimatedSpan, Terminal } from '@goosar/ui/components/ui/terminal';
 import { useLocale } from '../i18n';
 import { useDashboardCtaHref } from '../utils/use-dashboard-cta';
-import { heroButtonClassName } from './shared';
+import { demoLog } from '../demo-log';
+
+const HERO_BUTTON_SOLID =
+  'inline-flex items-center justify-center gap-2 rounded-[12px] bg-brand px-5 py-3 text-[14px] font-semibold text-brand-foreground transition-colors hover:opacity-90';
+const HERO_BUTTON_GHOST =
+  'inline-flex items-center justify-center gap-2 rounded-[12px] border border-white/18 bg-white/8 px-5 py-3 text-[14px] font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/14';
 
 export function LandingHero() {
   const { t } = useLocale();
   const user = useAuthStore((s) => s.user);
   const ctaHref = useDashboardCtaHref();
+  const reducedMotion = usePrefersReducedMotion();
 
   return (
-    <div className="relative min-h-full overflow-hidden bg-[linear-gradient(180deg,#ffffff_0%,#f2f3f5_100%)] text-[#1c1917] dark:bg-[linear-gradient(180deg,#0f1115_0%,#171a1f_100%)] dark:text-white">
+    <div className="relative min-h-full overflow-hidden bg-rail text-white">
       <LandingBackdrop />
 
       <main className="relative z-10">
@@ -23,21 +30,21 @@ export function LandingHero() {
           className="mx-auto max-w-[1320px] px-4 pb-16 pt-28 sm:px-6 sm:pt-32 lg:px-8 lg:pb-24 lg:pt-36"
         >
           <div className="mx-auto max-w-[1120px] text-center">
-            <h1 className="font-[family-name:var(--font-serif)] text-[3.65rem] leading-[0.93] tracking-[-0.038em] sm:text-[4.85rem] lg:text-[6.4rem]">
+            <h1 className="font-heading text-[3.65rem] leading-[0.93] tracking-[-0.038em] sm:text-[4.85rem] lg:text-[6.4rem]">
               {t.hero.headlineLine1}
               <br />
               {t.hero.headlineLine2}
             </h1>
 
-            <p className="mx-auto mt-7 max-w-[820px] text-[15px] leading-7 text-[#1c1917]/64 sm:text-[17px] dark:text-white/80">
+            <p className="mx-auto mt-7 max-w-[820px] text-[15px] leading-7 text-white/72 sm:text-[17px]">
               {t.hero.subheading}
             </p>
 
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-              <Link href={ctaHref} className={heroButtonClassName('solid', 'hero')}>
+              <Link href={ctaHref} className={HERO_BUTTON_SOLID}>
                 {user ? t.header.dashboard : t.hero.cta}
               </Link>
-              <Link href="/download" className={heroButtonClassName('ghost', 'hero')}>
+              <Link href="/download" className={HERO_BUTTON_GHOST}>
                 <Download className="size-4" aria-hidden />
                 {t.hero.downloadDesktop}
               </Link>
@@ -45,20 +52,56 @@ export function LandingHero() {
           </div>
 
           <div className="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-3">
-            <span className="text-[15px] text-[#1c1917]/45 dark:text-white/50">
-              {t.hero.worksWith}
-            </span>
-            <span className="text-[15px] font-medium text-[#1c1917]/78 dark:text-white/80">
-              {t.hero.runtimeCount}
-            </span>
+            <span className="text-[15px] text-white/50">{t.hero.worksWith}</span>
+            <span className="text-[15px] font-medium text-white/80">{t.hero.runtimeCount}</span>
           </div>
 
-          <div id="preview" className="mt-10 sm:mt-12">
-            <ProductImage alt={t.hero.imageAlt} />
+          <div id="preview" className="mt-10 sm:mt-12 flex justify-center">
+            <DemoTerminal lines={t.demoLog.lines} reducedMotion={reducedMotion} />
           </div>
         </section>
       </main>
     </div>
+  );
+}
+
+function usePrefersReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    const mql = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReduced(mql.matches);
+    const onChange = () => setReduced(mql.matches);
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
+  return reduced;
+}
+
+function DemoTerminal({
+  lines,
+  reducedMotion,
+}: {
+  lines: Record<string, string>;
+  reducedMotion: boolean;
+}) {
+  if (reducedMotion) {
+    return (
+      <Terminal className="max-h-none max-w-[560px] bg-black/24 text-left text-white" sequence={false}>
+        {demoLog.map((line) => (
+          <div key={line.key} className="grid text-sm font-normal tracking-tight">
+            {lines[line.key]}
+          </div>
+        ))}
+      </Terminal>
+    );
+  }
+
+  return (
+    <Terminal className="max-h-none max-w-[560px] bg-black/24 text-left text-white">
+      {demoLog.map((line) => (
+        <AnimatedSpan key={line.key}>{lines[line.key]}</AnimatedSpan>
+      ))}
+    </Terminal>
   );
 }
 
@@ -93,30 +136,6 @@ function LandingBackdrop() {
         </defs>
         <rect width="100%" height="100%" fill="url(#landing-honeycomb)" />
       </svg>
-    </div>
-  );
-}
-
-function ProductImage({ alt }: { alt: string }) {
-  return (
-    <div className="relative">
-      {/* Warm brand-orange radial glow behind the product screenshot. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute left-1/2 top-[-14%] h-[72%] w-[112%] -translate-x-1/2 rounded-[100%] bg-[radial-gradient(50%_50%_at_50%_50%,rgba(249,115,22,0.28),rgba(249,115,22,0))] blur-3xl dark:bg-[radial-gradient(50%_50%_at_50%_50%,rgba(249,115,22,0.16),rgba(249,115,22,0))]"
-      />
-      <div className="relative overflow-hidden border border-[#1c1917]/10 shadow-[0_28px_90px_rgba(28,25,23,0.16)] dark:border-white/14 dark:shadow-[0_28px_90px_rgba(0,0,0,0.5)]">
-        <Image
-          src="/images/landing-hero.png"
-          alt={alt}
-          width={3532}
-          height={2382}
-          priority
-          className="block h-auto w-full"
-          sizes="(max-width: 1320px) 100vw, 1320px"
-          quality={85}
-        />
-      </div>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import type { SupportedLocale } from '@goosar/core/i18n';
+import type { DemoLogLineKey } from '../demo-log';
 
 export type Locale = SupportedLocale;
 export type LandingDictionaryLocale = 'en' | 'ru';
@@ -44,6 +45,9 @@ export type LandingDict = {
     worksWith: string;
     runtimeCount: string;
     imageAlt: string;
+  };
+  demoLog: {
+    lines: Record<DemoLogLineKey, string>;
   };
   features: {
     teammates: FeatureSection;

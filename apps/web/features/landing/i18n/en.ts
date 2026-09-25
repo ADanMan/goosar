@@ -24,6 +24,23 @@ export function createEnDict(allowSignup: boolean): LandingDict {
       imageAlt: 'Goosar board view \u2014 tasks managed by humans and agents',
     },
 
+    demoLog: {
+      lines: {
+        taskCreated: 'GUS-42 Fix deadline parsing on the task card',
+        agentAssigned: 'agent take GUS-42',
+        agentReadingCode: 'reading task-card/deadline.ts',
+        agentFoundCause: 'found cause: timezone offset dropped in parseDeadline()',
+        agentWritingTest: 'agent write test',
+        testWritten: 'added deadline.test.ts \u2014 1 case',
+        agentRunningTests: 'agent run tests',
+        testsFailedFirst: '1 failed, 0 passed',
+        testsPassed: '1 passed, 0 failed',
+        agentOpeningPr: 'agent open pr',
+        prOpened: 'PR #128 opened: fix(task-card): keep timezone offset in deadline parsing',
+        statusInReview: 'status: In review',
+      },
+    },
+
     features: {
       teammates: {
         label: 'EXECUTOR',
