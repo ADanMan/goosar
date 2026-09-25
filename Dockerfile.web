@@ -251,6 +251,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
 # CLI tarballs + checksums, served next to public/install.sh at /cli/*
 COPY --from=cli --chown=nextjs:nodejs /out/cli ./apps/web/public/cli
+COPY --chown=nextjs:nodejs THIRD_PARTY_NOTICES.md LICENSE ./
 
 USER nextjs
 

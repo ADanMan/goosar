@@ -34,6 +34,9 @@ archives:
         formats:
           - zip
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - THIRD_PARTY_NOTICES.md
   # Versioned archive name used by current CLI / install scripts /
   # desktop bootstrap going forward.
   - id: versioned
@@ -44,6 +47,9 @@ archives:
         formats:
           - zip
     name_template: "{{ .ProjectName }}-cli-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    files:
+      - LICENSE
+      - THIRD_PARTY_NOTICES.md
 
 checksum:
   name_template: "checksums.txt"

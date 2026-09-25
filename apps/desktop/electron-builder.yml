@@ -69,6 +69,10 @@ asarUnpack:
 # explaining the absence when no artifact was available), so `from` resolves
 # even on a build without the payload.
 extraResources:
+  - from: ../../THIRD_PARTY_NOTICES.md
+    to: THIRD_PARTY_NOTICES.md
+  - from: ../../LICENSE
+    to: LICENSE
   - from: resources-agent/hermes
     to: hermes
   # Corporate CA bundles (issue #46): ca-bundle.pem + corp-ca.pem, staged by
