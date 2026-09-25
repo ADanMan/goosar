@@ -488,7 +488,7 @@ describe('SwimLaneView', () => {
       <SwimLaneView issues={mockIssues} onMoveIssue={vi.fn()} onCreateIssue={onCreateIssue} />,
     );
 
-    const addButtons = screen.getAllByRole('button', { name: /add issue/i });
+    const addButtons = screen.getAllByRole('button', { name: /add task/i });
     expect(addButtons.length).toBeGreaterThan(0);
 
     fireEvent.click(addButtons[0]!);
@@ -507,7 +507,7 @@ describe('SwimLaneView', () => {
       />,
     );
 
-    const addButtons = screen.getAllByRole('button', { name: /add issue/i });
+    const addButtons = screen.getAllByRole('button', { name: /add task/i });
     fireEvent.click(addButtons[0]!);
 
     expect(onCreateIssue).toHaveBeenCalledWith(expect.objectContaining({ project_id: 'proj-42' }));
@@ -525,7 +525,7 @@ describe('SwimLaneView', () => {
       />,
     );
 
-    const addButtons = screen.getAllByRole('button', { name: /add issue/i });
+    const addButtons = screen.getAllByRole('button', { name: /add task/i });
     fireEvent.click(addButtons[0]!);
 
     expect(onCreateIssue).toHaveBeenCalledWith(expect.objectContaining({ project_id: 'proj-42' }));
@@ -575,7 +575,7 @@ describe('SwimLaneView', () => {
 
     const realLaneCount = 2;
     const visibleStatusCount = 7; 
-    expect(screen.getAllByRole('button', { name: /add issue/i }).length).toBe(
+    expect(screen.getAllByRole('button', { name: /add task/i }).length).toBe(
       realLaneCount * visibleStatusCount,
     );
   });
@@ -673,7 +673,7 @@ describe('SwimLaneView', () => {
     );
 
     expect(screen.getAllByText('Parent Issue 1')).toHaveLength(1);
-    expect(screen.queryByRole('link', { name: 'Open parent issue' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open parent task' })).not.toBeInTheDocument();
   });
 
   it('does not render a server parent header again as a No-parent card', () => {
@@ -732,7 +732,7 @@ describe('SwimLaneView', () => {
     );
 
     expect(screen.getAllByText('Parent Issue 1')).toHaveLength(1);
-    expect(screen.getByRole('link', { name: 'Open parent issue' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open parent task' })).toBeInTheDocument();
     expect(screen.getByText('Child Issue 1')).toBeInTheDocument();
   });
 
@@ -755,7 +755,7 @@ describe('SwimLaneView', () => {
   it('renders an open-parent link for lanes with a real parent', () => {
     renderWithI18n(<SwimLaneView issues={mockIssues} onMoveIssue={vi.fn()} />);
 
-    const links = screen.getAllByRole('link', { name: 'Open parent issue' });
+    const links = screen.getAllByRole('link', { name: 'Open parent task' });
     expect(links).toHaveLength(1);
     expect(links[0]).toHaveAttribute('href', expect.stringContaining('parent-1'));
   });

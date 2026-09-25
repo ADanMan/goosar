@@ -30,11 +30,11 @@
     },
     "sticky_comment_bar": {
       "title": "コメントバーを固定",
-      "hint": "イシューのページをスクロールしても、コメントバーを常に下部に固定します。"
+      "hint": "タスクのページをスクロールしても、コメントバーを常に下部に固定します。"
     },
     "issue_link_new_tab": {
-      "title": "イシューリンクを新しいタブで開く",
-      "hint": "説明・コメント・チャット内のイシューリンクを、その場で移動せず新しいタブで開きます。"
+      "title": "タスクリンクを新しいタブで開く",
+      "hint": "説明・コメント・チャット内のタスクリンクを、その場で移動せず新しいタブで開きます。"
     }
   },
   "shortcuts": {
@@ -72,20 +72,20 @@
         "description": "どこからでも検索やコマンドを実行します。"
       },
       "createIssue": {
-        "label": "Issueを作成",
-        "description": "優先するissue作成フローを開きます。"
+        "label": "タスクを作成",
+        "description": "優先するタスク作成フローを開きます。"
       },
       "toggleSidebar": {
         "label": "サイドバーを切り替え",
         "description": "メインサイドバーの表示を切り替えます。"
       },
       "findInIssue": {
-        "label": "Issue内を検索",
-        "description": "開いているissueの詳細を検索します。"
+        "label": "タスク内を検索",
+        "description": "開いているタスクの詳細を検索します。"
       },
       "send": {
         "label": "送信",
-        "description": "チャット、コメント、返信、フィードバック、プロンプトを送信し、作成ダイアログで issue を作成します。"
+        "description": "チャット、コメント、返信、フィードバック、プロンプトを送信し、作成ダイアログで タスク を作成します。"
       },
       "goInbox": {
         "label": "受信トレイへ移動",
@@ -96,12 +96,12 @@
         "description": "ワークスペースのチャットを開きます。"
       },
       "goMyIssues": {
-        "label": "自分のIssuesへ移動",
-        "description": "自分に割り当てられたissueを開きます。"
+        "label": "自分のタスクへ移動",
+        "description": "自分に割り当てられたタスクを開きます。"
       },
       "goIssues": {
-        "label": "Issuesへ移動",
-        "description": "Issue一覧を開きます。"
+        "label": "タスクへ移動",
+        "description": "タスク一覧を開きます。"
       },
       "goProjects": {
         "label": "プロジェクトへ移動",
@@ -176,7 +176,7 @@
       "profile": "プロフィール",
       "preferences": "環境設定",
       "shortcuts": "ショートカット",
-      "issue": "イシュー",
+      "issue": "タスク",
       "chat": "チャット",
       "notifications": "通知",
       "security": "セキュリティ",
@@ -195,7 +195,7 @@
   },
   "properties": {
     "title": "プロパティ",
-    "description": "このワークスペースの Issue に型付きカスタムプロパティを定義します。値は各 Issue に設定され、エージェントが読み書きできます。",
+    "description": "このワークスペースの タスク に型付きカスタムプロパティを定義します。値は各 タスク に設定され、エージェントが読み書きできます。",
     "search_placeholder": "名前で絞り込み...",
     "new_property": "新規プロパティ",
     "show_archived": "アーカイブ済みを表示",
@@ -206,7 +206,7 @@
       "usage": "使用数",
       "updated": "更新日時"
     },
-    "usage_count_other": "{{count}} 件の Issue",
+    "usage_count_other": "{{count}} 件の タスク",
     "loading": "プロパティを読み込み中...",
     "empty": "プロパティはまだありません",
     "empty_hint": "Severity や Environment のような型付きフィールドを作成できます。エージェントはバリデーション付きで読み書きします。",
@@ -252,7 +252,7 @@
     },
     "archive_dialog": {
       "title": "プロパティをアーカイブしますか？",
-      "description": "「{{name}}」はピッカーとフィルターから非表示になります。Issue 上の既存の値は保持され、後で復元できます。",
+      "description": "「{{name}}」はピッカーとフィルターから非表示になります。タスク 上の既存の値は保持され、後で復元できます。",
       "cancel": "キャンセル",
       "confirm": "プロパティをアーカイブ",
       "failed": "プロパティをアーカイブできませんでした"
@@ -260,9 +260,9 @@
   },
   "labels": {
     "title": "ラベル",
-    "description": "このワークスペースの Issue、エージェント、Skill 用ラベルを個別に管理します。",
+    "description": "このワークスペースの タスク、エージェント、Skill 用ラベルを個別に管理します。",
     "scopes": {
-      "issue": "Issue",
+      "issue": "タスク",
       "agent": "エージェント",
       "skill": "Skill"
     },
@@ -327,25 +327,25 @@
     "section_kerberos": "Kerberos"
   },
   "notifications": {
-    "title": "インボックス通知",
-    "description": "どのイベントがインボックス通知を生成するかを制御します。ミュートしたイベントタイプは静かにフィルタされますが、イシューを直接開けば引き続き確認できます。",
+    "title": "フィード通知",
+    "description": "どのイベントがフィード通知を生成するかを制御します。ミュートしたイベントタイプは静かにフィルタされますが、タスクを直接開けば引き続き確認できます。",
     "toast_failed": "通知設定を更新できませんでした",
     "groups": {
       "assignments": {
         "label": "担当の割り当て",
-        "description": "イシューの担当者に割り当てられたとき、または解除されたとき"
+        "description": "タスクの担当者に割り当てられたとき、または解除されたとき"
       },
       "status_changes": {
         "label": "ステータス変更",
-        "description": "フォロー中のイシューのステータスが変わったとき（例: todo、in progress、done）"
+        "description": "フォロー中のタスクのステータスが変わったとき（例: todo、in progress、done）"
       },
       "comments": {
         "label": "コメントとメンション",
-        "description": "フォロー中のイシューに新しいコメントが付いたとき、または誰かがあなたを @メンションしたとき"
+        "description": "フォロー中のタスクに新しいコメントが付いたとき、または誰かがあなたを @メンションしたとき"
       },
       "updates": {
         "label": "優先度と期限",
-        "description": "フォロー中のイシューの優先度や期限が変わったとき"
+        "description": "フォロー中のタスクの優先度や期限が変わったとき"
       },
       "agent_activity": {
         "label": "エージェントのアクティビティ",
@@ -356,11 +356,11 @@
       "title": "システム通知",
       "description": "Goosar がバックグラウンドにあるときに表示される OS のネイティブ通知バナーを制御します。",
       "label": "システム通知を表示",
-      "hint": "アプリにフォーカスがないときに、新しいインボックス項目について OS のバナーを表示します。"
+      "hint": "アプリにフォーカスがないときに、新しいフィード項目について OS のバナーを表示します。"
     },
     "browser": {
       "label": "ブラウザ通知",
-      "hint": "このブラウザで新しいインボックス項目の通知バナーを表示できるようにします。",
+      "hint": "このブラウザで新しいフィード項目の通知バナーを表示できるようにします。",
       "enable": "有効にする",
       "granted": "このブラウザは通知バナーを表示できます。",
       "denied": "ブラウザによってブロックされています。ブラウザの設定でこのサイトの通知を許可してください。",
@@ -419,10 +419,10 @@
     "context_label": "コンテキスト",
     "context_placeholder": "このワークスペースで作業する AI エージェント向けの背景情報とコンテキスト",
     "slug_label": "スラッグ",
-    "issue_prefix_label": "イシュー接頭辞",
-    "issue_prefix_hint": "{{example}} のようなイシュー番号に使用されます。",
-    "prefix_confirm_title": "イシュー接頭辞を変更しますか？",
-    "prefix_confirm_description": "すべてのイシュー番号が {{oldPrefix}}-N から {{newPrefix}}-N に振り直されます。Pull request のタイトル、ブランチ名、ドキュメントやチャットのリンクなど、{{oldPrefix}}-N を使用している外部参照は解決されなくなります。",
+    "issue_prefix_label": "タスク接頭辞",
+    "issue_prefix_hint": "{{example}} のようなタスク番号に使用されます。",
+    "prefix_confirm_title": "タスク接頭辞を変更しますか？",
+    "prefix_confirm_description": "すべてのタスク番号が {{oldPrefix}}-N から {{newPrefix}}-N に振り直されます。Pull request のタイトル、ブランチ名、ドキュメントやチャットのリンクなど、{{oldPrefix}}-N を使用している外部参照は解決されなくなります。",
     "save": "保存",
     "saving": "保存中...",
     "manage_hint": "ワークスペース設定を更新できるのは admin と owner のみです。",
@@ -452,7 +452,7 @@
   },
   "delete_workspace_dialog": {
     "title": "ワークスペースを削除",
-    "description": "この操作は元に戻せません。すべてのイシュー、エージェント、データが完全に削除されます。",
+    "description": "この操作は元に戻せません。すべてのタスク、エージェント、データが完全に削除されます。",
     "type_to_confirm_prefix": "確認するには、下に",
     "type_to_confirm_suffix": " と入力してください。",
     "cancel": "キャンセル",
@@ -471,8 +471,8 @@
     "master_description_off": "GitHub 機能はオフです。PR サイドバー、Co-authored-by トレーラー、自動リンクが一時停止されています。バックエンドのデータは削除されません。",
     "section_connection": "接続",
     "connection_title": "GitHub App",
-    "connection_description_prefix": "イシューを Pull request に自動でリンクします。ブランチ、タイトル、または本文に",
-    "connection_description_suffix": "を含む PR がマージされると、対応するイシューが次のステータスに移動します:",
+    "connection_description_prefix": "タスクを Pull request に自動でリンクします。ブランチ、タイトル、または本文に",
+    "connection_description_suffix": "を含む PR がマージされると、対応するタスクが次のステータスに移動します:",
     "connection_description_done": "完了",
     "connection_identifier_example": "MUL-123",
     "connected_to": "{{login}} に接続済み",
@@ -496,12 +496,12 @@
     "toast_disconnected": "GitHub App の接続を解除しました",
     "section_features": "機能",
     "feature_pr_sidebar_label": "Pull request サイドバー",
-    "feature_pr_sidebar_description": "リンクされた Pull request をイシュー詳細サイドバーに表示します。",
+    "feature_pr_sidebar_description": "リンクされた Pull request をタスク詳細サイドバーに表示します。",
     "feature_co_author_label": "Co-authored-by トレーラー",
     "feature_co_author_description_prefix": "エージェントが作成したコミットに",
     "feature_co_author_description_suffix": "を追加します。",
-    "feature_auto_link_label": "イシューと PR を自動リンク",
-    "feature_auto_link_description": "PR のタイトル、本文、ブランチ名をイシュー識別子と照合し、自動でリンクを作成します。",
+    "feature_auto_link_label": "タスクと PR を自動リンク",
+    "feature_auto_link_description": "PR のタイトル、本文、ブランチ名をタスク識別子と照合し、自動でリンクを作成します。",
     "section_repositories": "リポジトリ",
     "repositories_shortcut_label": "リポジトリ URL はリポジトリタブにあります",
     "repositories_shortcut_link": "リポジトリを管理 →",
@@ -509,7 +509,7 @@
   },
   "vcs": {
     "section_title": "Git providers (self-hosted)",
-    "page_description": "Connect a self-hosted Forgejo, Gitea, or GitLab instance to mirror pull requests onto issues. Each connection uses an access token; agents push branches and open PRs using the runtime's own Git credentials.",
+    "page_description": "Connect a self-hosted Forgejo, Gitea, or GitLab instance to mirror pull requests onto タスク. Each connection uses an access token; agents push branches and open PRs using the runtime's own Git credentials.",
     "connect_title": "Connect a provider instance",
     "connected_as": "Connected as {{login}}",
     "form_provider_label": "Provider",
@@ -532,7 +532,7 @@
     "copied": "Copied to clipboard",
     "copy_failed": "Could not copy",
     "disconnect_confirm_title": "Disconnect this provider?",
-    "disconnect_confirm_description": "Mirrored pull requests and their issue links for this connection will be removed. This cannot be undone.",
+    "disconnect_confirm_description": "Mirrored pull requests and their タスク links for this connection will be removed. This cannot be undone.",
     "disconnect_confirm_cancel": "Cancel",
     "disconnect_confirm_action": "Disconnect",
     "toast_connected": "Provider connected",
@@ -580,7 +580,7 @@
   },
   "slack": {
     "section_title": "Slack",
-    "page_description": "各 Goosar エージェントを専用の Slack ボットに接続します。メンバーはボットに DM したり、チャンネルで @メンションしたり、/issue と入力して新しい Goosar イシューを起こすことができます。",
+    "page_description": "各 Goosar エージェントを専用の Slack ボットに接続します。メンバーはボットに DM したり、チャンネルで @メンションしたり、/タスク と入力して新しい Goosar タスクを起こすことができます。",
     "not_enabled_title": "Slack 連携が有効になっていません",
     "not_enabled_description_prefix": "サーバーで",
     "not_enabled_description_suffix": "を設定すると Slack ボットのインストールが有効になります。",
@@ -1029,7 +1029,7 @@
       },
       "member": {
         "label": "メンバー",
-        "description": "イシューの作成と作業"
+        "description": "タスクの作成と作業"
       }
     },
     "remove_member_unavailable": "このメンバーには入力できる表示名もメールアドレスもないため、削除をここで確認できません。",
@@ -1041,7 +1041,7 @@
     "role_demote_owner_to_admin_description": "{{name}} は admin のままですが、{{workspace}} を削除する権限と他の owner を管理する権限を失うため、あなたの決定を取り消すことも、あなたを削除することもできなくなります。マシン、エージェント、進行中の作業には影響しません。",
     "role_demote_owner_to_member_description": "{{name}} は {{workspace}} を削除する権限と他の owner を管理する権限を失い、あわせてワークスペースの設定とキー、パッケージのピン、メンバー管理へのアクセスも失います。マシン、エージェント、進行中の作業には影響しません。",
     "role_demote_admin_title": "{{name}} を通常の member にする",
-    "role_demote_admin_description": "{{name}} は、ワークスペースの設定とキー、パッケージのピン、メンバー管理、他の人のエージェント・skill・ランタイムの編集へのアクセスを失います。本人のマシン、エージェント、イシューには影響せず、付与済みの社内ネットワークへのアクセスもそのまま残ります。",
+    "role_demote_admin_description": "{{name}} は、ワークスペースの設定とキー、パッケージのピン、メンバー管理、他の人のエージェント・skill・ランタイムの編集へのアクセスを失います。本人のマシン、エージェント、タスクには影響せず、付与済みの社内ネットワークへのアクセスもそのまま残ります。",
     "role_change_unavailable": "このメンバーには入力できる表示名もメールアドレスもないため、ロールの変更をここで確認できません。",
     "perimeter_grant_title": "{{name}} に社内ネットワークへのアクセスを許可",
     "perimeter_grant_description": "{{name}} の Helper に社内向け MCP プリセットのカタログが書き込まれ、上手引導で社内トークンの入力を求めるようになります。書き込みは一度きりで、アクセスを取り消しても元には戻りません。取り戻すには {{name}} をワークスペースから削除する必要があります。",

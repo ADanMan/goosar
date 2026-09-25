@@ -129,7 +129,7 @@ describe('IntegrationsTab', () => {
       install_supported: false,
     };
     renderTab(<IntegrationsTab agent={agent} />);
-    expect(screen.getByText(/installation coming soon/i)).toBeTruthy();
+    expect(screen.getByText(/install coming soon/i)).toBeTruthy();
     expect(screen.queryByTestId('slack-bind-button')).toBeNull();
   });
 
@@ -148,6 +148,6 @@ describe('IntegrationsTab', () => {
     };
     renderTab(<IntegrationsTab agent={agent} />);
     expect(screen.getByTestId('slack-bind-button')).toBeTruthy();
-    expect(screen.queryByText(/installation coming soon/i)).toBeNull();
+    expect(screen.queryByText(/install coming soon/i)).toBeNull();
   });
 });

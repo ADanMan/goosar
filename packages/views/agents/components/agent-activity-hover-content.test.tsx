@@ -149,7 +149,7 @@ describe('WorkspaceAgentActivityHoverContent', () => {
       />,
     );
 
-    expect(screen.getByText('3 issues · 4 tasks')).toBeInTheDocument();
+    expect(screen.getByText('3 tasks · 4 tasks')).toBeInTheDocument();
     expect(screen.getByText('MUL-4879')).toBeInTheDocument();
     expect(screen.getByText('Counting logic looks wrong')).toBeInTheDocument();
     expect(screen.getAllByTestId('actor-avatar')).toHaveLength(4);
@@ -165,7 +165,7 @@ describe('WorkspaceAgentActivityHoverContent', () => {
     );
 
     expect(screen.queryByText(/not counted/)).not.toBeInTheDocument();
-    expect(screen.getByText('1 issue · 1 task')).toBeInTheDocument();
+    expect(screen.getByText('1 task · 1 task')).toBeInTheDocument();
   });
 
   it('falls back to the agent-worded empty copy when nothing is counted', () => {
@@ -187,6 +187,6 @@ describe('WorkspaceAgentActivityHoverContent', () => {
       { locale: 'zh-Hans' },
     );
 
-    expect(screen.getByText('1 个 issue · 2 个 task')).toBeInTheDocument();
+    expect(screen.getByText('1 个 任务 · 2 个 task')).toBeInTheDocument();
   });
 });

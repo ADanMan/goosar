@@ -617,10 +617,10 @@ describe('CreateIssueModal', () => {
 
     renderModal(<CreateIssueModal onClose={onClose} />);
 
-    fireEvent.change(screen.getByPlaceholderText('Issue title'), {
+    fireEvent.change(screen.getByPlaceholderText('Task title'), {
       target: { value: '  Ship create issue regression coverage  ' },
     });
-    await user.click(screen.getByRole('button', { name: 'Create Issue' }));
+    await user.click(screen.getByRole('button', { name: 'Create Task' }));
 
     await waitFor(() => {
       expect(mockCreateIssue).toHaveBeenCalledWith({
@@ -648,11 +648,11 @@ describe('CreateIssueModal', () => {
 
     render(renderToast('toast-1'));
 
-    expect(screen.getByText('Issue created')).toBeInTheDocument();
+    expect(screen.getByText('Task created')).toBeInTheDocument();
     expect(screen.getByText(/TES-123/)).toBeInTheDocument();
     expect(screen.getByText(/Ship create issue regression coverage/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'View issue' }));
+    await user.click(screen.getByRole('button', { name: 'View task' }));
 
     expect(mockPush).toHaveBeenCalledWith('/ws-test/issues/issue-123');
     expect(mockToastDismiss).toHaveBeenCalledWith('toast-1');
@@ -667,10 +667,10 @@ describe('CreateIssueModal', () => {
 
     renderModal(<CreateIssueModal onClose={vi.fn()} />);
 
-    fireEvent.change(screen.getByPlaceholderText('Issue title'), {
+    fireEvent.change(screen.getByPlaceholderText('Task title'), {
       target: { value: 'Labeled issue' },
     });
-    await user.click(screen.getByRole('button', { name: 'Create Issue' }));
+    await user.click(screen.getByRole('button', { name: 'Create Task' }));
 
     await waitFor(() => {
       expect(mockCreateIssue).toHaveBeenCalledWith(
@@ -701,10 +701,10 @@ describe('CreateIssueModal', () => {
 
     renderModal(<CreateIssueModal onClose={vi.fn()} />);
 
-    fireEvent.change(screen.getByPlaceholderText('Issue title'), {
+    fireEvent.change(screen.getByPlaceholderText('Task title'), {
       target: { value: 'Labeled issue' },
     });
-    await user.click(screen.getByRole('button', { name: 'Create Issue' }));
+    await user.click(screen.getByRole('button', { name: 'Create Task' }));
 
     await waitFor(() => {
       expect(mockAttachLabel).toHaveBeenCalledTimes(2);
@@ -726,9 +726,9 @@ describe('CreateIssueModal', () => {
 
     renderModal(<CreateIssueModal onClose={onClose} />);
 
-    await user.type(screen.getByPlaceholderText('Issue title'), 'First follow-up issue');
+    await user.type(screen.getByPlaceholderText('Task title'), 'First follow-up issue');
     await user.type(screen.getByPlaceholderText('Add description...'), 'Description to clear');
-    await user.click(screen.getByRole('button', { name: 'Create Issue' }));
+    await user.click(screen.getByRole('button', { name: 'Create Task' }));
 
     await waitFor(() => {
       expect(mockCreateIssue).toHaveBeenCalledWith({
@@ -747,7 +747,7 @@ describe('CreateIssueModal', () => {
     });
 
     expect(onClose).not.toHaveBeenCalled();
-    expect(screen.getByPlaceholderText('Issue title')).toHaveValue('');
+    expect(screen.getByPlaceholderText('Task title')).toHaveValue('');
     expect(screen.getByPlaceholderText('Add description...')).toHaveValue('');
     expect(mockSetManual).toHaveBeenCalledWith({
       title: '',
@@ -775,8 +775,8 @@ describe('CreateIssueModal', () => {
     await screen.findByText('Customer tier');
     await user.click(screen.getByText('Customer tier'));
     await user.click(screen.getByRole('button', { name: 'Edit Customer tier' }));
-    await user.type(screen.getByPlaceholderText('Issue title'), 'Enterprise follow-up');
-    await user.click(screen.getByRole('button', { name: 'Create Issue' }));
+    await user.type(screen.getByPlaceholderText('Task title'), 'Enterprise follow-up');
+    await user.click(screen.getByRole('button', { name: 'Create Task' }));
 
     await waitFor(() => {
       expect(mockSetIssueProperty).toHaveBeenCalledWith(
@@ -844,7 +844,7 @@ describe('CreateIssueModal', () => {
       '1',
     );
 
-    await user.click(screen.getByRole('button', { name: 'Create Issue' }));
+    await user.click(screen.getByRole('button', { name: 'Create Task' }));
 
     await waitFor(() => {
       expect(mockCreateIssue).toHaveBeenCalledWith(
@@ -959,7 +959,7 @@ describe('CreateIssueModal', () => {
       />,
     );
 
-    await user.type(screen.getByPlaceholderText('Issue title'), 'Refactor auth');
+    await user.type(screen.getByPlaceholderText('Task title'), 'Refactor auth');
     await user.click(screen.getByRole('button', { name: /Switch to Agent/i }));
 
     expect(onSwitchMode).toHaveBeenCalledTimes(1);
@@ -992,8 +992,8 @@ describe('CreateIssueModal', () => {
     );
 
     renderModal(<CreateIssueModal onClose={onClose} />);
-    await user.type(screen.getByPlaceholderText('Issue title'), 'Login bug');
-    await user.click(screen.getByRole('button', { name: 'Create Issue' }));
+    await user.type(screen.getByPlaceholderText('Task title'), 'Login bug');
+    await user.click(screen.getByRole('button', { name: 'Create Task' }));
 
     await waitFor(() => expect(mockToastCustom).toHaveBeenCalledTimes(1));
     expect(mockToastError).not.toHaveBeenCalled();
@@ -1003,11 +1003,11 @@ describe('CreateIssueModal', () => {
     expect(typeof renderToast).toBe('function');
     render(renderToast('toast-dup'));
 
-    expect(screen.getByText('Duplicate issue')).toBeInTheDocument();
+    expect(screen.getByText('Duplicate task')).toBeInTheDocument();
     expect(screen.getByText(/MUL-7/)).toBeInTheDocument();
     expect(screen.getByText(/Login bug/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'View existing issue' }));
+    await user.click(screen.getByRole('button', { name: 'View existing task' }));
     expect(mockPush).toHaveBeenCalledWith('/ws-test/issues/issue-dup');
     expect(mockToastDismiss).toHaveBeenCalledWith('toast-dup');
   });
@@ -1021,8 +1021,8 @@ describe('CreateIssueModal', () => {
     );
 
     renderModal(<CreateIssueModal onClose={vi.fn()} />);
-    await user.type(screen.getByPlaceholderText('Issue title'), 'Login bug');
-    await user.click(screen.getByRole('button', { name: 'Create Issue' }));
+    await user.type(screen.getByPlaceholderText('Task title'), 'Login bug');
+    await user.click(screen.getByRole('button', { name: 'Create Task' }));
 
     await waitFor(() => expect(mockToastError).toHaveBeenCalledTimes(1));
     expect(mockToastError).toHaveBeenCalledWith('Backend says title is taken');
@@ -1034,8 +1034,8 @@ describe('CreateIssueModal', () => {
     mockCreateIssue.mockRejectedValue(new Error('Server is overloaded, try again'));
 
     renderModal(<CreateIssueModal onClose={vi.fn()} />);
-    await user.type(screen.getByPlaceholderText('Issue title'), 'Anything');
-    await user.click(screen.getByRole('button', { name: 'Create Issue' }));
+    await user.type(screen.getByPlaceholderText('Task title'), 'Anything');
+    await user.click(screen.getByRole('button', { name: 'Create Task' }));
 
     await waitFor(() => expect(mockToastError).toHaveBeenCalledTimes(1));
     expect(mockToastError).toHaveBeenCalledWith('Server is overloaded, try again');
@@ -1046,11 +1046,11 @@ describe('CreateIssueModal', () => {
     mockCreateIssue.mockRejectedValue('network exploded');
 
     renderModal(<CreateIssueModal onClose={vi.fn()} />);
-    await user.type(screen.getByPlaceholderText('Issue title'), 'Anything');
-    await user.click(screen.getByRole('button', { name: 'Create Issue' }));
+    await user.type(screen.getByPlaceholderText('Task title'), 'Anything');
+    await user.click(screen.getByRole('button', { name: 'Create Task' }));
 
     await waitFor(() => expect(mockToastError).toHaveBeenCalledTimes(1));
-    expect(mockToastError).toHaveBeenCalledWith('Failed to create issue');
+    expect(mockToastError).toHaveBeenCalledWith('Failed to create task');
   });
 
   it('commits the picked project to the shared draft when switching to agent mode', async () => {
@@ -1067,7 +1067,7 @@ describe('CreateIssueModal', () => {
       />,
     );
 
-    await user.type(screen.getByPlaceholderText('Issue title'), 'Refactor auth');
+    await user.type(screen.getByPlaceholderText('Task title'), 'Refactor auth');
 
     await user.click(screen.getByRole('button', { name: /Switch to Agent/i }));
 
@@ -1108,7 +1108,7 @@ describe('CreateIssueModal', () => {
       />,
     );
 
-    await user.type(screen.getByPlaceholderText('Issue title'), 'Refactor auth');
+    await user.type(screen.getByPlaceholderText('Task title'), 'Refactor auth');
     await user.click(screen.getByRole('button', { name: /Switch to Agent/i }));
 
     expect(onSwitchMode).toHaveBeenCalledTimes(1);
@@ -1222,7 +1222,7 @@ describe('CreateIssueModal', () => {
       />,
     );
 
-    await user.type(screen.getByPlaceholderText('Issue title'), 'Update');
+    await user.type(screen.getByPlaceholderText('Task title'), 'Update');
     await user.type(screen.getByPlaceholderText('Add description...'), 'Some body');
 
     mockSetManual.mockClear();
@@ -1257,8 +1257,8 @@ describe('CreateIssueModal', () => {
       const user = userEvent.setup();
       const onClose = vi.fn();
       const view = renderManualPanel(onClose);
-      await user.type(screen.getByPlaceholderText('Issue title'), 'Draft A');
-      fireEvent.keyDown(screen.getByPlaceholderText('Issue title'), {
+      await user.type(screen.getByPlaceholderText('Task title'), 'Draft A');
+      fireEvent.keyDown(screen.getByPlaceholderText('Task title'), {
         key: 'Enter',
         metaKey: true,
       });
@@ -1357,7 +1357,7 @@ describe('CreateIssueModal', () => {
     it('disables Create and shows Uploading… while an upload is in flight', async () => {
       const user = userEvent.setup();
       renderManual();
-      await user.type(screen.getByPlaceholderText('Issue title'), 'Has a screenshot');
+      await user.type(screen.getByPlaceholderText('Task title'), 'Has a screenshot');
 
       const pending = startPendingUpload();
 
@@ -1375,14 +1375,14 @@ describe('CreateIssueModal', () => {
         });
       });
       await waitFor(() =>
-        expect(screen.getByRole('button', { name: 'Create Issue' })).not.toBeDisabled(),
+        expect(screen.getByRole('button', { name: 'Create Task' })).not.toBeDisabled(),
       );
     });
 
     it('never submits manual create from plain Enter in the title', async () => {
       const user = userEvent.setup();
       renderManual();
-      const title = screen.getByPlaceholderText('Issue title');
+      const title = screen.getByPlaceholderText('Task title');
       await user.type(title, 'Has a screenshot');
 
       fireEvent.keyDown(title, { key: 'Enter' });
@@ -1393,7 +1393,7 @@ describe('CreateIssueModal', () => {
     it('blocks the title send chord while an upload is in flight', async () => {
       const user = userEvent.setup();
       renderManual();
-      const title = screen.getByPlaceholderText('Issue title');
+      const title = screen.getByPlaceholderText('Task title');
       await user.type(title, 'Has a screenshot');
 
       startPendingUpload();
@@ -1407,7 +1407,7 @@ describe('CreateIssueModal', () => {
       const user = userEvent.setup();
       const onSwitchMode = vi.fn();
       renderManual(onSwitchMode);
-      await user.type(screen.getByPlaceholderText('Issue title'), 'Has a screenshot');
+      await user.type(screen.getByPlaceholderText('Task title'), 'Has a screenshot');
 
       startPendingUpload();
 
@@ -1433,7 +1433,7 @@ describe('CreateIssueModal', () => {
     it('creates from the send chord in the title', async () => {
       const user = userEvent.setup();
       renderManual();
-      const title = screen.getByPlaceholderText('Issue title');
+      const title = screen.getByPlaceholderText('Task title');
       await user.type(title, 'Shortcut from title');
 
       fireEvent.keyDown(title, { key: 'Enter', metaKey: true });
@@ -1447,7 +1447,7 @@ describe('CreateIssueModal', () => {
     it('creates from the send chord in the description', async () => {
       const user = userEvent.setup();
       renderManual();
-      await user.type(screen.getByPlaceholderText('Issue title'), 'Shortcut from body');
+      await user.type(screen.getByPlaceholderText('Task title'), 'Shortcut from body');
       const description = screen.getByPlaceholderText('Add description...');
       await user.type(description, 'Body text');
 
@@ -1465,7 +1465,7 @@ describe('CreateIssueModal', () => {
     it('leaves plain Enter in the description as a newline, not a create', async () => {
       const user = userEvent.setup();
       renderManual();
-      await user.type(screen.getByPlaceholderText('Issue title'), 'Still typing');
+      await user.type(screen.getByPlaceholderText('Task title'), 'Still typing');
 
       fireEvent.keyDown(screen.getByPlaceholderText('Add description...'), { key: 'Enter' });
       await Promise.resolve();
@@ -1482,7 +1482,7 @@ describe('CreateIssueModal', () => {
 
       await Promise.resolve();
       expect(mockCreateIssue).not.toHaveBeenCalled();
-      expect(screen.getByPlaceholderText('Issue title')).toHaveFocus();
+      expect(screen.getByPlaceholderText('Task title')).toHaveFocus();
     });
 
     it('creates once when the chord is pressed twice in the same tick', async () => {
@@ -1495,7 +1495,7 @@ describe('CreateIssueModal', () => {
           }),
       );
       renderManual();
-      const title = screen.getByPlaceholderText('Issue title');
+      const title = screen.getByPlaceholderText('Task title');
       await user.type(title, 'Double tap');
 
       await act(async () => {
@@ -1517,17 +1517,17 @@ describe('CreateIssueModal', () => {
       const user = userEvent.setup();
       renderManual();
 
-      expect(screen.getByRole('button', { name: 'Create Issue' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Create Task' })).toBeInTheDocument();
       expect(document.querySelector("[data-slot='shortcut-keycaps']")).toBeInTheDocument();
 
-      await user.type(screen.getByPlaceholderText('Issue title'), 'Now valid');
-      expect(screen.getByRole('button', { name: 'Create Issue' })).toBeInTheDocument();
+      await user.type(screen.getByPlaceholderText('Task title'), 'Now valid');
+      expect(screen.getByRole('button', { name: 'Create Task' })).toBeInTheDocument();
       expect(document.querySelector("[data-slot='shortcut-keycaps']")).toBeInTheDocument();
     });
 
     it('keeps Create focusable via aria-disabled while the title is empty', () => {
       renderManual();
-      const createButton = screen.getByRole('button', { name: 'Create Issue' });
+      const createButton = screen.getByRole('button', { name: 'Create Task' });
 
       expect(createButton).toHaveAttribute('aria-disabled', 'true');
       expect(createButton).not.toBeDisabled();
@@ -1537,7 +1537,7 @@ describe('CreateIssueModal', () => {
 
     it('carries its own disabled visuals, since the Button base only styles native disabled', () => {
       renderManual();
-      const createButton = screen.getByRole('button', { name: 'Create Issue' });
+      const createButton = screen.getByRole('button', { name: 'Create Task' });
 
       expect(createButton.className).toContain('aria-disabled:opacity-50');
       expect(createButton.className).toContain('aria-disabled:cursor-not-allowed');

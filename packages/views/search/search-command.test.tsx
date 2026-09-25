@@ -292,7 +292,7 @@ describe('SearchCommand', () => {
     expect(screen.queryByText('Pages')).not.toBeInTheDocument();
     expect(screen.getByText('Commands')).toBeInTheDocument();
     expect(
-      screen.getByText((_, el) => el?.textContent === 'New Issue' && el?.tagName === 'SPAN'),
+      screen.getByText((_, el) => el?.textContent === 'New Task' && el?.tagName === 'SPAN'),
     ).toBeInTheDocument();
     expect(screen.queryByText('New Project')).not.toBeInTheDocument();
     expect(screen.queryByText('Switch to Light Theme')).not.toBeInTheDocument();
@@ -407,7 +407,7 @@ describe('SearchCommand', () => {
     await waitFor(() => {
       expect(screen.getByText('Commands')).toBeInTheDocument();
       expect(
-        screen.getByText((_, el) => el?.textContent === 'New Issue' && el?.tagName === 'SPAN'),
+        screen.getByText((_, el) => el?.textContent === 'New Task' && el?.tagName === 'SPAN'),
       ).toBeInTheDocument();
       expect(
         screen.getByText((_, el) => el?.textContent === 'New Project' && el?.tagName === 'SPAN'),
@@ -415,7 +415,7 @@ describe('SearchCommand', () => {
     });
 
     const newIssue = await screen.findByText(
-      (_, el) => el?.textContent === 'New Issue' && el?.tagName === 'SPAN',
+      (_, el) => el?.textContent === 'New Task' && el?.tagName === 'SPAN',
     );
     await user.click(newIssue);
 
@@ -431,7 +431,7 @@ describe('SearchCommand', () => {
     const input = screen.getByPlaceholderText('Type a command or search...');
     await user.type(input, 'copy');
 
-    expect(screen.queryByText('Copy Issue Link')).not.toBeInTheDocument();
+    expect(screen.queryByText('Copy Task Link')).not.toBeInTheDocument();
   });
 
   it('copies issue link and identifier when on an issue detail route', async () => {
@@ -449,7 +449,7 @@ describe('SearchCommand', () => {
     await user.type(input, 'copy');
 
     const linkItem = await screen.findByText(
-      (_, el) => el?.textContent === 'Copy Issue Link' && el?.tagName === 'SPAN',
+      (_, el) => el?.textContent === 'Copy Task Link' && el?.tagName === 'SPAN',
     );
     await user.click(linkItem);
 
@@ -839,7 +839,7 @@ describe('SearchCommand', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText((_, el) => el?.textContent === 'New Issue' && el?.tagName === 'SPAN'),
+        screen.getByText((_, el) => el?.textContent === 'New Task' && el?.tagName === 'SPAN'),
       ).toBeInTheDocument();
       expect(
         screen.getByText((_, el) => el?.textContent === 'New Project' && el?.tagName === 'SPAN'),

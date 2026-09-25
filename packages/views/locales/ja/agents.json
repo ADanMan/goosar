@@ -1,7 +1,7 @@
 {
   "page": {
-    "title": "エージェント",
-    "tagline": "イシューを引き受け、コメントし、ステータスを更新する AI チームメイトです。",
+    "title": "実行者",
+    "tagline": "タスクを引き受け、コメントし、ステータスを更新する AI チームメイトです。",
     "learn_more": "詳細はこちら →",
     "new_agent": "新規エージェント",
     "search_placeholder": "エージェントを検索...",
@@ -40,7 +40,7 @@
   },
   "empty": {
     "title": "まだエージェントがいません",
-    "description": "チームメイトと同じように、エージェントを作成してイシューを割り当てましょう。ローカルエージェントは自分のマシンで、クラウドエージェントは Goosar のランタイムで実行されます。"
+    "description": "チームメイトと同じように、エージェントを作成してタスクを割り当てましょう。ローカルエージェントは自分のマシンで、クラウドエージェントは Goosar のランタイムで実行されます。"
   },
   "no_matches": {
     "title": "一致する結果なし",
@@ -573,18 +573,18 @@
       "avg_duration_label": "平均時間",
       "failed_count": "{{count}} 回失敗",
       "failed_label": "失敗",
-      "source_issue": "イシュー",
+      "source_issue": "タスク",
       "source_chat": "チャット",
       "source_autopilot": "オートパイロット",
       "source_untracked": "未追跡",
       "source_quick_create": "クイック作成",
-      "source_creating_issue": "イシューを作成中",
+      "source_creating_issue": "タスクを作成中",
       "source_chat_session": "チャットセッション",
       "source_autopilot_run": "オートパイロット実行",
-      "issue_short_fallback": "イシュー {{prefix}}...",
+      "issue_short_fallback": "タスク {{prefix}}...",
       "triggered_by": "トリガーした人",
-      "open_issue_aria": "イシューを開く",
-      "open_issue_tooltip": "イシューを開く",
+      "open_issue_aria": "タスクを開く",
+      "open_issue_tooltip": "タスクを開く",
       "transcript_tooltip": "トランスクリプトを表示",
       "cancel_task_aria": "タスクをキャンセル",
       "cancel_task_tooltip": "タスクをキャンセル",

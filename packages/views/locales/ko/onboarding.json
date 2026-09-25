@@ -7,14 +7,14 @@
     "headline_line1": "AI 팀원과",
     "headline_line2": "하나의",
     "headline_emphasis": "워크스페이스에서.",
-    "lede": "동료에게 일을 맡기듯 작업을 할당하세요. 에이전트가 이슈를 맡고, 상태를 업데이트하고, 끝나면 댓글을 남깁니다.",
+    "lede": "동료에게 일을 맡기듯 작업을 할당하세요. 에이전트가 작업을 맡고, 상태를 업데이트하고, 끝나면 댓글을 남깁니다.",
     "lede_web": "데스크톱에는 런타임이 포함되어 있어 따로 설치할 게 없습니다. 웹에서 계속하려면 내 CLI를 연결하세요.",
-    "lede_desktop": "끝나면 실제 에이전트가 첫 이슈에 답하고 있을 겁니다.",
+    "lede_desktop": "끝나면 실제 에이전트가 첫 작업에 답하고 있을 겁니다.",
     "download_desktop": "데스크톱 다운로드",
     "continue_on_web": "웹에서 계속",
     "start_exploring": "둘러보기 시작",
     "skip_existing": "이미 해봤습니다",
-    "illustration_caption": "모든 이슈, 모든 스레드, 모든 결정이 팀과 에이전트에게 공유됩니다.",
+    "illustration_caption": "모든 작업, 모든 스레드, 모든 결정이 팀과 에이전트에게 공유됩니다.",
     "illustration": {
       "card1_actor_name": "나",
       "card1_actor_initial": "N",
@@ -150,7 +150,7 @@
     "runtime": {
       "greeting": "안녕하세요, Goosar에 오신 것을 환영합니다",
       "subtitle": "저는 첫 에이전트 어시스턴트입니다.",
-      "capabilities": "Goosar 사용법은 무엇이든 물어보세요. 워크스페이스에서 이슈를 만들고, cron 작업을 설정하고, 새 에이전트를 만드는 일도 맡길 수 있습니다.",
+      "capabilities": "Goosar 사용법은 무엇이든 물어보세요. 워크스페이스에서 작업을 만들고, cron 작업을 설정하고, 새 에이전트를 만드는 일도 맡길 수 있습니다.",
       "section_label": "시작할 작업을 하나 이상 선택하세요:",
       "assign_empty": "하나 이상 선택",
       "assign_count_other": "작업 {{count}}개를 나에게 할당 →",
@@ -159,7 +159,7 @@
           "subtitle": "Goosar가 무엇이고 무엇을 할 수 있는지 1-2문단으로 설명하겠습니다."
         },
         "tour": {
-          "subtitle": "이슈, 에이전트, 스쿼드, 오토파일럿이 어떻게 맞물리는지 안내하겠습니다."
+          "subtitle": "작업, 에이전트, 분대, 오토파일럿이 어떻게 맞물리는지 안내하겠습니다."
         },
         "welcome_page": {
           "subtitle": "역할에 맞춘 단일 HTML 슬라이드 덱을 만들어 드립니다. 복사해서 브라우저에서 열 수 있습니다."
@@ -168,7 +168,7 @@
       "success": {
         "title": "준비 완료!",
         "subtitle": "잠시만요 — {{agentName}}이(가) 작업 중입니다 ☕",
-        "tip_inbox": "진행 상황이 생기면 인박스에서 볼 수 있습니다.",
+        "tip_inbox": "진행 상황이 생기면 피드에서 볼 수 있습니다.",
         "tip_chat": "실시간으로 채팅하고 싶다면 오른쪽 아래 채팅 버튼을 누르세요.",
         "got_it": "알겠습니다 →"
       }
@@ -202,14 +202,14 @@
     "eyebrow_resume": "이어 하거나 새로 시작",
     "headline_first": "워크스페이스 이름을 정하세요.",
     "headline_resume": "{{name}}에서 계속하거나 새로 시작하세요.",
-    "lede_first": "워크스페이스는 이슈, 에이전트, 프로젝트가 모이는 곳입니다. 나중에 팀원을 초대하거나 워크스페이스를 더 만들 수 있습니다.",
+    "lede_first": "워크스페이스는 작업, 에이전트, 프로젝트가 모이는 곳입니다. 나중에 팀원을 초대하거나 워크스페이스를 더 만들 수 있습니다.",
     "lede_resume": "이미 있는 워크스페이스에서 설정을 이어가거나 별도로 새 워크스페이스를 만드세요. 여러 워크스페이스에 속할 수 있습니다.",
     "name_label": "워크스페이스 이름",
     "name_placeholder": "Acme Inc, 내 연구실, 사이드 프로젝트...",
     "url_label": "URL",
     "slug_placeholder": "acme",
-    "issue_prefix_label": "이슈 접두사",
-    "issue_prefix_prefix": "이슈는 ",
+    "issue_prefix_label": "작업 접두사",
+    "issue_prefix_prefix": "작업은 ",
     "issue_prefix_suffix": "처럼 표시됩니다. 나중에 설정에서 바꿀 수 있습니다.",
     "create_new_title": "새 워크스페이스 만들기",
     "create_new_subtitle": "새로 시작합니다. 다른 업무 영역을 위한 별도 공간입니다.",
@@ -234,22 +234,22 @@
     "side_next_eyebrow": "다음 단계",
     "side_preview_name": "내 워크스페이스",
     "side_preview_slug": "workspace",
-    "perk_assign": "동료에게 하듯 이슈를 에이전트에 할당",
-    "perk_chat": "이슈를 만들지 않고 에이전트와 채팅",
+    "perk_assign": "동료에게 하듯 작업을 에이전트에 할당",
+    "perk_chat": "작업을 만들지 않고 에이전트와 채팅",
     "perk_invite": "팀원 초대 — 이 워크스페이스만 보입니다",
     "perk_switch": "왼쪽 위에서 언제든 다른 워크스페이스로 전환",
     "next_runtime": "에이전트를 실행할 컴퓨터 연결",
     "next_agent": "연결된 런타임에서 Goosar Helper 만들기",
-    "next_starter": "다음 단계를 위한 온보딩 이슈 열기",
+    "next_starter": "다음 단계를 위한 온보딩 작업 열기",
     "preview": {
-      "inbox_label": "인박스",
+      "inbox_label": "피드",
       "inbox_meta": "내 알림",
-      "issues_label": "이슈",
+      "issues_label": "작업",
       "issues_meta": "공유 작업 보드",
       "agents_label": "에이전트",
       "agents_meta": "AI 팀원",
       "projects_label": "프로젝트",
-      "projects_meta": "관련 이슈 묶기",
+      "projects_meta": "관련 작업 묶기",
       "autopilot_label": "오토파일럿",
       "autopilot_meta": "예약 자동화",
       "runtimes_label": "런타임",
@@ -457,15 +457,15 @@
       "atlassian": {
         "admin_note": "키를 저장해도 업무용 컴퓨터에 무언가가 설치되지는 않습니다. 도구를 쓸 수 없다는 답이 오면 관리자에게 문의하세요. 컴퓨터 준비는 관리자의 몫입니다.\nmcp-atlassian 프로그램 자체는 설치할 필요가 없습니다. 앱에 포함되어 있으며 첫 실행 때 컴퓨터에 풀립니다.",
         "confluence_token_label": "Confluence 개인 토큰",
-        "description": "Jira와 Confluence에서 이슈를 검색하고 위키 페이지를 읽습니다.",
+        "description": "Jira와 Confluence에서 작업을 검색하고 위키 페이지를 읽습니다.",
         "guide": "1. {{jiraHost}} → 내 프로필 → Personal Access Tokens → Create token 을 엽니다.\n2. 토큰을 복사해 Jira 칸에 붙여 넣습니다.\n3. {{confluenceHost}} 에서도 같은 과정을 거쳐 두 번째 토큰을 Confluence 칸에 붙여 넣습니다.\nJira와 Confluence가 클라우드(*.atlassian.net 주소)라면 개인 액세스 토큰이 없습니다. id.atlassian.com → Security → API tokens 에서 API 토큰을 만들어 개인 토큰 칸 대신 「이메일 + API 토큰」 쌍을 입력하세요.\n두 칸이 모두 채워질 때까지 도구는 꺼져 있습니다.",
         "guide_unknown_hosts": "1. Jira와 Confluence 주소는 관리자가 알려 줍니다. 모른다면 관리자에게 문의하세요.\n2. Jira 주소 → 내 프로필 → Personal Access Tokens → Create token 을 열고, 토큰을 복사해 Jira 칸에 붙여 넣습니다.\n3. Confluence 에서도 같은 과정을 거쳐 두 번째 토큰을 Confluence 칸에 붙여 넣습니다.\nJira와 Confluence가 클라우드(*.atlassian.net 주소)라면 개인 액세스 토큰이 없습니다. id.atlassian.com → Security → API tokens 에서 API 토큰을 만들어 개인 토큰 칸 대신 「이메일 + API 토큰」 쌍을 입력하세요.\n두 칸이 모두 채워질 때까지 도구는 꺼져 있습니다.",
         "jira_token_label": "Jira 개인 토큰",
         "ssl_verify_label": "TLS 인증서 확인",
-        "rights": "토큰은 회원님 자격으로 동작하므로 도우미는 회원님이 보는 것만 봅니다. 별도 권한을 받을 필요는 없지만, 필요한 Jira 프로젝트와 Confluence 공간에 본인이 접근할 수 있는지 확인하세요. 도우미는 이슈·댓글·페이지·이력·첨부를 읽고 이슈 상태를 옮깁니다. 만료 기한이 있는 토큰을 쓰는 편이 좋습니다.",
+        "rights": "토큰은 회원님 자격으로 동작하므로 도우미는 회원님이 보는 것만 봅니다. 별도 권한을 받을 필요는 없지만, 필요한 Jira 프로젝트와 Confluence 공간에 본인이 접근할 수 있는지 확인하세요. 도우미는 작업·댓글·페이지·이력·첨부를 읽고 작업 상태를 옮깁니다. 만료 기한이 있는 토큰을 쓰는 편이 좋습니다.",
         "title": "Jira & Confluence",
         "token_placeholder": "여기에 토큰을 붙여넣으세요",
-        "verify": "도우미에게 \"내 Jira 이슈를 보여줘\", \"Confluence 에서 … 페이지를 찾아줘\" 라고 요청해 보세요. 목록이 오면 키가 받아들여진 것입니다. 분명히 있는 이슈인데 \"찾지 못했다\"고 하면 토큰이 잘려 복사되었거나 만료된 경우가 많습니다. 새로 만들어 다시 붙여 넣으세요."
+        "verify": "도우미에게 \"내 Jira 작업을 보여줘\", \"Confluence 에서 … 페이지를 찾아줘\" 라고 요청해 보세요. 목록이 오면 키가 받아들여진 것입니다. 분명히 있는 작업인데 \"찾지 못했다\"고 하면 토큰이 잘려 복사되었거나 만료된 경우가 많습니다. 새로 만들어 다시 붙여 넣으세요."
       },
       "outlook": {
         "title": "Outlook 메일 & 캘린더",

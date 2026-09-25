@@ -131,7 +131,7 @@ function clickCancel() {
 const ROLE_DESCRIPTION = {
   owner: 'Full access, manage all settings',
   admin: 'Manage members and settings',
-  member: 'Create and work on issues',
+  member: 'Create and work on tasks',
 } as const;
 
 function pickRole(role: keyof typeof ROLE_DESCRIPTION) {

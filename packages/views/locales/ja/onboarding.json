@@ -7,14 +7,14 @@
     "headline_line1": "あなたの AI チームメイトを、",
     "headline_line2": "ひとつの",
     "headline_emphasis": "ワークスペースに。",
-    "lede": "同僚に仕事を任せるように作業を割り当てるだけ。エージェントがイシューを引き受け、ステータスを更新し、完了したらコメントします。",
+    "lede": "同僚に仕事を任せるように作業を割り当てるだけ。エージェントがタスクを引き受け、ステータスを更新し、完了したらコメントします。",
     "lede_web": "デスクトップ版にはランタイムが同梱されており、何もインストールする必要はありません。ご自身の CLI を接続するには、ウェブで続けてください。",
-    "lede_desktop": "完了するころには、実際のエージェントがあなたの最初のイシューに返信しています。",
+    "lede_desktop": "完了するころには、実際のエージェントがあなたの最初のタスクに返信しています。",
     "download_desktop": "デスクトップ版をダウンロード",
     "continue_on_web": "ウェブで続ける",
     "start_exploring": "探索を始める",
     "skip_existing": "以前にやったことがあります",
-    "illustration_caption": "すべてのイシュー、すべてのスレッド、すべての判断を、チームとエージェントで共有。",
+    "illustration_caption": "すべてのタスク、すべてのスレッド、すべての判断を、チームとエージェントで共有。",
     "illustration": {
       "card1_actor_name": "あなた",
       "card1_actor_initial": "N",
@@ -150,7 +150,7 @@
     "runtime": {
       "greeting": "こんにちは、Goosar へようこそ",
       "subtitle": "私はあなたの最初の Agent アシスタントです。",
-      "capabilities": "Goosar の使い方について、何でも聞いてください。ワークスペースでの作業を任せることもできます — イシューの作成、cron タスクの設定、新しいエージェントの構築など…",
+      "capabilities": "Goosar の使い方について、何でも聞いてください。ワークスペースでの作業を任せることもできます — タスクの作成、cron タスクの設定、新しいエージェントの構築など…",
       "section_label": "まず取り組むタスクを 1 つ以上選んでください:",
       "assign_empty": "1 つ以上選択",
       "assign_count_other": "{{count}} 件のタスクを私に割り当てる →",
@@ -159,7 +159,7 @@
           "subtitle": "Goosar とは何か、何ができるのかを 1〜2 段落で説明します。"
         },
         "tour": {
-          "subtitle": "イシュー、エージェント、スクワッド、オートパイロットがどう連携するかをご案内します。"
+          "subtitle": "タスク、エージェント、スクワッド、オートパイロットがどう連携するかをご案内します。"
         },
         "welcome_page": {
           "subtitle": "あなたの役割に合わせた単一ファイルの HTML スライドデックを作成します。コピーしてブラウザで開けます。"
@@ -168,7 +168,7 @@
       "success": {
         "title": "準備完了!",
         "subtitle": "少々お待ちを — {{agentName}} が対応中です ☕",
-        "tip_inbox": "進捗があると、インボックスに表示されます。",
+        "tip_inbox": "進捗があると、フィードに表示されます。",
         "tip_chat": "ライブでチャットしたいときは、右下のチャットバブルをクリックしてください。",
         "got_it": "了解 →"
       }
@@ -202,14 +202,14 @@
     "eyebrow_resume": "続きから、または新規作成",
     "headline_first": "ワークスペースに名前を付けましょう。",
     "headline_resume": "{{name}} で続けるか、別のワークスペースを始めましょう。",
-    "lede_first": "ワークスペースは、イシュー、エージェント、プロジェクトが集まる場所です。あとでチームメイトを招待したり、ワークスペースを増やしたりできます。",
+    "lede_first": "ワークスペースは、タスク、エージェント、プロジェクトが集まる場所です。あとでチームメイトを招待したり、ワークスペースを増やしたりできます。",
     "lede_resume": "すでにあるワークスペースでセットアップを続けるか、別に新しいワークスペースを作成してください。いくつでもワークスペースに所属できます。",
     "name_label": "ワークスペース名",
     "name_placeholder": "Acme Inc、My Lab、Side Projects…",
     "url_label": "URL",
     "slug_placeholder": "acme",
-    "issue_prefix_label": "イシュープレフィックス",
-    "issue_prefix_prefix": "イシューは ",
+    "issue_prefix_label": "タスクプレフィックス",
+    "issue_prefix_prefix": "タスクは ",
     "issue_prefix_suffix": " のように表示されます。あとで設定から変更できます。",
     "create_new_title": "新しいワークスペースを作成",
     "create_new_subtitle": "新しく始めましょう — 別の業務領域のための独立した場所です。",
@@ -234,22 +234,22 @@
     "side_next_eyebrow": "次のステップ",
     "side_preview_name": "あなたのワークスペース",
     "side_preview_slug": "workspace",
-    "perk_assign": "同僚に任せるようにイシューをエージェントに割り当てる",
-    "perk_chat": "イシューを作らずにどのエージェントともチャット",
+    "perk_assign": "同僚に任せるようにタスクをエージェントに割り当てる",
+    "perk_chat": "タスクを作らずにどのエージェントともチャット",
     "perk_invite": "チームメイトを招待 — 招待した人にはこのワークスペースだけが見えます",
     "perk_switch": "左上からいつでも他のワークスペースに切り替え",
     "next_runtime": "エージェントが動く場所を用意するためにコンピュータを接続",
     "next_agent": "接続したランタイムから Goosar Helper を作成",
-    "next_starter": "次のステップのためにオンボーディングイシューを 1 つ開く",
+    "next_starter": "次のステップのためにオンボーディングタスクを 1 つ開く",
     "preview": {
-      "inbox_label": "インボックス",
+      "inbox_label": "フィード",
       "inbox_meta": "あなたの通知",
-      "issues_label": "イシュー",
+      "issues_label": "タスク",
       "issues_meta": "共有のタスクボード",
       "agents_label": "エージェント",
       "agents_meta": "あなたの AI チームメイト",
       "projects_label": "プロジェクト",
-      "projects_meta": "関連するイシューをまとめる",
+      "projects_meta": "関連するタスクをまとめる",
       "autopilot_label": "オートパイロット",
       "autopilot_meta": "スケジュールされた自動化",
       "runtimes_label": "ランタイム",

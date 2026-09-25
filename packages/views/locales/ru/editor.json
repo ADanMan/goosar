@@ -23,9 +23,9 @@
       "task_list": "Список задач"
     },
     "sub_issue": {
-      "tooltip": "Создать дочерний issue из выделенного",
+      "tooltip": "Создать дочернюю задачу из выделенного",
       "created": "Создан {{identifier}}",
-      "create_failed": "Не удалось создать дочерний issue"
+      "create_failed": "Не удалось создать дочернюю задачу"
     }
   },
   "image": {
@@ -67,7 +67,7 @@
   },
   "mention": {
     "group_users": "Пользователи",
-    "group_issues": "Issues",
+    "group_issues": "Задачи",
     "all_members": "Все участники",
     "searching": "Ищем...",
     "no_results": "Ничего не найдено",
@@ -76,8 +76,8 @@
     "group_search": "Результаты поиска"
   },
   "slash_command": {
-    "no_skills_configured": "Нет настроенных skill",
-    "no_results": "Подходящих skill нет",
+    "no_skills_configured": "Нет настроенных навыков",
+    "no_results": "Подходящих навыков нет",
     "commands": {
       "note": "Добавить заметку — агенты не сработают"
     }

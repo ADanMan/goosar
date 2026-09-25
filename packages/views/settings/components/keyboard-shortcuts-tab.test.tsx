@@ -91,7 +91,7 @@ describe('KeyboardShortcutsTab', () => {
   it('rejects shortcuts already assigned to another action', () => {
     renderWithI18n(<KeyboardShortcutsTab />);
     const recorder = screen.getByRole('button', {
-      name: 'Change shortcut for Create issue',
+      name: 'Change shortcut for Create task',
     });
 
     fireEvent.click(recorder);
@@ -106,12 +106,12 @@ describe('KeyboardShortcutsTab', () => {
 
     fireEvent.click(
       screen.getByRole('button', {
-        name: 'Disable Create issue shortcut',
+        name: 'Disable Create task shortcut',
       }),
     );
     expect(getShortcut('createIssue')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reset Create issue' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reset Create task' }));
     expect(getShortcut('createIssue')).toEqual(createShortcutChord('C'));
   });
 

@@ -190,7 +190,7 @@ describe('WorkspaceTab — automatic updates', () => {
     await user.tab();
 
     expect(mockUpdateWorkspace).not.toHaveBeenCalled();
-    await screen.findByText(/Change issue prefix/i);
+    await screen.findByText(/Change task prefix/i);
     expect(screen.getByText(/TES-N/)).toBeTruthy();
     expect(screen.getByText(/NEW-N/)).toBeTruthy();
 
@@ -217,7 +217,7 @@ describe('WorkspaceTab — automatic updates', () => {
     await user.clear(input);
     await user.type(input, 'NEW');
     await user.tab();
-    await screen.findByText(/Change issue prefix/i);
+    await screen.findByText(/Change task prefix/i);
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
 
     expect(mockUpdateWorkspace).not.toHaveBeenCalled();

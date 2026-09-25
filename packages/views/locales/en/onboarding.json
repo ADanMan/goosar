@@ -9,12 +9,12 @@
     "headline_emphasis": "one workspace.",
     "lede": "Assign them work like you'd assign a colleague — they pick it up, update status, and comment when done.",
     "lede_web": "Desktop bundles the runtime — nothing to install. Continue on web to connect your own CLI.",
-    "lede_desktop": "By the end, a real agent will be replying to your first issue.",
+    "lede_desktop": "By the end, a real agent will be replying to your first task.",
     "download_desktop": "Download Desktop",
     "continue_on_web": "Continue on web",
     "start_exploring": "Start exploring",
     "skip_existing": "I've done this before",
-    "illustration_caption": "Every issue, every thread, every decision — shared by your team and agents.",
+    "illustration_caption": "Every task, every thread, every decision — shared by your team and agents.",
     "illustration": {
       "card1_actor_name": "You",
       "card1_actor_initial": "N",
@@ -150,7 +150,7 @@
     "runtime": {
       "greeting": "Hi, welcome to Goosar",
       "subtitle": "I'm your first Agent assistant.",
-      "capabilities": "Ask me anything about how to use Goosar. You can also have me get things done in your workspace — create issues, set up cron tasks, build new agents…",
+      "capabilities": "Ask me anything about how to use Goosar. You can also have me get things done in your workspace — create tasks, set up cron tasks, build new agents…",
       "section_label": "Pick one or more tasks to start with:",
       "assign_empty": "Pick one or more",
       "assign_count_one": "Assign {{count}} task to me →",
@@ -160,7 +160,7 @@
           "subtitle": "Let me explain in 1–2 paragraphs what Goosar is and what it can do."
         },
         "tour": {
-          "subtitle": "I'll walk you through how issue, agent, squad, autopilot fit together."
+          "subtitle": "I'll walk you through how task, agent, squad, autopilot fit together."
         },
         "welcome_page": {
           "subtitle": "I'll build you a single-file HTML slide deck — tailored to your role, ready to copy and open in a browser."
@@ -169,7 +169,7 @@
       "success": {
         "title": "All set!",
         "subtitle": "Sit tight — your {{agentName}} is on it ☕",
-        "tip_inbox": "When there's progress, you'll see it in your Inbox.",
+        "tip_inbox": "When there's progress, you'll see it in your Feed.",
         "tip_chat": "Want to chat live? Click the chat bubble at the bottom-right.",
         "got_it": "Got it →"
       }
@@ -203,14 +203,14 @@
     "eyebrow_resume": "Pick up or start fresh",
     "headline_first": "Name your workspace.",
     "headline_resume": "Continue with {{name}}, or start another.",
-    "lede_first": "A workspace is where your issues, agents, and projects live. You can invite teammates or spin up more workspaces later.",
+    "lede_first": "A workspace is where your tasks, agents, and projects live. You can invite teammates or spin up more workspaces later.",
     "lede_resume": "Resume setup with the workspace you already have, or create a new one alongside it — you can belong to any number of workspaces.",
     "name_label": "Workspace name",
     "name_placeholder": "Acme Inc, My Lab, Side Projects…",
     "url_label": "URL",
     "slug_placeholder": "acme",
-    "issue_prefix_label": "Issue prefix",
-    "issue_prefix_prefix": "Issues will look like ",
+    "issue_prefix_label": "Task prefix",
+    "issue_prefix_prefix": "Tasks will look like ",
     "issue_prefix_suffix": ". You can change this later in settings.",
     "create_new_title": "Create a new workspace",
     "create_new_subtitle": "Start fresh — a separate space for a different side of your work.",
@@ -235,22 +235,22 @@
     "side_next_eyebrow": "What's next",
     "side_preview_name": "Your workspace",
     "side_preview_slug": "workspace",
-    "perk_assign": "Assign issues to agents like you would a teammate",
-    "perk_chat": "Chat with any agent without creating an issue",
+    "perk_assign": "Assign tasks to agents like you would a teammate",
+    "perk_chat": "Chat with any agent without creating an task",
     "perk_invite": "Invite teammates — they see only this workspace",
     "perk_switch": "Switch to other workspaces anytime from the top-left",
     "next_runtime": "Connect a computer so your agents have somewhere to run",
     "next_agent": "Create Goosar Helper from your connected runtime",
-    "next_starter": "Open one onboarding issue for your next step",
+    "next_starter": "Open one onboarding task for your next step",
     "preview": {
-      "inbox_label": "Inbox",
+      "inbox_label": "Feed",
       "inbox_meta": "your notifications",
-      "issues_label": "Issues",
+      "issues_label": "Tasks",
       "issues_meta": "shared task board",
       "agents_label": "Agents",
       "agents_meta": "your AI teammates",
       "projects_label": "Projects",
-      "projects_meta": "group related issues",
+      "projects_meta": "group related tasks",
       "autopilot_label": "Autopilot",
       "autopilot_meta": "scheduled automation",
       "runtimes_label": "Runtimes",
@@ -459,15 +459,15 @@
       "atlassian": {
         "admin_note": "Saving a key does not install anything on the work computer. If the assistant says the tool is unavailable, write to your administrator — preparing the machine is their job, not yours.\nThe mcp-atlassian program itself does not need installing: it ships with the app and is unpacked on the computer at first launch.",
         "confluence_token_label": "Confluence personal token",
-        "description": "Search issues and read wiki pages in Jira and Confluence.",
+        "description": "Search tasks and read wiki pages in Jira and Confluence.",
         "guide": "1. Open {{jiraHost}} → your profile → Personal Access Tokens → Create token.\n2. Copy the token and paste it into the Jira field.\n3. Do the same on {{confluenceHost}} and paste the second token into the Confluence field.\nIf your Jira and Confluence are Cloud (an *.atlassian.net address), there are no personal access tokens there: create an API token at id.atlassian.com → Security → API tokens and fill in the e-mail + API token pair instead of the personal-token fields.\nThe tool stays off until both fields are filled in.",
         "guide_unknown_hosts": "1. Your administrator gives you the Jira and Confluence addresses — ask them if you do not know.\n2. Open the Jira address → your profile → Personal Access Tokens → Create token, copy the token and paste it into the Jira field.\n3. Do the same in Confluence and paste the second token into the Confluence field.\nIf your Jira and Confluence are Cloud (an *.atlassian.net address), there are no personal access tokens there: create an API token at id.atlassian.com → Security → API tokens and fill in the e-mail + API token pair instead of the personal-token fields.\nThe tool stays off until both fields are filled in.",
         "jira_token_label": "Jira personal token",
         "ssl_verify_label": "Verify TLS certificate",
-        "rights": "The token acts as you, so the assistant sees exactly what you see and nothing more. No separate permissions have to be granted — but check that you yourself can reach the Jira projects and Confluence spaces you care about: the assistant reads issues, comments, pages, history and attachments, and moves issues between statuses. Giving the token an expiry date is a good habit.",
+        "rights": "The token acts as you, so the assistant sees exactly what you see and nothing more. No separate permissions have to be granted — but check that you yourself can reach the Jira projects and Confluence spaces you care about: the assistant reads tasks, comments, pages, history and attachments, and moves tasks between statuses. Giving the token an expiry date is a good habit.",
         "title": "Jira & Confluence",
         "token_placeholder": "Paste your token here",
-        "verify": "Ask the assistant to \"show my Jira issues\" and to \"find the Confluence page about …\". A list back means the key was accepted. If an issue you know exists comes back as \"nothing found\", the token was probably truncated when copied, or has expired: create a new one and paste it again."
+        "verify": "Ask the assistant to \"show my Jira tasks\" and to \"find the Confluence page about …\". A list back means the key was accepted. If an task you know exists comes back as \"nothing found\", the token was probably truncated when copied, or has expired: create a new one and paste it again."
       },
       "outlook": {
         "title": "Outlook mail & calendar",
@@ -490,7 +490,7 @@
         "kb_token_placeholder": "Paste your token here",
         "kb_deployment_label": "Search deployment id",
         "kb_deployment_placeholder": "Optional — issued with the token",
-        "guide": "1. In Bitrix24 open your profile → Developer resources → Other → Inbound webhook.\n2. Copy the tail of the address — it looks like 123/abc…/ — and paste it into the webhook field.\n3. Ask the knowledge-base team for the knowledge-base token; they issue the search id together with it, and it is optional.\nThe tool stays off until the webhook and the token are filled in.",
+        "guide": "1. In Bitrix24 open your profile → Developer resources → Other → Inbound webhook.\n2. Copy the tail of the address — it looks like 123/abc…/ — and paste it into the webhook field.\n3. Ask the knowledge-base team for the knowledge-base token; they task the search id together with it, and it is optional.\nThe tool stays off until the webhook and the token are filled in.",
         "rights": "When you create the webhook, tick CRM access — without it the assistant cannot see deals; to let it read a deal's conversation, add access to comments and files as well. A webhook is never broader than your own permissions. The knowledge-base token is read-only.",
         "verify": "Ask \"show my open deals\". A list means the webhook was accepted. A permission error almost always means CRM was not ticked when the webhook was created: make a new one with the right scopes. Then ask it to \"find … in the knowledge base\" to check the second token.",
         "admin_note": "The portal address and the knowledge-base address are set by an administrator while preparing your workplace. If the assistant cannot reach Bitrix24 at all, that one is for them."
@@ -507,7 +507,7 @@
       "mcp_gateway": {
         "admin_note": "Access itself is set up by the platform team. If the token is accepted but the tools do not answer, that one is for them.",
         "admin_note_self_install": "If the computer is your own and you have no administrator, the missing program is installed with pipx install mcp-proxy.",
-        "description": "The set of tools your company issues to you personally.",
+        "description": "The set of tools your company tasks to you personally.",
         "guide": "1. Ask the platform team for your personal corporate gateway token.\n2. Paste it into the field below.\nThe tool stays off while the field is empty.",
         "rights": "The token is personal: it opens exactly the set of work tools issued to you. Ask for one in your own name — a colleague's token will not work and must not be passed around.",
         "title": "Extra work tools",

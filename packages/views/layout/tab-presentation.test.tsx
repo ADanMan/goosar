@@ -97,7 +97,7 @@ describe('useTabPresentation — live from cache', () => {
   it('page: page icon + localized page name', () => {
     expect(presentationOf('/acme/issues')).toEqual({
       visual: { kind: 'icon', icon: 'ListTodo' },
-      title: 'Issues',
+      title: 'Tasks',
     });
   });
 
@@ -162,7 +162,7 @@ describe('useTabPresentation — live from cache', () => {
   });
 
   it('archived inbox: selected issue resolves against the archived list', () => {
-    expect(presentationOf('/acme/inbox?issue=i1').title).toBe('Inbox');
+    expect(presentationOf('/acme/inbox?issue=i1').title).toBe('Feed');
     expect(presentationOf('/acme/inbox?view=archived&issue=i1')).toEqual({
       visual: { kind: 'icon', icon: 'Inbox' },
       title: 'MUL-1: Fix login',
@@ -199,7 +199,7 @@ describe('useTabPresentation — pending / fallback', () => {
   it('pending issue with no fallback shows the localized type label, not Issues', () => {
     const p = presentationOf('/acme/issues/unloaded');
     expect(p.visual).toEqual({ kind: 'issue-status', status: null });
-    expect(p.title).toBe('Issue');
+    expect(p.title).toBe('Task');
   });
 
   it('unknown route is neutral, never Issues', () => {

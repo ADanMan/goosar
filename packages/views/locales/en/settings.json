@@ -30,11 +30,11 @@
     },
     "sticky_comment_bar": {
       "title": "Sticky comment bar",
-      "hint": "Keep the comment bar pinned to the bottom while scrolling an issue page."
+      "hint": "Keep the comment bar pinned to the bottom while scrolling an task page."
     },
     "issue_link_new_tab": {
-      "title": "Open issue links in new tab",
-      "hint": "Issue links in descriptions, comments, and chat open in a new tab instead of navigating in place."
+      "title": "Open task links in new tab",
+      "hint": "Task links in descriptions, comments, and chat open in a new tab instead of navigating in place."
     }
   },
   "shortcuts": {
@@ -72,36 +72,36 @@
         "description": "Search and run commands from anywhere."
       },
       "createIssue": {
-        "label": "Create issue",
-        "description": "Open your preferred issue creation flow."
+        "label": "Create task",
+        "description": "Open your preferred task creation flow."
       },
       "toggleSidebar": {
         "label": "Toggle sidebar",
         "description": "Show or hide the main sidebar."
       },
       "findInIssue": {
-        "label": "Find in issue",
-        "description": "Search within the open issue detail."
+        "label": "Find in task",
+        "description": "Search within the open task detail."
       },
       "send": {
         "label": "Send",
-        "description": "Send chat messages, comments, replies, feedback, and prompts, and create issues in the create dialog."
+        "description": "Send chat messages, comments, replies, feedback, and prompts, and create tasks in the create dialog."
       },
       "goInbox": {
-        "label": "Go to Inbox",
-        "description": "Open the workspace inbox."
+        "label": "Go to Feed",
+        "description": "Open the workspace feed."
       },
       "goChat": {
         "label": "Go to Chat",
         "description": "Open workspace chat."
       },
       "goMyIssues": {
-        "label": "Go to My Issues",
-        "description": "Open issues assigned to you."
+        "label": "Go to My Tasks",
+        "description": "Open tasks assigned to you."
       },
       "goIssues": {
-        "label": "Go to Issues",
-        "description": "Open the issue list."
+        "label": "Go to Tasks",
+        "description": "Open the task list."
       },
       "goProjects": {
         "label": "Go to Projects",
@@ -176,7 +176,7 @@
       "profile": "Profile",
       "preferences": "Preferences",
       "shortcuts": "Shortcuts",
-      "issue": "Issue",
+      "issue": "Task",
       "chat": "Chat",
       "notifications": "Notifications",
       "security": "Security",
@@ -195,7 +195,7 @@
   },
   "properties": {
     "title": "Properties",
-    "description": "Define typed custom properties for issues in this workspace. Values are set on each issue and are readable and writable by agents.",
+    "description": "Define typed custom properties for tasks in this workspace. Values are set on each task and are readable and writable by agents.",
     "search_placeholder": "Filter by name...",
     "new_property": "New property",
     "show_archived": "Show archived",
@@ -206,8 +206,8 @@
       "usage": "Used by",
       "updated": "Updated"
     },
-    "usage_count_one": "{{count}} issue",
-    "usage_count_other": "{{count}} issues",
+    "usage_count_one": "{{count}} task",
+    "usage_count_other": "{{count}} tasks",
     "loading": "Loading properties...",
     "empty": "No properties yet",
     "empty_hint": "Create typed fields like Severity or Environment — agents can read and write them with validation.",
@@ -253,7 +253,7 @@
     },
     "archive_dialog": {
       "title": "Archive property?",
-      "description": "\"{{name}}\" will be hidden from pickers and filters. Existing values on issues are preserved. You can restore it later.",
+      "description": "\"{{name}}\" will be hidden from pickers and filters. Existing values on tasks are preserved. You can restore it later.",
       "cancel": "Cancel",
       "confirm": "Archive property",
       "failed": "Couldn't archive property"
@@ -261,9 +261,9 @@
   },
   "labels": {
     "title": "Labels",
-    "description": "Manage the separate label catalogs used to organize issues, agents, and skills in this workspace.",
+    "description": "Manage the separate label catalogs used to organize tasks, agents, and skills in this workspace.",
     "scopes": {
-      "issue": "Issues",
+      "issue": "Tasks",
       "agent": "Agents",
       "skill": "Skills"
     },
@@ -328,25 +328,25 @@
     "section_kerberos": "Kerberos"
   },
   "notifications": {
-    "title": "Inbox Notifications",
-    "description": "Control which events generate inbox notifications. Muted event types are silently filtered — you can still see them by visiting the issue directly.",
+    "title": "Feed Notifications",
+    "description": "Control which events generate feed notifications. Muted event types are silently filtered — you can still see them by visiting the task directly.",
     "toast_failed": "Failed to update notification settings",
     "groups": {
       "assignments": {
         "label": "Assignments",
-        "description": "When you are assigned or unassigned from an issue"
+        "description": "When you are assigned or unassigned from an task"
       },
       "status_changes": {
         "label": "Status changes",
-        "description": "When an issue you follow changes status (e.g. todo, in progress, done)"
+        "description": "When an task you follow changes status (e.g. todo, in progress, done)"
       },
       "comments": {
         "label": "Comments & Mentions",
-        "description": "New comments on issues you follow, or when someone @mentions you"
+        "description": "New comments on tasks you follow, or when someone @mentions you"
       },
       "updates": {
         "label": "Priority & Due date",
-        "description": "When priority or due date changes on issues you follow"
+        "description": "When priority or due date changes on tasks you follow"
       },
       "agent_activity": {
         "label": "Agent activity",
@@ -357,11 +357,11 @@
       "title": "System Notifications",
       "description": "Control native OS notification banners shown when Goosar is in the background.",
       "label": "Show system notifications",
-      "hint": "Show a banner from your operating system for new inbox items when the app isn't focused."
+      "hint": "Show a banner from your operating system for new feed items when the app isn't focused."
     },
     "browser": {
       "label": "Browser notifications",
-      "hint": "Allow this browser to show notification banners for new inbox items.",
+      "hint": "Allow this browser to show notification banners for new feed items.",
       "enable": "Enable",
       "granted": "This browser can show notification banners.",
       "denied": "Blocked by your browser. Enable notifications for this site in your browser settings.",
@@ -424,10 +424,10 @@
     "context_label": "Context",
     "context_placeholder": "Background information and context for AI agents working in this workspace",
     "slug_label": "Slug",
-    "issue_prefix_label": "Issue prefix",
-    "issue_prefix_hint": "Used in issue numbers like {{example}}.",
-    "prefix_confirm_title": "Change issue prefix?",
-    "prefix_confirm_description": "All issues will be renumbered from {{oldPrefix}}-N to {{newPrefix}}-N. External references — pull request titles, branch names, links in docs and chat — that use {{oldPrefix}}-N will stop resolving.",
+    "issue_prefix_label": "Task prefix",
+    "issue_prefix_hint": "Used in task numbers like {{example}}.",
+    "prefix_confirm_title": "Change task prefix?",
+    "prefix_confirm_description": "All tasks will be renumbered from {{oldPrefix}}-N to {{newPrefix}}-N. External references — pull request titles, branch names, links in docs and chat — that use {{oldPrefix}}-N will stop resolving.",
     "save": "Save",
     "saving": "Saving...",
     "manage_hint": "Only admins and owners can update workspace settings.",
@@ -453,7 +453,7 @@
   },
   "delete_workspace_dialog": {
     "title": "Delete workspace",
-    "description": "This cannot be undone. All issues, agents, and data will be permanently removed.",
+    "description": "This cannot be undone. All tasks, agents, and data will be permanently removed.",
     "type_to_confirm_prefix": "To confirm, type",
     "type_to_confirm_suffix": " below.",
     "cancel": "Cancel",
@@ -472,8 +472,8 @@
     "master_description_off": "GitHub features are turned off. The PR sidebar, co-author trailer, and auto-link are paused. Data on the backend is not deleted.",
     "section_connection": "Connection",
     "connection_title": "GitHub App",
-    "connection_description_prefix": "Link issues to pull requests automatically. When a PR with",
-    "connection_description_suffix": "in its branch, title, or body is merged, the corresponding issue moves to",
+    "connection_description_prefix": "Link tasks to pull requests automatically. When a PR with",
+    "connection_description_suffix": "in its branch, title, or body is merged, the corresponding task moves to",
     "connection_description_done": "Done",
     "connection_identifier_example": "MUL-123",
     "connected_to": "Connected to {{login}}",
@@ -497,12 +497,12 @@
     "toast_disconnected": "GitHub App disconnected",
     "section_features": "Features",
     "feature_pr_sidebar_label": "Pull Request sidebar",
-    "feature_pr_sidebar_description": "Show linked pull requests inside the issue detail sidebar.",
+    "feature_pr_sidebar_description": "Show linked pull requests inside the task detail sidebar.",
     "feature_co_author_label": "Co-authored-by trailer",
     "feature_co_author_description_prefix": "Append",
     "feature_co_author_description_suffix": "to commits authored by agents.",
-    "feature_auto_link_label": "Auto-link issues and PRs",
-    "feature_auto_link_description": "Match PR titles, bodies, and branch names against issue identifiers and create the link automatically.",
+    "feature_auto_link_label": "Auto-link tasks and PRs",
+    "feature_auto_link_description": "Match PR titles, bodies, and branch names against task identifiers and create the link automatically.",
     "section_repositories": "Repositories",
     "repositories_shortcut_label": "Repository URLs live in the Repositories tab",
     "repositories_shortcut_link": "Manage repositories →",
@@ -510,7 +510,7 @@
   },
   "vcs": {
     "section_title": "Git providers (self-hosted)",
-    "page_description": "Connect a self-hosted Forgejo, Gitea, or GitLab instance to mirror pull requests onto issues. Each connection uses an access token; agents push branches and open PRs using the runtime's own Git credentials.",
+    "page_description": "Connect a self-hosted Forgejo, Gitea, or GitLab instance to mirror pull requests onto tasks. Each connection uses an access token; agents push branches and open PRs using the runtime's own Git credentials.",
     "connect_title": "Connect a provider instance",
     "connected_as": "Connected as {{login}}",
     "form_provider_label": "Provider",
@@ -533,7 +533,7 @@
     "copied": "Copied to clipboard",
     "copy_failed": "Could not copy",
     "disconnect_confirm_title": "Disconnect this provider?",
-    "disconnect_confirm_description": "Mirrored pull requests and their issue links for this connection will be removed. This cannot be undone.",
+    "disconnect_confirm_description": "Mirrored pull requests and their task links for this connection will be removed. This cannot be undone.",
     "disconnect_confirm_cancel": "Cancel",
     "disconnect_confirm_action": "Disconnect",
     "toast_connected": "Provider connected",
@@ -581,7 +581,7 @@
   },
   "slack": {
     "section_title": "Slack",
-    "page_description": "Connect each Goosar Agent to its own Slack bot. Members can DM the bot, @mention it in a channel, and type /issue to spin up a new Goosar issue.",
+    "page_description": "Connect each Goosar Agent to its own Slack bot. Members can DM the bot, @mention it in a channel, and type /task to spin up a new Goosar task.",
     "not_enabled_title": "Slack integration not enabled",
     "not_enabled_description_prefix": "Set",
     "not_enabled_description_suffix": "on the server to enable Slack bot installations.",
@@ -1037,7 +1037,7 @@
       },
       "member": {
         "label": "Member",
-        "description": "Create and work on issues"
+        "description": "Create and work on tasks"
       }
     },
     "remove_member_unavailable": "This member has neither a display name nor an email to type, so the removal cannot be confirmed here.",
@@ -1049,7 +1049,7 @@
     "role_demote_owner_to_admin_description": "{{name}} keeps admin rights but loses the right to delete {{workspace}} and to manage other owners, so they can no longer undo your decisions or remove you. Their machines, agents and work are untouched.",
     "role_demote_owner_to_member_description": "{{name}} loses the right to delete {{workspace}} and to manage other owners, and with it access to the workspace configuration and keys, to the provisioning pins and to member management. Their machines, agents and work are untouched.",
     "role_demote_admin_title": "Make {{name}} a plain member",
-    "role_demote_admin_description": "{{name}} loses access to the workspace configuration and its keys, to the provisioning pins, to member management and to editing other people's agents, skills and runtimes. Their own machines, agents and issues are untouched, and perimeter access, if granted, stays granted.",
+    "role_demote_admin_description": "{{name}} loses access to the workspace configuration and its keys, to the provisioning pins, to member management and to editing other people's agents, skills and runtimes. Their own machines, agents and tasks are untouched, and perimeter access, if granted, stays granted.",
     "role_change_unavailable": "This member has neither a display name nor an email to type, so the role change cannot be confirmed here.",
     "perimeter_grant_title": "Give {{name}} perimeter access",
     "perimeter_grant_description": "{{name}}'s Helper gets seeded with the corporate MCP preset catalog, and onboarding starts asking them for corporate tokens. Seeding happens once and is not undone by revoking access — to take it back you have to remove {{name}} from the workspace.",
@@ -1302,7 +1302,7 @@
       "deactivate_action": "Deactivate",
       "deactivate_aria": "Deactivate {{name}}",
       "deactivate_confirm": "Deactivate",
-      "deactivate_confirm_description": "Their sessions end, personal access tokens are revoked and live connections are closed. Issues, comments and authorship stay intact, and the account can be restored.",
+      "deactivate_confirm_description": "Their sessions end, personal access tokens are revoked and live connections are closed. Tasks, comments and authorship stay intact, and the account can be restored.",
       "deactivate_confirm_title": "Deactivate {{name}}?",
       "deactivated_badge": "Deactivated",
       "description": "Every workspace of the deployment. Find one, then edit its configuration layer or place a personal override on one of its members — deployment role only, no membership needed.",

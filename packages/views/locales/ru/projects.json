@@ -28,7 +28,7 @@
     "progress": "Прогресс",
     "lead": "Ответственный",
     "created": "Создан",
-    "issues": "Issue"
+    "issues": "Задачи"
   },
   "status": {
     "planned": "Запланирован",
@@ -75,13 +75,13 @@
     "clear_date": "Очистить дату",
     "description_placeholder": "Добавьте описание...",
     "description_hint": "Агенты получают это описание как контекст для каждой задачи в проекте.",
-    "empty_issues_title": "Связанных issue нет",
-    "empty_issues_hint": "Создайте новый issue или добавьте в проект существующие.",
-    "empty_issues_new_button": "Новый issue",
-    "no_issues_yet": "Пока нет ни одного issue",
+    "empty_issues_title": "Связанных задач нет",
+    "empty_issues_hint": "Создайте новую задачу или добавьте в проект существующие.",
+    "empty_issues_new_button": "Новая задача",
+    "no_issues_yet": "Пока нет ни одной задачи",
     "toast_link_copied": "Ссылка скопирована",
     "toast_project_deleted": "Проект удалён",
-    "toast_move_issue_failed": "Не удалось переместить issue"
+    "toast_move_issue_failed": "Не удалось переместить задачу"
   },
   "resources": {
     "section_header": "Ресурсы",
@@ -122,7 +122,7 @@
   },
   "delete_dialog": {
     "title": "Удалить проект",
-    "description": "Проект будет удалён. Issue сохранятся, но перестанут быть привязаны к нему.",
+    "description": "Проект будет удалён. Задача сохранятся, но перестанут быть привязаны к нему.",
     "confirm": "Удалить",
     "cancel": "Отмена"
   },

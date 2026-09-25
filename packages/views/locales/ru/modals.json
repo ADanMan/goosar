@@ -8,17 +8,17 @@
   },
   "create_workspace": {
     "title": "Создать рабочее пространство",
-    "description": "Рабочее пространство — общее место, где команда ведёт проекты и issue."
+    "description": "Рабочее пространство — общее место, где команда ведёт проекты и задачи."
   },
   "delete_issue": {
-    "title": "Удалить issue",
-    "description": "Issue и все комментарии к нему будут удалены навсегда. Отменить это нельзя.",
-    "hint": "Удалять issue может любой участник рабочего пространства.",
+    "title": "Удалить задачу",
+    "description": "Задача и все комментарии к нему будут удалены навсегда. Отменить это нельзя.",
+    "hint": "Удалять задачи может любой участник рабочего пространства.",
     "cancel": "Отмена",
     "confirm": "Удалить",
     "deleting": "Удаляем...",
-    "toast_deleted": "Issue удалён",
-    "toast_delete_failed": "Не удалось удалить issue"
+    "toast_deleted": "Задача удалён",
+    "toast_delete_failed": "Не удалось удалить задачу"
   },
   "feedback": {
     "title": "Обратная связь",
@@ -33,27 +33,27 @@
     "github_hint_link": "GitHub"
   },
   "issue_picker": {
-    "search_placeholder": "Поиск по issue...",
+    "search_placeholder": "Поиск по задачам...",
     "searching": "Ищем...",
     "no_results": "Ничего не нашли.",
-    "prompt_to_search": "Начните вводить, чтобы найти issue"
+    "prompt_to_search": "Начните вводить, чтобы найти задачу"
   },
   "set_parent": {
-    "title": "Выбрать родительский issue",
-    "description": "Найдите issue, который станет родительским для текущего",
-    "toast_failed": "Не удалось обновить issue",
-    "toast_success": "{{identifier}} — теперь родительский issue"
+    "title": "Выбрать родительскую задачу",
+    "description": "Найдите задачу, которая станет родительской для текущей",
+    "toast_failed": "Не удалось обновить задачу",
+    "toast_success": "{{identifier}} — теперь родительскую задачу"
   },
   "add_child": {
-    "title": "Добавить дочерний issue",
-    "description": "Найдите issue, который станет дочерним",
-    "toast_failed": "Не удалось добавить дочерний issue",
+    "title": "Добавить дочернюю задачу",
+    "description": "Найдите задачу, которая станет дочерней",
+    "toast_failed": "Не удалось добавить дочернюю задачу",
     "toast_success": "{{identifier}} добавлен как дочерний"
   },
   "run_confirm": {
     "title_assign": "Подтвердить назначение?",
-    "assign_single": "Назначить этот issue на {{name}}. Если условия запуска выполнены, работа начнётся сразу.",
-    "assign_batch": "Назначить {{count}} issue на {{name}}. Если условия запуска выполнены, работа начнётся сразу.",
+    "assign_single": "Назначить эту задачу на {{name}}. Если условия запуска выполнены, работа начнётся сразу.",
+    "assign_batch": "Назначить {{count}} задач на {{name}}. Если условия запуска выполнены, работа начнётся сразу.",
     "note_label": "Записка при передаче (необязательно)",
     "note_placeholder": "Что важно: объём, на чём сосредоточиться, чего делать не нужно…",
     "note_unsupported": "Среда выполнения слишком старая и не примет эту записку — её могут не прочитать.",
@@ -61,7 +61,7 @@
     "dont_start": "Пока не начинать",
     "toast_failed": "Не удалось выполнить действие",
     "create_will_start": "{{name}} возьмётся за работу сразу после создания.",
-    "create_will_start_squad": "Лидер {{name}} посмотрит issue и сразу после создания начнёт раздавать работу.",
+    "create_will_start_squad": "Лидер {{name}} посмотрит задачи и сразу после создания начнёт раздавать работу.",
     "create_parked": "Назначено — в «Бэклоге» работа не начнётся."
   },
   "create_squad": {
@@ -145,23 +145,23 @@
     "local_hint": "Агенты на других компьютерах этот путь не увидят и не смогут запуститься. Для общей работы берите репозитории."
   },
   "create_issue": {
-    "sr_manual": "Новый issue",
-    "sr_agent": "Быстро создать issue",
+    "sr_manual": "Новая задача",
+    "sr_agent": "Быстро создать задачу",
     "manual_breadcrumb": "Создать вручную",
     "agent_breadcrumb": "Создать через агента",
-    "title_placeholder": "Заголовок issue",
+    "title_placeholder": "Заголовок задачи",
     "description_placeholder": "Добавьте описание...",
     "more_options_aria": "Другие параметры",
     "title_required": "Сначала введите название",
-    "submit": "Создать issue",
+    "submit": "Создать задачу",
     "submitting": "Создаём...",
-    "toast_created": "Issue создан",
+    "toast_created": "Задача создан",
     "view_issue": "Открыть",
-    "toast_failed": "Не удалось создать issue",
-    "toast_duplicate_title": "Такой issue уже есть",
+    "toast_failed": "Не удалось создать задачу",
+    "toast_duplicate_title": "Такая задача уже есть",
     "toast_duplicate_view": "Открыть существующий",
-    "toast_link_subissues_all_failed": "Не удалось привязать дочерние issue",
-    "toast_link_subissues_partial": "Не удалось привязать {{failed}} из {{total}} дочерних issue",
+    "toast_link_subissues_all_failed": "Не удалось привязать дочерние задачи",
+    "toast_link_subissues_partial": "Не удалось привязать {{failed}} из {{total}} дочерних задач",
     "toast_link_labels_failed": "Не удалось добавить метки",
     "toast_set_properties_failed": "Не удалось заполнить дополнительные поля: {{count}}",
     "switch_to_agent": "Через агента",
@@ -169,15 +169,15 @@
     "switch_to_manual": "Вручную",
     "switch_to_manual_tooltip": "Создать вручную: поля заполняете вы",
     "create_another": "Создать ещё",
-    "remove_parent_aria": "Убрать родительский issue",
-    "remove_subissue_aria": "Убрать дочерний issue {{identifier}}",
-    "subissue_of": "Дочерний issue для {{identifier}}",
+    "remove_parent_aria": "Убрать родительскую задачу",
+    "remove_subissue_aria": "Убрать дочернюю задачу {{identifier}}",
+    "subissue_of": "Дочерняя задача для {{identifier}}",
     "subissue_chip": "Дочерний: {{identifier}}",
     "parent_with_id": "Родительский: {{identifier}}",
     "set_due_date": "Указать срок...",
     "set_start_date": "Указать дату начала...",
-    "set_parent": "Выбрать родительский issue...",
-    "add_subissue": "Добавить дочерний issue...",
+    "set_parent": "Выбрать родительскую задачу...",
+    "add_subissue": "Добавить дочернюю задачу...",
     "set_status": "Указать статус...",
     "set_priority": "Указать приоритет...",
     "set_assignee": "Назначить исполнителя...",
@@ -187,12 +187,12 @@
     "custom_properties": "Свои свойства",
     "remove_parent": "Убрать родительский",
     "set_parent_picker": {
-      "title": "Выбрать родительский issue",
-      "description": "Найдите issue, который станет родительским для нового"
+      "title": "Выбрать родительскую задачу",
+      "description": "Найдите задачу, которая станет родительской для новой"
     },
     "add_subissue_picker": {
-      "title": "Добавить дочерний issue",
-      "description": "Найдите issue, который станет дочерним для нового"
+      "title": "Добавить дочернюю задачу",
+      "description": "Найдите задачу, которая станет дочерней для новой"
     },
     "agent": {
       "created_by": "Автор",
@@ -216,11 +216,11 @@
       "sent_label": "Отправлено",
       "sent_count": "Отправлено: {{count}}",
       "version_blocked_tooltip": "Нужен CLI демона ≥ {{min}}",
-      "toast_sent": "Отправили агенту — когда закончит, придёт уведомление во Входящие",
+      "toast_sent": "Отправили агенту — когда закончит, придёт уведомление в ленту",
       "error_agent_unavailable_fallback": "Агент недоступен. Выберите другого.",
       "error_daemon_version": "CLI демона этого агента ({{current}}) ниже нужной версии {{min}}. Обновите демон, чтобы создавать через агента.",
       "error_unknown": "Не удалось отправить. Попробуйте ещё раз.",
-      "sub_issue_of": "Дочерний issue для {{identifier}}"
+      "sub_issue_of": "Дочерняя задача для {{identifier}}"
     }
   }
 }
