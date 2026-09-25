@@ -2,8 +2,6 @@ import ReactDOM from 'react-dom/client';
 import { configStore } from '@goosar/core/config';
 import App from './App';
 import './brand-fonts.css';
-import '@fontsource/geist-mono/400.css';
-import '@fontsource/geist-mono/700.css';
 import './globals.css';
 
 if (import.meta.env.DEV && import.meta.env.VITE_REACT_GRAB) {

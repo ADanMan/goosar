@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from 'next';
 import Script from 'next/script';
-import { Geist_Mono } from 'next/font/google';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@goosar/ui/components/ui/sonner';
 import { cn } from '@goosar/ui/lib/utils';
@@ -10,14 +9,9 @@ import { RESOURCES } from '@goosar/views/locales';
 import { getRequestLocale } from '@/lib/request-locale';
 import { PUBLIC_SITE_ORIGIN } from '@/lib/public-host';
 import { resolveBrowserApiBaseUrl, resolveBrowserWsUrl } from '@/config/runtime-urls';
-import { comfortaa, montserrat } from './fonts';
+import { manrope, unbounded, jetbrainsMono } from './fonts';
 import './globals.css';
 
-const geistMono = Geist_Mono({
-  subsets: ['latin'],
-  variable: '--font-mono',
-  fallback: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
-});
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -78,9 +72,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       suppressHydrationWarning
       className={cn(
         'antialiased font-sans h-full',
-        montserrat.variable,
-        comfortaa.variable,
-        geistMono.variable,
+        manrope.variable,
+        unbounded.variable,
+        jetbrainsMono.variable,
       )}
     >
       <body className="h-full overflow-hidden">

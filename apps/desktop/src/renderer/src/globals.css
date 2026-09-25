@@ -20,12 +20,12 @@
   }
 }
 
-/* Font stack: Montserrat (body) + Comfortaa (headings), both self-hosted via
-   Vite-bundled @font-face (./brand-fonts.css) — the same TTF files the web app
-   serves from apps/web/public/fonts. Keep the CJK fallback tail in sync with
-   the web app's stack (apps/web/app/globals.css).
-   Per-character fallback: Latin chars render with Montserrat/Comfortaa, CJK
-   chars render with the platform-native Chinese/Korean fallback when needed.
+/* Font stack: Manrope (body) + Unbounded (headings) + JetBrains Mono (code),
+   all self-hosted via Vite-bundled @font-face (./brand-fonts.css) — variable
+   woff2 downloaded from Google Fonts, matching apps/web/app/fonts.ts. Keep the
+   CJK fallback tail in sync with the web app's stack (apps/web/app/globals.css).
+   Per-character fallback: Latin/Cyrillic chars render with Manrope/Unbounded,
+   CJK chars render with the platform-native Chinese/Korean fallback when needed.
    Chinese fonts must stay before Korean fonts so zh users do not receive
    Korean Hanja glyph shapes.
 
@@ -34,16 +34,16 @@
    CJK fonts here would falsely signal alignment guarantees. Browser default
    fallback handles the rare mixed case correctly. */
 :root {
-  --font-sans: "Montserrat Variable", -apple-system, BlinkMacSystemFont,
+  --font-sans: "Manrope Variable", -apple-system, BlinkMacSystemFont,
                "Segoe UI", "PingFang SC", "Microsoft YaHei",
                "Noto Sans CJK SC", "Apple SD Gothic Neo", "Malgun Gothic",
                "Noto Sans CJK KR", sans-serif;
-  --font-heading: "Comfortaa Variable", "Montserrat Variable", -apple-system,
+  --font-heading: "Unbounded Variable", "Manrope Variable", -apple-system,
                   BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei",
                   "Noto Sans CJK SC", "Apple SD Gothic Neo", "Malgun Gothic",
                   "Noto Sans CJK KR", sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
-               monospace;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo,
+               Consolas, monospace;
 }
 
 /* Japanese-scoped CJK override. Japanese Kanji share the Han Unicode block
@@ -58,13 +58,13 @@
    `ja` or `ja-<region>` (App.tsx sets `ja-JP`), never unrelated subtags
    such as `jam`. */
 html[lang|="ja"] {
-  --font-sans: "Montserrat Variable", "Hiragino Sans",
+  --font-sans: "Manrope Variable", "Hiragino Sans",
                "Hiragino Kaku Gothic ProN", "Yu Gothic", "YuGothic", "Meiryo",
                "Noto Sans CJK JP", "Noto Sans JP", -apple-system,
                BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei",
                "Noto Sans CJK SC", "Apple SD Gothic Neo", "Malgun Gothic",
                "Noto Sans CJK KR", sans-serif;
-  --font-heading: "Comfortaa Variable", "Montserrat Variable", "Hiragino Sans",
+  --font-heading: "Unbounded Variable", "Manrope Variable", "Hiragino Sans",
                   "Hiragino Kaku Gothic ProN", "Yu Gothic", "YuGothic", "Meiryo",
                   "Noto Sans CJK JP", "Noto Sans JP", -apple-system,
                   BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei",
