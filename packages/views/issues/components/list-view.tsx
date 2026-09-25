@@ -47,7 +47,7 @@ import { VirtuosoSeed, VIRTUOSO_SEED_COUNT } from '../../common/virtuoso-seed';
 import { DeferredTooltip } from '../../common/deferred-tooltip';
 import { useRestoredScrollRef } from '../../platform';
 
-const LIST_ROW_ESTIMATED_HEIGHT = 36;
+const LIST_ROW_ESTIMATED_HEIGHT = 40;
 
 const EMPTY_PROGRESS_MAP = new Map<string, ChildProgress>();
 const EMPTY_IDS: string[] = [];

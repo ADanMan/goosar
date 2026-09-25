@@ -23,6 +23,7 @@ import { PriorityPicker, AssigneePicker, StartDatePicker, DueDatePicker } from '
 import { useViewStore } from '@goosar/core/issues/stores/view-store-context';
 import { ProgressRing } from './progress-ring';
 import type { ChildProgress } from './list-row';
+import { StatusStripe } from './task-properties';
 import { IssueActionsContextMenu } from '../actions';
 import { LabelChip } from '../../labels/label-chip';
 import { IssueAgentActivityIndicator } from './issue-agent-activity-indicator';
@@ -174,7 +175,8 @@ export const BoardCardContent = memo(function BoardCardContent({
   const showRightMeta = !!showStartDate || !!showDueDate || !!showChildProgress || showUpdatedHint;
 
   return (
-    <div className="rounded-lg border-[0.5px] border-surface-border bg-surface py-3 px-2.5 shadow-[var(--surface-shadow)] transition-colors group-hover/card:border-foreground/15 group-hover/card:bg-surface-hover group-data-[popup-open]/card:border-foreground/15 group-data-[popup-open]/card:bg-surface-hover">
+    <div className="relative overflow-hidden rounded-lg border-[0.5px] border-surface-border bg-surface py-3 pl-3 pr-2.5 shadow-[var(--surface-shadow)] transition-colors group-hover/card:border-foreground/15 group-hover/card:bg-surface-hover group-data-[popup-open]/card:border-foreground/15 group-data-[popup-open]/card:bg-surface-hover">
+      <StatusStripe status={issue.status} />
       {/* Row 1: priority + identifier (left), agent activity + assignee (right) */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">

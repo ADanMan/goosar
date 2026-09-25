@@ -7,7 +7,10 @@ import { Skeleton } from '@goosar/ui/components/ui/skeleton';
 import { cn } from '@goosar/ui/lib/utils';
 import { useWorkspaceId } from '@goosar/core/hooks';
 import { ViewStoreProvider } from '@goosar/core/issues/stores/view-store-context';
-import { getIssueSurfaceViewStore } from '@goosar/core/issues/stores/surface-view-store';
+import {
+  getIssueSurfaceViewStore,
+  getIssueSurfaceViewStateRegistrySnapshot,
+} from '@goosar/core/issues/stores/surface-view-store';
 import { issueScopeKey } from '@goosar/core/issues/surface/scope';
 import type { Issue } from '@goosar/core/types';
 import { BoardView } from '../components/board-view';
@@ -59,7 +62,17 @@ export function IssueSurface({
 }: IssueSurfaceComponentProps) {
   const wsId = useWorkspaceId();
   const resolvedSurfaceKey = surfaceKey ?? issueScopeKey(scope);
-  const store = useMemo(() => getIssueSurfaceViewStore(resolvedSurfaceKey), [resolvedSurfaceKey]);
+  const store = useMemo(() => {
+    // Core defaults viewMode to 'board'. On a workspace's first-ever open of
+    // this surface (no persisted preference yet), override to 'list' here —
+    // core stays untouched. Only viewMode is touched, so filters survive.
+    const isFirstOpen = !getIssueSurfaceViewStateRegistrySnapshot()[resolvedSurfaceKey];
+    const s = getIssueSurfaceViewStore(resolvedSurfaceKey);
+    if (isFirstOpen) {
+      s.setState({ viewMode: 'list' });
+    }
+    return s;
+  }, [resolvedSurfaceKey]);
 
   const contentKey = `${wsId}:${issueScopeKey(scope)}`;
   useEffect(() => {

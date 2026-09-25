@@ -2044,6 +2044,16 @@ export function IssueDetail({
                 it never overlaps the title (which truncates to make room).
                 It self-hides when no agent is active. */}
             <IssueAgentHeaderChip issueId={id} />
+            <AssigneePicker
+              assigneeType={issue.assignee_type}
+              assigneeId={issue.assignee_id}
+              onUpdate={handleUpdateField}
+              trigger={
+                <Button variant="ghost" size="sm" className="text-muted-foreground">
+                  Передать агенту
+                </Button>
+              }
+            />
             {onDone && issue.status !== 'done' && issue.status !== 'cancelled' && (
               <Tooltip>
                 <TooltipTrigger
