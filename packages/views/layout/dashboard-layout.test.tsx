@@ -30,7 +30,14 @@ vi.mock('@goosar/ui/components/ui/popover', () => ({
 vi.mock('./dashboard-guard', () => ({
   DashboardGuard: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
-vi.mock('./app-sidebar', () => ({ AppSidebar: () => <nav /> }));
+vi.mock('./nav-rail', () => ({
+  NavRail: () => <nav />,
+  navSectionForPath: () => null,
+}));
+vi.mock('./context-panel', () => ({ ContextPanel: () => null }));
+vi.mock('./command-bar', () => ({ CommandBar: () => null }));
+vi.mock('../navigation', () => ({ useNavigation: () => ({ pathname: '/acme/issues' }) }));
+vi.mock('@goosar/core/paths', () => ({ useWorkspacePaths: () => ({}) }));
 vi.mock('./navigation-progress', () => ({ NavigationProgress: () => null }));
 vi.mock('./workspace-presence-prefetch', () => ({
   WorkspacePresencePrefetch: () => null,
