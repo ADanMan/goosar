@@ -327,6 +327,15 @@ export default function App() {
     document.documentElement.lang = HTML_LANG[locale];
   }, [locale]);
 
+  // macOS uses `titleBarStyle: 'hiddenInset'` (see apps/desktop/src/main),
+  // so the traffic-light buttons float over the window content instead of
+  // reserving their own bar. `data-os="macos"` lets desktop-only CSS give
+  // the nav rail's first item room to clear them (T-014); other platforms
+  // keep their native title bar and need no extra clearance.
+  useLayoutEffect(() => {
+    document.documentElement.dataset.os = os;
+  }, [os]);
+
   useEffect(() => {
     window.desktopAPI.setUiLocale?.(locale);
   }, [locale]);
