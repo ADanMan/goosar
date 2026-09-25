@@ -219,7 +219,7 @@ function getChecksBadge(
     case 'pending':
       return {
         icon: CircleDashed,
-        className: 'text-amber-600 dark:text-amber-400',
+        className: 'text-warning',
         label: t(($) => $.detail.pull_request_checks_running, {
           passed: status.passed,
           total: status.total,
@@ -271,7 +271,7 @@ function getMergeBadge(status: PullRequestMergeStatus, t: IssuesT): PullRequestB
     case 'conflicting':
       return {
         icon: TriangleAlert,
-        className: 'text-amber-600 dark:text-amber-400',
+        className: 'text-warning',
         label: t(($) => $.detail.pull_request_merge_conflicting),
       };
     case 'ready':

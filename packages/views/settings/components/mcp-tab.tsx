@@ -316,7 +316,7 @@ function McpServerRow({
         */}
         {fields.length > 0 ? (
           missing.length > 0 ? (
-            <p className="mt-1 text-xs leading-5 text-amber-600 dark:text-amber-500">
+            <p className="mt-1 text-xs leading-5 text-warning">
               {t(($) => $.mcp.credentials_missing_note, {
                 fields: missing.join(', '),
               })}

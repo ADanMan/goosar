@@ -71,7 +71,7 @@ export function McpCredentialsDialog({
           know that while they can still do something about it.
         */}
         {stillMissing.length > 0 ? (
-          <p className="text-xs text-amber-600 dark:text-amber-500">
+          <p className="text-xs text-warning">
             {t(($) => $.mcp.credentials_still_missing, {
               fields: stillMissing.map((field) => field.key).join(', '),
             })}

@@ -546,7 +546,7 @@ export function ManualCreatePanel({
               (toastId) => (
                 <div className="bg-popover text-popover-foreground border rounded-lg shadow-lg p-4 w-[360px]">
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="flex items-center justify-center size-5 rounded-full bg-amber-500/15 text-amber-500">
+                    <div className="flex items-center justify-center size-5 rounded-full bg-warning/15 text-warning">
                       <AlertTriangle className="size-3" />
                     </div>
                     <span className="text-sm font-medium">

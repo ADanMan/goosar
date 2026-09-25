@@ -277,7 +277,7 @@ function ToolkitCard({
           </div>
         ) : expired ? (
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 text-xs text-amber-600">
+            <span className="inline-flex items-center gap-1 text-xs text-warning">
               <AlertTriangle className="h-3 w-3" />
               {t(($) => $.composio.expired)}
             </span>
