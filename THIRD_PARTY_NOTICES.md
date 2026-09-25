@@ -2,7 +2,7 @@
 
 Goosar распространяется под лицензией MIT и включает перечисленные ниже компоненты.
 Для каждого указана лицензия и строки копирайта из его файла LICENSE; полные тексты лицензий приведены в приложении.
-Сгенерировано scripts/third-party-notices.mjs: 1822 компонентов.
+Сгенерировано scripts/third-party-notices.mjs: 1824 компонентов.
 
 | Компонент | Версия | Лицензия | Копирайт |
 |---|---|---|---|
@@ -189,7 +189,6 @@ Goosar распространяется под лицензией MIT и вкл�
 | npm: @floating-ui/utils | 0.2.11 | MIT | Copyright (c) 2021-present Floating UI contributors |
 | npm: @fontsource-variable/inter | 5.2.8 | OFL-1.1 | Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter) Inter-Italic[opsz,wght].ttf: Copyright 2016 The Inter Project Authors (https://github.com/rsms/inter) |
 | npm: @fontsource-variable/source-serif-4 | 5.2.9 | OFL-1.1 |  |
-| npm: @fontsource/geist-mono | 5.2.7 | OFL-1.1 | Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font.git) |
 | npm: @formatjs/fast-memoize | 3.1.2 | MIT | Copyright (c) 2023 FormatJS |
 | npm: @formatjs/intl-localematcher | 0.6.2, 0.8.4 | MIT | Copyright (c) 2023 FormatJS |
 | npm: @hono/node-server | 1.19.11 | MIT | Copyright (c) 2022 - present, Yusuke Wada and Hono contributors |
@@ -1165,6 +1164,7 @@ Goosar распространяется под лицензией MIT и вкл�
 | npm: jest-util | 29.7.0 | MIT | Copyright (c) Meta Platforms, Inc. and affiliates. |
 | npm: jest-validate | 29.7.0 | MIT | Copyright (c) Meta Platforms, Inc. and affiliates. |
 | npm: jest-worker | 29.7.0 | MIT | Copyright (c) Meta Platforms, Inc. and affiliates. |
+| font: JetBrains Mono |  | OFL-1.1 | Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono) |
 | npm: jimp-compact | 0.16.1 | MIT |  |
 | npm: jiti | 1.21.7, 2.6.1 | MIT | Copyright (c) Pooya Parsa <pooya@pi0.io> |
 | npm: jose | 6.2.2 | MIT | Copyright (c) 2018 Filip Skokan |
@@ -1220,6 +1220,7 @@ Goosar распространяется под лицензией MIT и вкл�
 | npm: magic-string | 0.30.21 | MIT | Copyright 2018 Rich Harris |
 | npm: make-fetch-happen | 14.0.3 | ISC | Copyright 2017-2022 (c) npm, Inc. |
 | npm: makeerror | 1.0.12 | BSD-3-Clause | Copyright (c) 2014, Naitik Shah. All rights reserved. |
+| font: Manrope |  | OFL-1.1 | Copyright 2018 The Manrope Project Authors (https://github.com/sharanda/manrope) |
 | npm: markdown-extensions | 2.0.0 | MIT | Copyright (c) Sindre Sorhus <sindresorhus@gmail.com> (https://sindresorhus.com) |
 | npm: markdown-table | 3.0.4 | MIT | Copyright (c) Titus Wormer <tituswormer@gmail.com> |
 | npm: marked | 16.4.2, 17.0.5, 18.0.3 | MIT | Copyright (c) 2018+, MarkedJS (https://github.com/markedjs/); Copyright (c) 2011-2018, Christopher Jeffrey (https://github.com/chjj/); Copyright © 2004, John Gruber |
@@ -1731,6 +1732,7 @@ Goosar распространяется под лицензией MIT и вкл�
 | npm: ua-parser-js | 1.0.41 | MIT | Copyright (c) 2012-2025 Faisal Salman <<f@faisalman.com>> |
 | npm: uc.micro | 2.1.0 | MIT |  |
 | npm: ufo | 1.6.3 | MIT | Copyright (c) Pooya Parsa <pooya@pi0.io> |
+| font: Unbounded |  | OFL-1.1 | Copyright 2022 The Unbounded Project Authors (https://github.com/wearetoolkits/unbounded) |
 | npm: unbox-primitive | 1.1.0 | MIT | Copyright (c) 2019 Jordan Harband |
 | npm: undici | 7.24.5 | MIT | Copyright (c) Matteo Collina and Undici contributors |
 | npm: undici-types | 6.21.0, 7.18.2 | MIT | Copyright (c) Matteo Collina and Undici contributors |

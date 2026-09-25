@@ -72,7 +72,23 @@ function goModuleLicenseText(gomodcache, mod) {
   return null;
 }
 
-const pkgs = [...npmPackages(), ...goPackages()].sort((a, b) => a.name.localeCompare(b.name));
+// Шрифты бандлятся файлами (apps/desktop/src/renderer/fonts, next/font), а не пакетами — перечисляем явно.
+const OFL_URL = 'https://openfontlicense.org/open-font-license-official-text/';
+const fontPackages = () =>
+  [
+    ['Manrope', 'Copyright 2018 The Manrope Project Authors (https://github.com/sharanda/manrope)'],
+    ['Unbounded', 'Copyright 2022 The Unbounded Project Authors (https://github.com/wearetoolkits/unbounded)'],
+    ['JetBrains Mono', 'Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)'],
+  ].map(([name, copyright]) => ({
+    eco: 'font',
+    name,
+    version: '',
+    license: 'OFL-1.1',
+    url: OFL_URL,
+    text: `${copyright}\n\nThis Font Software is licensed under the SIL Open Font License, Version 1.1.\nThe full text of the license is available at ${OFL_URL}`,
+  }));
+
+const pkgs = [...npmPackages(), ...goPackages(), ...fontPackages()].sort((a, b) => a.name.localeCompare(b.name));
 const textBySpdx = new Map();
 for (const p of pkgs) if (p.text && !textBySpdx.has(p.license)) textBySpdx.set(p.license, p.text);
 

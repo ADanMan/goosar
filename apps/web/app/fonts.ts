@@ -1,25 +1,20 @@
-import localFont from 'next/font/local';
+import { Manrope, Unbounded, JetBrains_Mono } from 'next/font/google';
 
-export const comfortaa = localFont({
-  src: '../public/fonts/Comfortaa.ttf',
-  weight: '300 700',
+export const manrope = Manrope({
+  subsets: ['latin', 'cyrillic'],
   display: 'swap',
-  variable: '--font-comfortaa',
+  variable: '--font-manrope',
 });
 
-export const montserrat = localFont({
-  src: [
-    {
-      path: '../public/fonts/Montserrat.ttf',
-      weight: '100 900',
-      style: 'normal',
-    },
-    {
-      path: '../public/fonts/Montserrat-Italic.ttf',
-      weight: '100 900',
-      style: 'italic',
-    },
-  ],
+export const unbounded = Unbounded({
+  subsets: ['latin', 'cyrillic'],
   display: 'swap',
-  variable: '--font-montserrat',
+  variable: '--font-unbounded',
+});
+
+export const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin', 'cyrillic'],
+  display: 'swap',
+  variable: '--font-jetbrains-mono',
+  fallback: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
 });
