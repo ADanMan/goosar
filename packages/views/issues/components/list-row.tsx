@@ -9,6 +9,7 @@ import type { Issue, Project, IssueProperty } from '@goosar/core/types';
 import { formatDateOnly } from '@goosar/core/issues/date';
 import { ActorAvatar } from '../../common/actor-avatar';
 import { PropertyIcon } from '../../common/property-icon';
+import { StatusStripe } from './task-properties';
 import { useWorkspacePaths } from '@goosar/core/paths';
 import { useQuery } from '@tanstack/react-query';
 import { useViewStore } from '@goosar/core/issues/stores/view-store-context';
@@ -80,12 +81,13 @@ function ListRowContent({
         ref={containerRef}
         style={containerStyle}
         {...containerProps}
-        className={`group/row flex h-9 items-center gap-2 px-4 text-sm transition-colors ${
+        className={`group/row relative flex h-10 items-center gap-2 pl-[11px] pr-4 text-sm transition-colors ${
           selected
             ? 'bg-surface-selected hover:not-data-[popup-open]:bg-surface-selected data-[popup-open]:bg-surface-selected'
             : 'hover:not-data-[popup-open]:bg-surface-hover data-[popup-open]:bg-surface-hover'
         } ${isDragging ? 'opacity-30' : ''}`}
       >
+        <StatusStripe status={issue.status} />
         <div
           className="relative flex shrink-0 items-center justify-center w-4 h-4"
           {...checkboxProps}
@@ -164,12 +166,20 @@ function ListRowContent({
             </span>
           )}
           {showAssignee && (
-            <ActorAvatar
-              actorType={issue.assignee_type!}
-              actorId={issue.assignee_id!}
-              size="sm"
-              enableHoverCard
-            />
+            <span className="relative inline-flex shrink-0">
+              <ActorAvatar
+                actorType={issue.assignee_type!}
+                actorId={issue.assignee_id!}
+                size="sm"
+                enableHoverCard
+              />
+              {issue.assignee_type === 'agent' && (
+                <span
+                  aria-label="агент"
+                  className="absolute -right-0.5 -bottom-0.5 size-2 rounded-full bg-accent-beak ring-1 ring-background"
+                />
+              )}
+            </span>
           )}
         </AppLink>
       </div>

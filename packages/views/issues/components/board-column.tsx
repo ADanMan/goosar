@@ -13,7 +13,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from '@goosar/ui/components/ui/dropdown-menu';
-import { STATUS_CONFIG } from '@goosar/core/issues/config';
 import { useViewStoreApi } from '@goosar/core/issues/stores/view-store-context';
 import { StatusHeading } from './status-heading';
 import { DraggableBoardCard } from './board-card';
@@ -74,7 +73,6 @@ export const BoardColumn = memo(function BoardColumn({
   sortLabel?: string | null;
 }) {
   const status = group.status;
-  const cfg = status ? STATUS_CONFIG[status] : null;
   const { setNodeRef, isOver } = useDroppable({ id: group.id });
   const viewStoreApi = useViewStoreApi();
   const { t } = useT('issues');
@@ -120,7 +118,7 @@ export const BoardColumn = memo(function BoardColumn({
   return (
     <div
       style={{ width: BOARD_COL_WIDTH }}
-      className={`flex shrink-0 flex-col rounded-xl ${cfg?.columnBg ?? 'bg-muted/40'} p-2`}
+      className="flex shrink-0 flex-col rounded-xl bg-background p-2"
     >
       <div className="mb-2 flex items-center justify-between px-1.5">
         <BoardGroupHeading group={group} count={totalCount ?? issueIds.length} />
