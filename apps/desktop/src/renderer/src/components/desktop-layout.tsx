@@ -6,10 +6,21 @@ import { useTabHistory } from '@/hooks/use-tab-history';
 import { SidebarProvider, SidebarTrigger, useSidebar } from '@goosar/ui/components/ui/sidebar';
 import { ModalRegistry } from '@goosar/views/modals/registry';
 import { KerberosPreflightGate } from './kerberos-preflight';
-import { AppSidebar, GlobalShortcuts, RealtimeStatusIndicator } from '@goosar/views/layout';
-import { SearchCommand, SearchTrigger } from '@goosar/views/search';
+import {
+  NavRail,
+  ContextPanel,
+  GlobalShortcuts,
+  RealtimeStatusIndicator,
+  navSectionForPath,
+} from '@goosar/views/layout';
+import { SearchCommand } from '@goosar/views/search';
 import { FloatingChat } from '@goosar/views/chat';
-import { WorkspaceSlugProvider, paths, useCurrentWorkspace } from '@goosar/core/paths';
+import {
+  WorkspaceSlugProvider,
+  paths,
+  useCurrentWorkspace,
+  useWorkspacePaths,
+} from '@goosar/core/paths';
 import { useNavigation } from '@goosar/views/navigation';
 import { getCurrentSlug, subscribeToCurrentSlug } from '@goosar/core/platform';
 import { useDesktopUnreadBadge } from '@goosar/views/platform';
@@ -78,10 +89,6 @@ function WindowToolbar() {
       </div>
     </div>
   );
-}
-
-function SidebarTopSpacer() {
-  return <div className={cn('shrink-0', TOP_BAR_HEIGHT_CLASS)} />;
 }
 
 function useNativeNavigationGestures() {
@@ -172,6 +179,18 @@ function DesktopInboxBridge() {
   return null;
 }
 
+function DesktopNavRailAndPanel() {
+  const { pathname } = useNavigation();
+  const p = useWorkspacePaths();
+  const activeSection = navSectionForPath(p, pathname);
+  return (
+    <>
+      <NavRail activeSection={activeSection} footerExtra={<NetworkStatusIndicator />} />
+      <ContextPanel activeSection={activeSection} />
+    </>
+  );
+}
+
 export function DesktopShell() {
   useInternalLinkHandler();
   useNativeNavigationGestures();
@@ -200,13 +219,7 @@ export function DesktopShell() {
                 bottom-left corner, outside the sidebar and the canvas flow. */}
             {slug && <RealtimeStatusIndicator />}
             {slug && <WindowToolbar />}
-            {slug && (
-              <AppSidebar
-                topSlot={<SidebarTopSpacer />}
-                searchSlot={<SearchTrigger />}
-                footerSlot={<NetworkStatusIndicator />}
-              />
-            )}
+            {slug && <DesktopNavRailAndPanel />}
             {/* Right side: header + content container */}
             <div className="flex flex-1 min-w-0 flex-col">
               <MainTopBar />

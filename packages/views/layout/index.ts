@@ -1,4 +1,7 @@
-export { AppSidebar } from './app-sidebar';
+export { NavRail, navSectionForPath } from './nav-rail';
+export { ContextPanel } from './context-panel';
+export { CommandBar } from './command-bar';
+export type { NavSection } from './nav-sections';
 export {
   CollectionPageHeader,
   CollectionPageHeaderAction,
