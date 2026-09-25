@@ -52,7 +52,9 @@ Acceptance criteria:
 Оценка: 1.5 дня
 Зависит от: T-001
 
-Задача: новый компонент `packages/views/layout/nav-rail.tsx`: 56px, тёмный (`--rail`), шесть пунктов из раздела 4.2, переключатель воркспейса аватаром сверху, профиль снизу; подпись пункта по наведению и по фокусу.
+Задача: добавить блок `sidebar-09` (`cd packages/ui && pnpm dlx shadcn@latest add sidebar-09`), из него взять первую (иконочную) `Sidebar collapsible="none"` как рельсу `packages/views/layout/nav-rail.tsx`: 56px, тёмный (`--rail`), шесть пунктов из раздела 4.2, переключатель воркспейса аватаром сверху, профиль снизу; подпись пункта по наведению и по фокусу через `SidebarMenuButton tooltip`.
+
+Источник: shadcn block sidebar-09, MIT (ADR-0005).
 
 Acceptance criteria:
 - [ ] шесть пунктов ведут на `paths.workspace(slug).{inbox,issues,projects,agents,autopilots,settings}()`;
@@ -68,7 +70,7 @@ Acceptance criteria:
 Оценка: 2 дня
 Зависит от: T-004
 
-Задача: `context-panel.tsx` 260px с содержимым по разделу (задачи: сохранённые фильтры, избранное, проекты; исполнители: агенты/отряды; настройки: подразделы среды, навыки, расход); сворачивание кнопкой и `[` с сохранением в `localStorage`; `command-bar.tsx` с поиском (`⌘K`), кнопкой «Новая задача» (`C`) и хлебными крошками. Заменить `app-sidebar.tsx` в `app-shell`.
+Задача: вторая панель из того же блока `sidebar-09` становится `context-panel.tsx` 260px с содержимым по разделу (задачи: сохранённые фильтры, избранное, проекты; исполнители: агенты/отряды; настройки: подразделы среды, навыки, расход); сворачивание кнопкой и `[` с сохранением в `localStorage`; `command-bar.tsx` с поиском (`⌘K`), кнопкой «Новая задача» (`C`) и хлебными крошками. Заменить `app-sidebar.tsx` в `app-shell`.
 
 Acceptance criteria:
 - [ ] `app-sidebar.tsx` не импортируется нигде, кроме собственного теста, либо удалён вместе с тестом;
@@ -77,6 +79,7 @@ Acceptance criteria:
 - [ ] `pnpm --filter @goosar/views test` и `typecheck` зелёные.
 
 Затрагивает: `packages/views/layout/context-panel.tsx`, `packages/views/layout/command-bar.tsx`, `packages/views/layout/app-shell.tsx`, `packages/views/layout/app-sidebar*.tsx`
+Источник: shadcn block sidebar-09 и `command.tsx` (cmdk), MIT (ADR-0005).
 Риск: L1
 
 ### T-006 · Словарь ru
@@ -137,6 +140,7 @@ Acceptance criteria:
 - [ ] высота строки 40px; при 500 задачах прокрутка без long tasks дольше 50 мс (вкладка Performance).
 
 Затрагивает: `packages/views/issues/issue-row.tsx`
+Источник: пример shadcn Tasks (TanStack Table, колонки status/priority с иконками) через уже имеющийся `packages/ui/components/ui/data-table.tsx`, MIT (ADR-0005).
 Риск: L1
 
 ### T-010 · Карточка задачи с лентой агента
@@ -174,7 +178,7 @@ Acceptance criteria:
 Оценка: 1 день
 Зависит от: T-003
 
-Задача: первый экран `apps/web/features/landing/components/hero.tsx` без скриншота; вместо него анимированная лента из статического сценария `demo-log.ts` (10–14 строк: постановка задачи, шаги агента, PR, статус «На проверке»); анимация отключается при `prefers-reduced-motion`.
+Задача: добавить `@magicui/terminal` (`cd packages/ui && pnpm dlx shadcn@latest add @magicui/terminal`, компоненты Terminal, TypingAnimation, AnimatedSpan); первый экран `apps/web/features/landing/components/hero.tsx` без скриншота; вместо него лента на Terminal из статического сценария `demo-log.ts` (10–14 строк: постановка задачи, шаги агента, PR, статус «На проверке»); анимация отключается при `prefers-reduced-motion`.
 
 Acceptance criteria:
 - [ ] `apps/web/public/images/landing-hero.png` удалён и не упоминается;
@@ -182,7 +186,8 @@ Acceptance criteria:
 - [ ] при `prefers-reduced-motion: reduce` лента показана целиком без анимации;
 - [ ] Lighthouse Performance главной не ниже 90 на десктопном профиле.
 
-Затрагивает: `apps/web/features/landing/components/hero.tsx`, `apps/web/features/landing/demo-log.ts`, `apps/web/public/images/`
+Затрагивает: `apps/web/features/landing/components/hero.tsx`, `apps/web/features/landing/demo-log.ts`, `apps/web/public/images/`, `packages/ui/components/ui/terminal.tsx`
+Источник: Magic UI Terminal, MIT (ADR-0005); `THIRD_PARTY_NOTICES.md` не меняется (код копируется в репо, лицензия MIT указывается в шапке файла).
 Риск: L0
 
 ### T-013 · Лендинг: секции и скриншоты нового интерфейса
