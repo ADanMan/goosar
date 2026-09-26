@@ -16,10 +16,18 @@ export default defineConfig({
     baseURL: E2E_BASE_URL,
     headless: true,
   },
+  expect: {
+    toHaveScreenshot: { maxDiffPixelRatio: 0.005, animations: 'disabled' },
+  },
   projects: [
     {
       name: 'chromium',
       use: { browserName: 'chromium' },
+    },
+    {
+      name: 'visual',
+      testDir: './e2e/visual',
+      use: { browserName: 'chromium', viewport: { width: 1600, height: 1000 } },
     },
   ],
   // Don't auto-start servers — they must be running already

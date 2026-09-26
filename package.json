@@ -22,6 +22,8 @@
     "build": "turbo build --filter=!@goosar/mobile",
     "typecheck": "turbo typecheck --filter=!@goosar/mobile",
     "test": "turbo test --filter=!@goosar/mobile",
+    "e2e": "playwright test",
+    "e2e:visual": "playwright test --project visual",
     "lint": "turbo lint --filter=!@goosar/mobile",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,mjs,cjs}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,mjs,cjs}\"",
