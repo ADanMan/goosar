@@ -42,97 +42,80 @@ export function createEnDict(allowSignup: boolean): LandingDict {
     },
 
     features: {
-      teammates: {
+      agentExecutor: {
         label: 'EXECUTOR',
         title: 'The agent is a full-fledged executor, not a hint on the side',
         description:
-          'An agent owns its task the way an employee does: it comments, changes statuses, creates subtasks, and closes the task with a finished result. Your activity feed shows people and agents working side by side.',
-        cards: [
+          'An agent shows up in the task list next to your people: status bar on the left, an agent dot on the assignee avatar. It comments, changes statuses, and closes the task with a finished result.',
+        points: [
           {
-            title: 'Agents in the assignee picker',
+            title: 'Agents in the assignee list',
             description:
-              'People and agents appear in the same list. A task is assigned to an agent the same way it is assigned to an employee.',
+              'People and agents share one list. A task is assigned to an agent the same way it is assigned to an employee.',
+          },
+          {
+            title: 'Status visible at a glance',
+            description:
+              'The status bar on the left of the row and the agent dot on the avatar show who owns the task and where it stands.',
           },
           {
             title: 'Owns the task end to end',
             description:
-              'The agent comments, changes statuses, and creates subtasks on its own \u2014 and hands back a finished result, not a draft to decode.',
+              'The agent comments, changes statuses, and hands back a finished result \u2014 not a draft to decode.',
+          },
+        ],
+        imageAlt: 'Task list with an agent among the assignees, status bar on the left',
+      },
+      selfHosted: {
+        label: 'YOUR PERIMETER',
+        title: 'Self-hosted, inside your perimeter',
+        description:
+          'Docker images, an offline install set, and a Helm chart for Kubernetes. No calls to external services: the server, the database, and the agent runtimes stay on your infrastructure.',
+        points: [
+          {
+            title: 'Docker images',
+            description: 'The full stack ships as Docker images you run on your own hosts.',
           },
           {
-            title: 'Squads led by an agent',
+            title: 'Offline install set',
             description:
-              'Squads are teams of agents and people under a leader agent: it splits the work, dispatches it, and assembles the result in the parent task.',
+              'An install bundle with no dependency on external registries or services during setup.',
+          },
+          {
+            title: 'Helm chart',
+            description: 'A Helm chart for Kubernetes deployments, versioned with the release.',
           },
         ],
       },
-      autonomous: {
-        label: 'OVERSIGHT',
-        title: 'Works on its own \u2014 under human control',
+      hermes: {
+        label: 'AGENT RUNTIME',
+        title: 'Hermes inside',
         description:
-          'Autopilots take over recurring work on schedules and webhooks. Significant actions are staged as drafts and executed only after a person approves them \u2014 every step leaves a trace in the history.',
-        cards: [
+          'Goosar ships with Hermes Agent, a standard agent runtime speaking ACP (Agent Control Protocol). It is bundled with the desktop app, so an agent is ready to run without a separate setup step.',
+        points: [
           {
-            title: 'Human-in-the-loop',
-            description:
-              'Draft \u2192 approve: significant actions run only after human confirmation, with a full trace in the task history.',
+            title: 'Standard agent runtime',
+            description: 'Hermes Agent is the default runtime that executes tasks assigned to agents.',
           },
           {
-            title: 'Autopilots',
+            title: 'ACP protocol',
             description:
-              'Recurring work runs on schedules and webhooks. Routine goes to agents; people handle the exceptions.',
+              'Agents talk to the platform over ACP, an open protocol, not a private integration.',
           },
           {
-            title: 'Progress and blockers in real time',
-            description:
-              'When an agent gets stuck, it raises a flag immediately, and you watch progress live \u2014 no checking back hours later to find nothing happened.',
+            title: 'Bundled with desktop',
+            description: 'The desktop app ships with Hermes Agent included \u2014 nothing extra to install.',
           },
         ],
+        imageAlt: 'Task card with the agent activity feed',
       },
-      skills: {
-        label: 'SKILLS',
-        title: 'A skill is the standard of a role, not a personal trick',
+      install: {
+        label: 'INSTALL',
+        title: 'Self-hosted install in five minutes',
         description:
-          'An administrator assembles skills \u2014 code, config, and context bundled together \u2014 and an employee gets a ready-made workplace. A process described once runs the same way for every agent, and the library compounds over time.',
-        cards: [
-          {
-            title: 'Skills set the role standard',
-            description:
-              'Describe a process once \u2014 customer replies, proposal drafts, report assembly \u2014 and every agent executes it the same way.',
-          },
-          {
-            title: 'Assembled by an administrator',
-            description:
-              'One person configures it, the whole team uses it: an employee gets a working agentic workplace with nothing to set up.',
-          },
-          {
-            title: 'Compound growth',
-            description:
-              'Day 1: you teach an agent one process. Day 30: every role has its own set of skills. Your team\u2019s capabilities accumulate.',
-          },
-        ],
-      },
-      runtimes: {
-        label: 'PERIMETER',
-        title: 'Enterprise AI inside your perimeter',
-        description:
-          'Your data never leaves the perimeter: agents run on your machines and your infrastructure, and reach models through the beeGate gateway \u2014 no direct internet access. Every runtime is visible in a single panel.',
-        cards: [
-          {
-            title: 'Data stays in your perimeter',
-            description:
-              'Execution happens on your machines or in your cloud. Code and documents never pass through anyone else\u2019s servers.',
-          },
-          {
-            title: 'Models through the beeGate gateway',
-            description:
-              'A single OpenAI-compatible gateway to models: access, limits, and logging controlled in one place.',
-          },
-          {
-            title: 'Unified runtime panel',
-            description:
-              'Local daemons and cloud runtimes in one view: online status, usage charts, and activity in real time.',
-          },
-        ],
+          'One command brings up the full stack \u2014 server, database, and agent runtimes \u2014 on your own infrastructure.',
+        command: 'make selfhost',
+        note: 'Docker and Docker Compose required. See SELF_HOSTING.md for configuration options.',
       },
     },
 
