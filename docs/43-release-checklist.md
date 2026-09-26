@@ -8,16 +8,16 @@
 - [x] Версии 1.1.0 в семи `package.json` и `Chart.yaml`.
 - [x] `THIRD_PARTY_NOTICES.md` перегенерирован, три новых шрифта в списке.
 - [x] Миграций нет: `ls server/migrations` содержит только `001_init.*`.
-- [ ] (ОТЛОЖЕНО: ждёт решения владельца) Владелец подтвердил пуш ветки и тег (до этого пункта репозиторий локальный).
+- [x] Владелец подтвердил пуш ветки и тег (26.09.2026).
 
 ## Выкатка
-- [ ] Ветка слита в `main`, тег `v1.1.0` проставлен.
-- [ ] Образы собраны на сервере из `git archive v1.1.0`, запушены как `v1.1.0` и `latest`.
-- [ ] `GOOSAR_IMAGE_TAG=v1.1.0` в `/opt/goosar/.env`, `docker compose up -d`.
-- [ ] Смоук из `32-test-plan.md`, раздел 5, пройден.
-- [ ] GitHub Release создан локальным пайплайном (goreleaser, desktop, helm, selfhost-бандл, image-kit), без Actions.
+- [x] Ветка слита в `main`, тег `v1.1.0` проставлен.
+- [x] Образы собраны на сервере из `git archive v1.1.0`, запушены как `v1.1.0` и `latest`.
+- [x] `GOOSAR_IMAGE_TAG=v1.1.0` в `/opt/goosar/.env`, `docker compose up -d`.
+- [x] Смоук из `32-test-plan.md`, раздел 5, пройден.
+- [x] GitHub Release создан локальным пайплайном (goreleaser, desktop, helm, selfhost-бандл, image-kit), без Actions.
 
 ## После
 - [ ] Через 15 минут: `docker compose logs --since 15m backend | grep -c ERR` равен 0.
-- [ ] `00-overview.md`: статус и ближайший шаг обновлены.
-- [ ] Точка отката зафиксирована: `GOOSAR_IMAGE_TAG=v1.0.1`, откат безопасен без ограничений, миграций не было.
+- [x] `00-overview.md`: статус и ближайший шаг обновлены.
+- [x] Точка отката зафиксирована: `GOOSAR_IMAGE_TAG=v1.0.1`, откат безопасен без ограничений, миграций не было.
