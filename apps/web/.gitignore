@@ -1,2 +1,6 @@
 .vercel
 .source/
+
+# Генерируется next dev, не хранить
+AGENTS.md
+CLAUDE.md
