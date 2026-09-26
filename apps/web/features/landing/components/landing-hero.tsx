@@ -97,9 +97,9 @@ function DemoTerminal({
   }
 
   return (
-    <Terminal className="max-h-none max-w-[560px] bg-black/24 text-left text-white">
-      {demoLog.map((line) => (
-        <AnimatedSpan key={line.key}>{lines[line.key]}</AnimatedSpan>
+    <Terminal className="max-h-none max-w-[560px] bg-black/24 text-left text-white" startOnView={false} sequence={false}>
+      {demoLog.map((line, index) => (
+        <AnimatedSpan startOnView={false} delay={index * 350} key={line.key}>{lines[line.key]}</AnimatedSpan>
       ))}
     </Terminal>
   );
