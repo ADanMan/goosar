@@ -15,13 +15,6 @@ export function toLandingDictionaryLocale(locale: Locale): LandingDictionaryLoca
   return locale === 'ru' ? 'ru' : 'en';
 }
 
-type FeatureSection = {
-  label: string;
-  title: string;
-  description: string;
-  cards: { title: string; description: string }[];
-};
-
 type FooterGroup = {
   label: string;
   links: { label: string; href: string }[];
@@ -50,10 +43,33 @@ export type LandingDict = {
     lines: Record<DemoLogLineKey, string>;
   };
   features: {
-    teammates: FeatureSection;
-    autonomous: FeatureSection;
-    skills: FeatureSection;
-    runtimes: FeatureSection;
+    agentExecutor: {
+      label: string;
+      title: string;
+      description: string;
+      points: { title: string; description: string }[];
+      imageAlt: string;
+    };
+    selfHosted: {
+      label: string;
+      title: string;
+      description: string;
+      points: { title: string; description: string }[];
+    };
+    hermes: {
+      label: string;
+      title: string;
+      description: string;
+      points: { title: string; description: string }[];
+      imageAlt: string;
+    };
+    install: {
+      label: string;
+      title: string;
+      description: string;
+      command: string;
+      note: string;
+    };
   };
   businessRoles: {
     label: string;
