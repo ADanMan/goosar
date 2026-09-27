@@ -31,7 +31,7 @@ const nextConfig: NextConfig = {
   transpilePackages: ['@goosar/core', '@goosar/ui', '@goosar/views'],
   ...(allowedDevOrigins && allowedDevOrigins.length > 0 ? { allowedDevOrigins } : {}),
   images: {
-    formats: ['image/avif', 'image/webp'],
+    formats: ['image/webp'],
     qualities: [75, 80, 85],
   },
   async rewrites() {
