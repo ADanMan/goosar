@@ -17,7 +17,7 @@ export function SettingsTab({
   return (
     <div className="space-y-8">
       <header>
-        <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+        <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
         {description ? (
           <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">{description}</p>
         ) : null}

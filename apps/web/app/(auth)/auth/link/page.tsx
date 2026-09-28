@@ -80,7 +80,7 @@ export default function AuthLinkPage() {
       <div className="flex min-h-screen items-center justify-center">
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl">{t(($) => $.web.login_link.failed_title)}</CardTitle>
+            <CardTitle className="text-xl">{t(($) => $.web.login_link.failed_title)}</CardTitle>
             <CardDescription>
               {phase === 'missing'
                 ? t(($) => $.web.login_link.missing_token)
@@ -104,7 +104,7 @@ export default function AuthLinkPage() {
     <div className="flex min-h-screen items-center justify-center">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">{t(($) => $.web.login_link.opening_title)}</CardTitle>
+          <CardTitle className="text-xl">{t(($) => $.web.login_link.opening_title)}</CardTitle>
           <CardDescription>{t(($) => $.web.login_link.opening_description)}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-3">

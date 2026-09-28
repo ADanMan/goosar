@@ -190,7 +190,7 @@ export function InvitePage({ invitationId, onBack }: InvitePageProps) {
           </div>
 
           <div className="text-center space-y-2">
-            <h2 className="text-xl font-semibold">
+            <h2 className="text-lg font-semibold">
               {t(($) => $.main.join_title, {
                 workspace_name:
                   invitation.workspace_name ?? t(($) => $.main.fallback_workspace_name),

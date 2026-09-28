@@ -909,7 +909,7 @@ export function ModeChooser({ onBlank, onAI }: { onBlank: () => void; onAI: () =
           <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             {t(($) => $.creation_studio.eyebrow)}
           </div>
-          <h2 className="mt-2 text-balance text-2xl font-semibold tracking-tight sm:text-3xl">
+          <h2 className="mt-2 text-balance text-xl font-semibold tracking-tight sm:text-2xl">
             {t(($) => $.creation_studio.choose_title)}
           </h2>
           <p className="mt-3 text-pretty text-sm text-muted-foreground">
@@ -1065,7 +1065,7 @@ function TemplateChooser({
                 <Bot className="size-6" />
               </span>
               <div>
-                <h2 className="text-xl font-semibold">{selected.name}</h2>
+                <h2 className="text-lg font-semibold">{selected.name}</h2>
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">
                   {selected.description}
                 </p>
@@ -1527,7 +1527,7 @@ function BuilderSetup({
         <span className="flex size-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <MessageSquare className="size-5" />
         </span>
-        <h2 className="mt-5 text-xl font-semibold">
+        <h2 className="mt-5 text-lg font-semibold">
           {t(($) => $.creation_studio.builder.setup_title)}
         </h2>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">

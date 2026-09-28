@@ -57,7 +57,7 @@ export function StepWelcome({
           <div className="flex w-full max-w-[540px] flex-col gap-8">
             <div className="flex items-center gap-2.5">
               <GoosarIcon className="size-8 text-foreground" noSpin />
-              <span className="font-serif text-xl font-medium tracking-tight">
+              <span className="font-serif text-lg font-medium tracking-tight">
                 {t(($) => $.welcome.wordmark)}
               </span>
             </div>

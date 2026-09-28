@@ -347,7 +347,7 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
               render={
                 <button
                   type="button"
-                  className="text-2xl cursor-pointer rounded-lg p-1 -ml-1 hover:bg-accent/60 transition-colors"
+                  className="text-xl cursor-pointer rounded-lg p-1 -ml-1 hover:bg-accent/60 transition-colors"
                   title={t(($) => $.create_project.icon_tooltip)}
                 >
                   {icon || '📁'}

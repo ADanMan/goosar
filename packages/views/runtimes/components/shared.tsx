@@ -147,7 +147,7 @@ export function KpiCard({
       <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
         {label}
       </div>
-      <div className={`text-3xl font-semibold leading-none tabular-nums ${valueClass}`}>
+      <div className={`text-2xl font-semibold leading-none tabular-nums ${valueClass}`}>
         {value}
       </div>
       {hint != null && <div className="text-xs text-muted-foreground">{hint}</div>}

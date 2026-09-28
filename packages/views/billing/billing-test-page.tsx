@@ -49,7 +49,7 @@ export function BillingTestPage() {
   return (
     <div className="space-y-6 p-6">
       <header>
-        <h1 className="text-xl font-semibold">{t(($) => $.title)}</h1>
+        <h1 className="text-lg font-semibold">{t(($) => $.title)}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{t(($) => $.subtitle)}</p>
       </header>
 
@@ -168,7 +168,7 @@ function BalanceCard() {
           <ErrorText error={balance.error} />
         ) : (
           <div className="space-y-1 text-sm">
-            <div className="text-2xl font-semibold tabular-nums">
+            <div className="text-xl font-semibold tabular-nums">
               {balance.data?.balance_credit.toLocaleString() ?? 0}
               <span className="ml-1 text-sm font-normal text-muted-foreground">
                 {t(($) => $.balance.credits_suffix)}

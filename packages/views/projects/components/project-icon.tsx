@@ -12,7 +12,7 @@ export interface ProjectIconProps {
 const SIZE_CLASS: Record<ProjectIconSize, string> = {
   sm: 'size-3.5 text-xs leading-none',
   md: 'size-4 text-sm leading-none',
-  lg: 'size-6 text-2xl leading-none',
+  lg: 'size-6 text-xl leading-none',
 };
 
 export function ProjectIcon({ project, size = 'sm', className }: ProjectIconProps) {

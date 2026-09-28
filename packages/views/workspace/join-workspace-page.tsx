@@ -63,7 +63,7 @@ export function JoinWorkspacePage({ onCreateInstead }: { onCreateInstead?: () =>
       <div className="flex flex-1 flex-col items-center justify-center px-6 py-16">
         <div className="flex w-full max-w-2xl flex-col gap-6">
           <div className="text-center">
-            <h1 className="text-3xl font-semibold tracking-tight">{t(($) => $.join_page.title)}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">{t(($) => $.join_page.title)}</h1>
             <p className="mt-3 text-muted-foreground">{t(($) => $.join_page.description)}</p>
           </div>
 

@@ -2175,7 +2175,7 @@ export function IssueDetail({
                 ref={titleEditorRef}
                 defaultValue={issue.title}
                 placeholder={t(($) => $.detail.title_placeholder)}
-                className="w-full text-2xl font-bold leading-snug tracking-tight"
+                className="w-full text-xl font-bold leading-snug tracking-tight"
                 onReady={titleLazy.onReady}
                 onBlur={(value) => {
                   const trimmed = value.trim();
@@ -2188,7 +2188,7 @@ export function IssueDetail({
             <div
               role="button"
               tabIndex={0}
-              className="w-full cursor-text text-2xl font-bold leading-snug tracking-tight"
+              className="w-full cursor-text text-xl font-bold leading-snug tracking-tight"
               onClick={(e) => {
                 const sel = window.getSelection();
                 if (sel && !sel.isCollapsed) return;

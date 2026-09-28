@@ -255,7 +255,7 @@ export function ProjectDetail({ projectId }: { projectId: string }) {
             render={
               <button
                 type="button"
-                className="text-2xl cursor-pointer rounded-lg p-1 -ml-1 hover:bg-accent/60 transition-colors"
+                className="text-xl cursor-pointer rounded-lg p-1 -ml-1 hover:bg-accent/60 transition-colors"
                 title={t(($) => $.detail.icon_tooltip)}
               >
                 {project.icon || '📁'}

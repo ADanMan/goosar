@@ -59,57 +59,100 @@
     --color-card: var(--card);
     --color-foreground: var(--foreground);
     --color-background: var(--background);
-    --radius-sm: calc(var(--radius) * 0.6);
-    --radius-md: calc(var(--radius) * 0.8);
-    --radius-lg: var(--radius);
-    --radius-xl: calc(var(--radius) * 1.4);
-    --radius-2xl: calc(var(--radius) * 1.8);
-    --radius-3xl: calc(var(--radius) * 2.2);
-    --radius-4xl: calc(var(--radius) * 2.6);
+    --color-inverse: var(--inverse);
+    --color-inverse-foreground: var(--inverse-foreground);
+    --color-inverse-muted-foreground: var(--inverse-muted-foreground);
+    --color-warning-foreground: var(--warning-foreground);
+    /* Radius ramp: fixed steps on the 2px grid (6/8/10/12px for controls and
+       containers, larger steps for hero cards and pills). */
+    --radius-sm: 0.375rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.625rem;
+    --radius-xl: 0.75rem;
+    --radius-2xl: 1rem;
+    --radius-3xl: 1.25rem;
+    --radius-4xl: 1.5rem;
+    /* Type scale. The app uses seven steps (2xs..2xl); 3xl is the display
+       size reserved for the public site hero. Line heights stay on the 4px
+       grid. Sizes outside the scale (`text-[…px]`, text-4xl and up) are
+       rejected by scripts/check-ui-tokens.mjs. */
+    --text-2xs: 0.6875rem;
+    --text-2xs--line-height: 1rem;
+    --text-xs: 0.75rem;
+    --text-xs--line-height: 1rem;
+    --text-sm: 0.875rem;
+    --text-sm--line-height: 1.25rem;
+    --text-base: 1rem;
+    --text-base--line-height: 1.5rem;
+    --text-lg: 1.25rem;
+    --text-lg--line-height: 1.75rem;
+    --text-xl: 1.5rem;
+    --text-xl--line-height: 2rem;
+    --text-2xl: 2rem;
+    --text-2xl--line-height: 2.5rem;
+    --text-3xl: 3rem;
+    --text-3xl--line-height: 3.5rem;
+    /* Elevation: three levels. raised = cards and inputs at rest,
+       overlay = menus and popovers, dialog = modal windows and sheets. */
+    --shadow-sm: var(--shadow-raised);
+    --shadow-md: var(--shadow-overlay);
+    --shadow-lg: var(--shadow-dialog);
 }
 
 /* Palette: "Речная синь" (river blue) — a cool, water-toned brand
-   (oklch(0.48 0.10 230)) with a single warm accent, the beak accent
-   (oklch(0.72 0.17 60)), reserved for agent activity and "in progress"
-   states. Neutrals carry a cool blue tint (hue ~245) instead of the old
-   warm hue 60. The nav rail is a fixed dark tone shared by both themes. */
-:root {
+   (oklch(0.48 0.10 230)) with a single warm accent, the beak accent,
+   reserved for agent activity and "in progress" states. Neutrals are warm
+   (hue 70–75, chroma ≤ 0.012) so areas separate by tone rather than by
+   lines. The nav rail is a dark river tone. Every text pair clears 4.5:1 and
+   every UI pair 3:1 in both themes; scripts/check-ui-tokens.mjs recomputes
+   the ratios from this file.
+
+   Layers (z-index), kept as plain Tailwind steps: z-10 sticky headers and
+   in-page overlays, z-20 floating toolbars, z-30 side panels, z-40
+   backdrops, z-50 menus, popovers, dialogs and toasts. */
+:root,
+.landing-light {
     color-scheme: light;
     /* Surface system: the app shell is the quiet outer frame; the page canvas
        is where lists, boards, and conversations live; surfaces are reserved
        for bounded content groups; raised surfaces are ephemeral overlays. */
-    --app-shell: oklch(0.965 0.005 245);
-    --page-canvas: oklch(0.985 0.005 90);
-    --surface: oklch(1 0 0);
-    --surface-foreground: oklch(0.22 0.02 250);
-    --surface-raised: oklch(1 0 0);
-    --surface-hover: oklch(0.965 0.005 245);
-    --surface-selected: oklch(0.95 0.01 245);
-    --surface-selected-foreground: oklch(0.22 0.02 250);
-    --surface-border: oklch(0.90 0.01 240);
-    --surface-shadow: 0 1px 2px rgb(28 25 23 / 0.05), 0 1px 1px rgb(28 25 23 / 0.03);
-    --floating-shadow: 0 16px 40px rgb(28 25 23 / 0.14), 0 3px 10px rgb(28 25 23 / 0.08);
-    /* Menus (dropdown/context/select/popover) hover just above their trigger,
-       so they carry a lighter shadow than window-level overlays (dialogs,
-       sheets), which keep --floating-shadow. */
-    --menu-shadow: 0 8px 24px rgb(28 25 23 / 0.08), 0 2px 6px rgb(28 25 23 / 0.05);
+    --app-shell: oklch(0.962 0.006 75);
+    --page-canvas: oklch(0.984 0.004 75);
+    --surface: oklch(0.997 0.002 75);
+    --surface-foreground: oklch(0.23 0.012 70);
+    --surface-raised: oklch(0.997 0.002 75);
+    --surface-hover: oklch(0.955 0.007 75);
+    --surface-selected: oklch(0.935 0.012 230);
+    --surface-selected-foreground: oklch(0.23 0.012 70);
+    --surface-border: oklch(0.905 0.008 75);
+    --shadow-raised: 0 1px 1px rgb(41 37 33 / 0.08), 0 0 1px rgb(41 37 33 / 0.12);
+    --shadow-overlay: 0 8px 12px rgb(41 37 33 / 0.1), 0 0 1px rgb(41 37 33 / 0.2);
+    --shadow-dialog: 0 16px 32px rgb(41 37 33 / 0.14), 0 2px 8px rgb(41 37 33 / 0.08);
+    --surface-shadow: var(--shadow-raised);
+    /* Menus (dropdown/context/select/popover) hover just above their trigger
+       and use the overlay level; window-level overlays (dialogs, sheets)
+       keep the dialog level. */
+    --menu-shadow: var(--shadow-overlay);
+    --floating-shadow: var(--shadow-dialog);
     --background: var(--page-canvas);
-    --foreground: oklch(0.22 0.02 250);
+    --foreground: oklch(0.23 0.012 70);
     --card: var(--surface);
-    --card-foreground: oklch(0.22 0.02 250);
+    --card-foreground: oklch(0.23 0.012 70);
     --popover: var(--surface-raised);
-    --popover-foreground: oklch(0.22 0.02 250);
-    --primary: oklch(0.24 0.01 245);
-    --primary-foreground: oklch(0.99 0 0);
-    --secondary: oklch(0.965 0.005 245);
-    --secondary-foreground: oklch(0.24 0.01 245);
-    --muted: oklch(0.965 0.005 245);
-    --muted-foreground: oklch(0.5 0.02 245);
-    --accent: oklch(0.965 0.005 245);
-    --accent-foreground: oklch(0.24 0.01 245);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.93 0.008 245);
-    --input: oklch(0.91 0.01 245);
+    --popover-foreground: oklch(0.23 0.012 70);
+    --primary: oklch(0.25 0.012 70);
+    --primary-foreground: oklch(0.99 0.002 75);
+    --secondary: oklch(0.955 0.007 75);
+    --secondary-foreground: oklch(0.25 0.012 70);
+    --muted: oklch(0.955 0.007 75);
+    --muted-foreground: oklch(0.48 0.012 70);
+    --accent: oklch(0.955 0.007 75);
+    --accent-foreground: oklch(0.25 0.012 70);
+    --destructive: oklch(0.55 0.22 27);
+    /* Decorative dividers stay quiet (exempt from 3:1); anything that marks
+       an interactive boundary (inputs, checkboxes) uses --input. */
+    --border: oklch(0.915 0.008 75);
+    --input: oklch(0.62 0.01 75);
     --ring: oklch(0.48 0.10 230);
     /* Accent gradient (brand hue). chart-1 equals brand so the most
        important series visually anchors to the product colour; chart-2..5 step
@@ -120,34 +163,41 @@
     --chart-3: oklch(0.68 0.07 238);
     --chart-4: oklch(0.78 0.05 240);
     --chart-5: oklch(0.88 0.03 242);
-    --radius: 0.375rem;
-    --sidebar: oklch(0.965 0.005 245);
-    --sidebar-foreground: oklch(0.22 0.02 250);
+    --radius: 0.5rem;
+    --sidebar: oklch(0.962 0.006 75);
+    --sidebar-foreground: oklch(0.23 0.012 70);
     --sidebar-primary: oklch(0.48 0.10 230);
-    --sidebar-primary-foreground: oklch(0.985 0.005 90);
-    --sidebar-accent: oklch(0.935 0.008 245);
-    --sidebar-accent-foreground: oklch(0.24 0.01 245);
-    --sidebar-border: oklch(0.92 0.008 245);
+    --sidebar-primary-foreground: oklch(0.984 0.004 75);
+    --sidebar-accent: oklch(0.935 0.008 75);
+    --sidebar-accent-foreground: oklch(0.25 0.012 70);
+    --sidebar-border: oklch(0.915 0.008 75);
     --sidebar-ring: oklch(0.48 0.10 230);
     --brand: oklch(0.48 0.10 230);
-    --brand-foreground: oklch(0.985 0.005 90);
-    --accent-beak: oklch(0.72 0.17 60);
+    --brand-foreground: oklch(0.984 0.004 75);
+    --accent-beak: oklch(0.60 0.16 55);
     --rail: oklch(0.26 0.03 240);
-    --status-backlog: oklch(0.70 0.02 250);
+    /* Inverse surfaces (site header/footer, dark bands) sit on the rail tone. */
+    --inverse: var(--rail);
+    --inverse-foreground: oklch(0.97 0.005 75);
+    --inverse-muted-foreground: oklch(0.78 0.012 75);
+    --status-backlog: oklch(0.58 0.02 250);
     --status-todo: oklch(0.55 0.08 250);
-    --status-doing: oklch(0.72 0.17 60);
-    --status-review: oklch(0.60 0.12 300);
-    --status-done: oklch(0.55 0.14 160);
-    --success: oklch(0.55 0.16 145);
-    --warning: oklch(0.75 0.16 85);
+    --status-doing: var(--accent-beak);
+    --status-review: oklch(0.56 0.13 300);
+    --status-done: oklch(0.53 0.12 160);
+    --success: oklch(0.52 0.15 145);
+    /* Warning reads as text at ≥ 4.5:1; fills use warning/10 with the same
+       colour for text, or a solid warning fill with --warning-foreground. */
+    --warning: oklch(0.54 0.12 70);
+    --warning-foreground: oklch(0.99 0.002 75);
     /* With one live accent the informational tone stays neutral. */
-    --info: oklch(0.45 0.02 245);
+    --info: oklch(0.45 0.015 70);
     --scrollbar-thumb: oklch(0 0 0 / 10%);
     --scrollbar-thumb-hover: oklch(0 0 0 / 18%);
     --scrollbar-track: transparent;
     /* In-page find (Cmd/Ctrl+F) match tints, painted via the CSS Custom
        Highlight API. Bright fill + dark text so matches stay legible in
-       both themes; the active match steps to the beak accent. */
+       both themes; the active match steps to a warm amber. */
     --find-match: oklch(0.92 0.15 100);
     --find-match-active: oklch(0.82 0.17 62);
     --find-match-foreground: oklch(0.22 0.03 92);
@@ -155,63 +205,70 @@
 
 .dark {
     color-scheme: dark;
-    --app-shell: oklch(0.15 0.02 250);
-    --page-canvas: oklch(0.17 0.02 250);
-    --surface: oklch(0.21 0.02 250);
-    --surface-foreground: oklch(0.95 0.01 90);
-    --surface-raised: oklch(0.235 0.02 250);
-    --surface-hover: oklch(0.274 0.02 250);
-    --surface-selected: oklch(0.3 0.025 250);
-    --surface-selected-foreground: oklch(0.95 0.01 90);
+    --app-shell: oklch(0.16 0.006 70);
+    --page-canvas: oklch(0.185 0.006 70);
+    --surface: oklch(0.215 0.007 70);
+    --surface-foreground: oklch(0.95 0.008 75);
+    --surface-raised: oklch(0.24 0.008 70);
+    --surface-hover: oklch(0.265 0.008 70);
+    --surface-selected: oklch(0.30 0.03 230);
+    --surface-selected-foreground: oklch(0.95 0.008 75);
     --surface-border: oklch(1 0 0 / 10%);
-    --surface-shadow: 0 1px 2px rgb(0 0 0 / 0.2), 0 1px 1px rgb(0 0 0 / 0.16);
-    --floating-shadow: 0 20px 48px rgb(0 0 0 / 0.46), 0 4px 12px rgb(0 0 0 / 0.28);
-    --menu-shadow: 0 10px 28px rgb(0 0 0 / 0.3), 0 2px 8px rgb(0 0 0 / 0.18);
+    --shadow-raised: 0 1px 1px rgb(0 0 0 / 0.3), 0 0 1px rgb(0 0 0 / 0.4);
+    --shadow-overlay: 0 8px 16px rgb(0 0 0 / 0.36), 0 0 1px rgb(0 0 0 / 0.5);
+    --shadow-dialog: 0 20px 40px rgb(0 0 0 / 0.46), 0 4px 12px rgb(0 0 0 / 0.28);
+    --surface-shadow: var(--shadow-raised);
+    --menu-shadow: var(--shadow-overlay);
+    --floating-shadow: var(--shadow-dialog);
     --background: var(--page-canvas);
-    --foreground: oklch(0.95 0.01 90);
+    --foreground: oklch(0.95 0.008 75);
     --card: var(--surface);
-    --card-foreground: oklch(0.95 0.01 90);
+    --card-foreground: oklch(0.95 0.008 75);
     --popover: var(--surface-raised);
-    --popover-foreground: oklch(0.95 0.01 90);
-    --primary: oklch(0.94 0.008 245);
-    --primary-foreground: oklch(0.21 0.02 250);
-    --secondary: oklch(0.274 0.02 250);
-    --secondary-foreground: oklch(0.95 0.01 90);
-    --muted: oklch(0.274 0.02 250);
-    --muted-foreground: oklch(0.72 0.02 245);
-    --accent: oklch(0.274 0.02 250);
-    --accent-foreground: oklch(0.95 0.01 90);
+    --popover-foreground: oklch(0.95 0.008 75);
+    --primary: oklch(0.94 0.008 75);
+    --primary-foreground: oklch(0.21 0.007 70);
+    --secondary: oklch(0.265 0.008 70);
+    --secondary-foreground: oklch(0.95 0.008 75);
+    --muted: oklch(0.265 0.008 70);
+    --muted-foreground: oklch(0.73 0.012 75);
+    --accent: oklch(0.265 0.008 70);
+    --accent-foreground: oklch(0.95 0.008 75);
     --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 6%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.60 0.11 230);
+    --border: oklch(1 0 0 / 7%);
+    --input: oklch(0.55 0.01 75);
+    --ring: oklch(0.66 0.11 230);
     /* Dark mode keeps the accent at full strength for series 1 (it pops on the
        dark canvas) and darkens the trailing series progressively. */
-    --chart-1: oklch(0.60 0.11 230);
-    --chart-2: oklch(0.52 0.09 233);
-    --chart-3: oklch(0.44 0.07 236);
-    --chart-4: oklch(0.36 0.05 239);
-    --chart-5: oklch(0.28 0.03 242);
-    --sidebar: oklch(0.21 0.02 250);
-    --sidebar-foreground: oklch(0.95 0.01 90);
-    --sidebar-primary: oklch(0.60 0.11 230);
-    --sidebar-primary-foreground: oklch(0.17 0.02 250);
-    --sidebar-accent: oklch(0.274 0.02 250);
-    --sidebar-accent-foreground: oklch(0.95 0.01 90);
+    --chart-1: oklch(0.66 0.11 230);
+    --chart-2: oklch(0.56 0.09 233);
+    --chart-3: oklch(0.46 0.07 236);
+    --chart-4: oklch(0.37 0.05 239);
+    --chart-5: oklch(0.29 0.03 242);
+    --sidebar: oklch(0.215 0.007 70);
+    --sidebar-foreground: oklch(0.95 0.008 75);
+    --sidebar-primary: oklch(0.66 0.11 230);
+    --sidebar-primary-foreground: oklch(0.17 0.006 70);
+    --sidebar-accent: oklch(0.265 0.008 70);
+    --sidebar-accent-foreground: oklch(0.95 0.008 75);
     --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.60 0.11 230);
-    --brand: oklch(0.60 0.11 230);
-    --brand-foreground: oklch(0.17 0.02 250);
-    --accent-beak: oklch(0.72 0.17 60);
-    --rail: oklch(0.26 0.03 240);
-    --status-backlog: oklch(0.60 0.02 250);
-    --status-todo: oklch(0.65 0.09 250);
-    --status-doing: oklch(0.72 0.17 60);
-    --status-review: oklch(0.68 0.13 300);
-    --status-done: oklch(0.62 0.15 160);
-    --success: oklch(0.65 0.15 145);
-    --warning: oklch(0.70 0.16 85);
-    --info: oklch(0.72 0.02 245);
+    --sidebar-ring: oklch(0.66 0.11 230);
+    --brand: oklch(0.66 0.11 230);
+    --brand-foreground: oklch(0.17 0.006 70);
+    --accent-beak: oklch(0.74 0.16 62);
+    --rail: oklch(0.21 0.025 240);
+    --inverse: var(--rail);
+    --inverse-foreground: oklch(0.97 0.005 75);
+    --inverse-muted-foreground: oklch(0.78 0.012 75);
+    --status-backlog: oklch(0.62 0.02 250);
+    --status-todo: oklch(0.66 0.09 250);
+    --status-doing: var(--accent-beak);
+    --status-review: oklch(0.70 0.13 300);
+    --status-done: oklch(0.66 0.14 160);
+    --success: oklch(0.70 0.15 145);
+    --warning: oklch(0.78 0.14 80);
+    --warning-foreground: oklch(0.2 0.02 70);
+    --info: oklch(0.73 0.012 75);
     --scrollbar-thumb: oklch(1 0 0 / 8%);
     --scrollbar-thumb-hover: oklch(1 0 0 / 18%);
     --scrollbar-track: transparent;

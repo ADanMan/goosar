@@ -407,7 +407,7 @@ export function LoginPage({
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
             {logo && <div className="mx-auto mb-4">{logo}</div>}
-            <CardTitle className="text-2xl">{t(($) => $.cli.title)}</CardTitle>
+            <CardTitle className="text-xl">{t(($) => $.cli.title)}</CardTitle>
             <CardDescription>
               {t(($) => $.cli.description, { email: existingUser.email })}
             </CardDescription>
@@ -438,7 +438,7 @@ export function LoginPage({
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
             {logo && <div className="mx-auto mb-4">{logo}</div>}
-            <CardTitle className="text-2xl">{t(($) => $.verify.title)}</CardTitle>
+            <CardTitle className="text-xl">{t(($) => $.verify.title)}</CardTitle>
             <CardDescription>{t(($) => $.verify.description, { email })}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center gap-4">
@@ -500,7 +500,7 @@ export function LoginPage({
         <Card className="w-full max-w-sm">
           <CardHeader className="text-center">
             {logo && <div className="mx-auto mb-4">{logo}</div>}
-            <CardTitle className="text-2xl">{t(($) => $.mfa.title)}</CardTitle>
+            <CardTitle className="text-xl">{t(($) => $.mfa.title)}</CardTitle>
             <CardDescription>
               {useRecoveryCode ? t(($) => $.mfa.recovery_description) : t(($) => $.mfa.description)}
             </CardDescription>
@@ -602,7 +602,7 @@ export function LoginPage({
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           {logo && <div className="mx-auto mb-4">{logo}</div>}
-          <CardTitle className="text-2xl">
+          <CardTitle className="text-xl">
             {showLdap ? t(($) => $.corporate.ldap_title) : t(($) => $.signin.title)}
           </CardTitle>
           {!showLdap && <CardDescription>{t(($) => $.signin.description)}</CardDescription>}

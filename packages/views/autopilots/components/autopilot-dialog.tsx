@@ -457,7 +457,7 @@ export function AutopilotDialog(props: AutopilotDialogProps) {
                     autoFocus={isCreate}
                     defaultValue={initial.title ?? ''}
                     placeholder={t(($) => $.dialog.title_placeholder)}
-                    className="text-2xl font-semibold tracking-tight"
+                    className="text-xl font-semibold tracking-tight"
                     onChange={setTitle}
                     onSubmit={handleSubmit}
                   />

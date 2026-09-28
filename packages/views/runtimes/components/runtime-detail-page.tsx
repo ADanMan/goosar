@@ -190,7 +190,7 @@ export function RuntimeDetailPage({
               </div>
               <div className="min-w-0 pt-0.5">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                  <h1 className="min-w-0 text-balance text-xl font-semibold tracking-tight sm:text-2xl">
+                  <h1 className="min-w-0 text-balance text-lg font-semibold tracking-tight sm:text-xl">
                     {machine.title}
                   </h1>
                   <span className="inline-flex items-center gap-1.5 text-xs">

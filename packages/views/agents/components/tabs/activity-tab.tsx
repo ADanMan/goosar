@@ -277,7 +277,7 @@ function Last30dSection({
                 locales={locales}
                 format={{ maximumFractionDigits: 0 }}
                 aria-label={String(totalRuns)}
-                className="text-3xl font-bold leading-none"
+                className="text-2xl font-bold leading-none"
               />
               <span className="text-sm text-muted-foreground">
                 {t(($) => $.tab_body.activity.runs, { count: totalRuns })}

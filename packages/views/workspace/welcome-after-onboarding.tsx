@@ -289,7 +289,7 @@ function RuntimeWelcome({ workspaceId, runtimeId, onAbandon, onComplete }: Runti
             <div className="text-4xl animate-welcome-emoji-pop" aria-hidden>
               🎉
             </div>
-            <DialogTitle className="text-center text-2xl font-semibold">
+            <DialogTitle className="text-center text-xl font-semibold">
               {t(($) => $.welcome_after_onboarding.runtime.success.title)}
             </DialogTitle>
             <DialogDescription
@@ -340,7 +340,7 @@ function RuntimeWelcome({ workspaceId, runtimeId, onAbandon, onComplete }: Runti
             aria-hidden
             className="h-14 w-14 rounded-xl ring-1 ring-foreground/10"
           />
-          <DialogTitle className="text-center text-xl font-semibold">
+          <DialogTitle className="text-center text-lg font-semibold">
             {t(($) => $.welcome_after_onboarding.runtime.greeting)}
           </DialogTitle>
           <DialogDescription
@@ -543,7 +543,7 @@ function SkipWelcome({ workspaceId, onDismiss }: SkipWelcomeProps) {
           <div className="text-6xl animate-welcome-emoji-pop" aria-hidden>
             🎉
           </div>
-          <DialogTitle className="text-center text-2xl font-semibold">
+          <DialogTitle className="text-center text-xl font-semibold">
             {t(($) => $.welcome_after_onboarding.skip.title)}
           </DialogTitle>
           <DialogDescription

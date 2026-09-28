@@ -177,7 +177,7 @@ export function InvitationsPage() {
               <Users className="h-6 w-6 text-primary" />
             </div>
             <div className="space-y-1">
-              <h2 className="text-xl font-semibold">{t(($) => $.batch.title)}</h2>
+              <h2 className="text-lg font-semibold">{t(($) => $.batch.title)}</h2>
               <p className="text-sm text-muted-foreground">{t(($) => $.batch.subtitle)}</p>
             </div>
           </div>
