@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 import type { IssueStatus, UpdateIssueRequest } from '@goosar/core/types';
 import { ALL_STATUSES, STATUS_CONFIG } from '@goosar/core/issues/config';
 import { StatusIcon } from '../status-icon';
@@ -54,8 +55,20 @@ export function StatusPicker({
             selected={s === status}
             hoverClassName={c.hoverBg}
             onClick={() => {
+              const previous = status;
               onUpdate({ status: s });
               setOpen(false);
+              // ponytail: undo re-applies the previous status via the same
+              // onUpdate path; no separate history/queue, good enough for a
+              // single-step revert (H3 — user control and freedom).
+              if (previous != null && previous !== s) {
+                toast.success(t(($) => $.detail.status_changed_toast, { status: t(($) => $.status[s]) }), {
+                  action: {
+                    label: t(($) => $.detail.undo),
+                    onClick: () => onUpdate({ status: previous }),
+                  },
+                });
+              }
             }}
           >
             <StatusIcon status={s} className="h-3.5 w-3.5" />

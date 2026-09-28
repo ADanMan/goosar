@@ -4,7 +4,8 @@
     "breadcrumb_workspace_fallback": "워크스페이스",
     "empty_title": "아직 작업이 없습니다",
     "empty_hint": "작업을 만들어 시작하세요.",
-    "move_failed": "작업을 이동하지 못했습니다"
+    "move_failed": "작업을 이동하지 못했습니다",
+    "empty_action": "첫 작업 만들기"
   },
   "status": {
     "backlog": "백로그",
@@ -311,7 +312,12 @@
     "link_copy_failed": "링크를 복사하지 못했습니다",
     "workdir_path_copied": "작업 디렉터리 경로를 복사했습니다",
     "workdir_path_copy_failed": "작업 디렉터리 경로를 복사하지 못했습니다",
-    "workdir_path_unavailable": "아직 로컬 작업 디렉터리가 없습니다. 로컬 에이전트가 이 작업을 실행하지 않았습니다"
+    "workdir_path_unavailable": "아직 로컬 작업 디렉터리가 없습니다. 로컬 에이전트가 이 작업을 실행하지 않았습니다",
+    "assign_to_agent": "에이전트에 위임",
+    "saving": "저장 중…",
+    "status_changed_toast": "상태가 \"{status}\"(으)로 변경되었습니다",
+    "undo": "실행 취소",
+    "done_undo_toast": "작업이 완료로 표시되었습니다"
   },
   "timeline": {
     "loading": "불러오는 중..."

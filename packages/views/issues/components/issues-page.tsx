@@ -4,6 +4,8 @@ import { ListTodo } from 'lucide-react';
 import type { Issue, IssueTableFacetSpec, IssueTableFacetsResponse } from '@goosar/core/types';
 import { useIssuesScopeStore } from '@goosar/core/issues/stores/issues-scope-store';
 import { useViewStore } from '@goosar/core/issues/stores/view-store-context';
+import { Button } from '@goosar/ui/components/ui/button';
+import { openCreateIssueWithPreference } from '@goosar/core/issues/stores/create-mode-store';
 import { PageHeader } from '../../layout/page-header';
 import { useT } from '../../i18n';
 import { IssueSurface } from '../surface/issue-surface';
@@ -67,6 +69,11 @@ export function IssuesPage() {
             <ListTodo className="h-10 w-10 text-muted-foreground/40" />
             <p className="text-sm">{t(($) => $.page.empty_title)}</p>
             <p className="text-xs">{t(($) => $.page.empty_hint)}</p>
+            {/* Carbon empty-states pattern — an empty state needs a primary
+                action, not just a description (H8 minimalism / recognition). */}
+            <Button size="sm" className="mt-2" onClick={() => openCreateIssueWithPreference()}>
+              {t(($) => $.page.empty_action)}
+            </Button>
           </div>
         )}
       />

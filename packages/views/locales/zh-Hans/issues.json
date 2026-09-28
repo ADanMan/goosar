@@ -4,7 +4,8 @@
     "breadcrumb_workspace_fallback": "工作区",
     "empty_title": "还没有 任务",
     "empty_hint": "创建一个 任务 开始使用。",
-    "move_failed": "移动 任务 失败"
+    "move_failed": "移动 任务 失败",
+    "empty_action": "创建第一个任务"
   },
   "status": {
     "backlog": "待规划",
@@ -311,7 +312,12 @@
     "link_copy_failed": "复制链接失败",
     "workdir_path_copied": "已复制本地 workdir 路径",
     "workdir_path_copy_failed": "复制本地 workdir 路径失败",
-    "workdir_path_unavailable": "暂无本地 workdir — 这个 任务 还没被本地 agent 运行过"
+    "workdir_path_unavailable": "暂无本地 workdir — 这个 任务 还没被本地 agent 运行过",
+    "assign_to_agent": "交给 Agent",
+    "saving": "保存中…",
+    "status_changed_toast": "状态已改为「{status}」",
+    "undo": "撤销",
+    "done_undo_toast": "任务已标记为已完成"
   },
   "timeline": {
     "loading": "加载中…"

@@ -4,7 +4,8 @@
     "breadcrumb_workspace_fallback": "Workspace",
     "empty_title": "No tasks yet",
     "empty_hint": "Create an task to get started.",
-    "move_failed": "Failed to move task"
+    "move_failed": "Failed to move task",
+    "empty_action": "Create your first task"
   },
   "status": {
     "backlog": "Backlog",
@@ -314,7 +315,12 @@
     "link_copy_failed": "Failed to copy link",
     "workdir_path_copied": "Workdir path copied",
     "workdir_path_copy_failed": "Failed to copy workdir path",
-    "workdir_path_unavailable": "No local workdir yet — task has not been run by a local agent"
+    "workdir_path_unavailable": "No local workdir yet — task has not been run by a local agent",
+    "assign_to_agent": "Assign to agent",
+    "saving": "Saving…",
+    "status_changed_toast": "Status changed to \"{status}\"",
+    "undo": "Undo",
+    "done_undo_toast": "Task marked as done"
   },
   "timeline": {
     "loading": "Loading..."

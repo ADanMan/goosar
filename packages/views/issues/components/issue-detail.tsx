@@ -46,6 +46,7 @@ import {
 } from '../../editor';
 import { FileUploadButton } from '@goosar/ui/components/common/file-upload-button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@goosar/ui/components/ui/tooltip';
+import { Spinner } from '@goosar/ui/components/ui/spinner';
 import { Popover, PopoverTrigger, PopoverContent } from '@goosar/ui/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@goosar/ui/components/ui/dialog';
 import { Checkbox } from '@goosar/ui/components/ui/checkbox';
@@ -147,6 +148,7 @@ import {
 } from '@goosar/core/issues/stores';
 import { useIssueSelectionStore } from '@goosar/core/issues/stores/selection-store';
 import { BatchActionToolbar } from './batch-action-toolbar';
+import { useIssueSurfaceActionsOptional } from '../surface/actions-context';
 import { useIssueTimeline } from '../hooks/use-issue-timeline';
 import { useIssueReactions } from '../hooks/use-issue-reactions';
 import { useIssueSubscribers } from '../hooks/use-issue-subscribers';
@@ -1366,6 +1368,10 @@ export function IssueDetail({
 
   const actions = useIssueActions(issue);
   const handleUpdateField = actions.updateField;
+  // H1 — visibility of system status: title/description autosave (onBlur /
+  // 1500ms debounce below) had no feedback at all. isPending is exposed by
+  // the surface actions context that already backs handleUpdateField.
+  const isSavingField = useIssueSurfaceActionsOptional()?.isPending ?? false;
 
   const { data: attachedLabels = [] } = useQuery(issueLabelsOptions(wsId, id));
   const attachedLabelsCount = attachedLabels.length;
@@ -2050,7 +2056,7 @@ export function IssueDetail({
               onUpdate={handleUpdateField}
               trigger={
                 <Button variant="ghost" size="sm" className="text-muted-foreground">
-                  Передать агенту
+                  {t(($) => $.detail.assign_to_agent)}
                 </Button>
               }
             />
@@ -2063,8 +2069,15 @@ export function IssueDetail({
                       size="icon-sm"
                       className="text-muted-foreground"
                       onClick={() => {
+                        const previous = issue.status;
                         handleUpdateField({ status: 'done' });
                         onDone?.();
+                        toast.success(t(($) => $.detail.done_undo_toast), {
+                          action: {
+                            label: t(($) => $.detail.undo),
+                            onClick: () => handleUpdateField({ status: previous }),
+                          },
+                        });
                       }}
                     >
                       <CircleCheck />
@@ -2189,6 +2202,13 @@ export function IssueDetail({
               }}
             >
               {issue.title}
+            </div>
+          )}
+
+          {isSavingField && (
+            <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Spinner className="size-3" />
+              <span>{t(($) => $.detail.saving)}</span>
             </div>
           )}
 
