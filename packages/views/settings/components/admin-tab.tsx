@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -63,7 +64,6 @@ function AdminLlmSection({ wsId }: { wsId: string }) {
   const [draftBaseUrl, setDraftBaseUrl] = useState<string | null>(null);
   const [draftModel, setDraftModel] = useState<string | null>(null);
   const [keyInput, setKeyInput] = useState('');
-  const [confirmOpen, setConfirmOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
 
   const serverBaseUrl = config?.llm_base_url ?? '';
@@ -84,19 +84,17 @@ function AdminLlmSection({ wsId }: { wsId: string }) {
     return patch;
   };
 
-  const requestSave = () => {
-    if (Object.keys(buildPatch()).length === 0) return;
-    setConfirmOpen(true);
-  };
-
+  // §3 L86: base_url/model are routine text-field edits — they auto-save
+  // with a success toast, the same as the rest of settings. Only clearing
+  // the stored key (below) is destructive enough to warrant a confirm.
   const applySave = async () => {
     const patch = buildPatch();
+    if (Object.keys(patch).length === 0) return;
     try {
       await updateConfig.mutateAsync(patch);
       setDraftBaseUrl(null);
       setDraftModel(null);
       setKeyInput('');
-      setConfirmOpen(false);
       toast.success(t(($) => $.admin.llm.toast_saved));
     } catch {
       toast.error(t(($) => $.admin.llm.toast_save_failed));
@@ -118,7 +116,7 @@ function AdminLlmSection({ wsId }: { wsId: string }) {
       title={t(($) => $.admin.llm.title)}
       description={t(($) => $.admin.llm.description)}
       action={
-        <Button size="sm" onClick={requestSave} disabled={updateConfig.isPending}>
+        <Button size="sm" onClick={() => void applySave()} disabled={updateConfig.isPending}>
           {t(($) => $.admin.llm.save)}
         </Button>
       }
@@ -142,6 +140,14 @@ function AdminLlmSection({ wsId }: { wsId: string }) {
             autoComplete="off"
           />
         </SettingsRow>
+        {/* §3 L92: base_url/model can be saved without a key, but the
+            gateway will not actually answer requests until one is set. */}
+        {!hasKey && (
+          <div className="flex items-start gap-2 px-4 py-3 text-xs text-warning">
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+            <span>{t(($) => $.admin.llm.no_key_warning)}</span>
+          </div>
+        )}
         <SettingsRow
           label={t(($) => $.admin.llm.api_key_label)}
           description={t(($) => $.admin.llm.api_key_hint)}
@@ -176,26 +182,10 @@ function AdminLlmSection({ wsId }: { wsId: string }) {
         </SettingsRow>
       </SettingsCard>
 
-      {/* §3 L2: plain confirm before the workspace config PUT (issue #244). */}
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t(($) => $.admin.llm.confirm_title)}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t(($) => $.admin.llm.confirm_description)}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t(($) => $.admin.llm.confirm_cancel)}</AlertDialogCancel>
-            <AlertDialogAction onClick={applySave} disabled={updateConfig.isPending}>
-              {t(($) => $.admin.llm.confirm_apply)}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* §3 L2: the same confirm on the way out — clearing the workspace key
-          strands every member's agents until a new one is set (issue #244). */}
+      {/* §3 L2: this is the only write in the section that keeps a confirm
+          (§3 L86 dropped it for the routine base_url/model save above) —
+          clearing the workspace key strands every member's agents until a
+          new one is set (issue #244). */}
       <AlertDialog open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

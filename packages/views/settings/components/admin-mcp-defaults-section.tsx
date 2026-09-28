@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { Plus, Server, X } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertDialog,
@@ -15,8 +15,10 @@ import {
 } from '@goosar/ui/components/ui/alert-dialog';
 import { Badge } from '@goosar/ui/components/ui/badge';
 import { Button } from '@goosar/ui/components/ui/button';
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@goosar/ui/components/ui/empty';
 import { Input } from '@goosar/ui/components/ui/input';
 import { Switch } from '@goosar/ui/components/ui/switch';
+import { cn } from '@goosar/ui/lib/utils';
 import {
   useUpdateWorkspaceConfig,
   workspaceConfigOptions,
@@ -149,10 +151,20 @@ export function AdminMcpDefaultsSection({ wsId }: { wsId: string }) {
       description={t(($) => $.admin.mcp.description)}
     >
       <SettingsCard>
+        {/* §3 L87: Carbon empty-state pattern (icon + text) instead of a bare
+            line, with the add-server form right below picking up the accent
+            that would otherwise go to a primary CTA here. */}
         {serverNames.length === 0 && (
-          <div className="px-4 py-3 text-sm text-muted-foreground">
-            {t(($) => $.admin.mcp.empty)}
-          </div>
+          <Empty className="rounded-none border-0 px-4 py-6">
+            <EmptyHeader className="gap-1.5">
+              <EmptyMedia variant="icon" className="mb-0 size-8 [&_svg:not([class*='size-'])]:size-4">
+                <Server />
+              </EmptyMedia>
+              <EmptyTitle className="text-sm font-normal text-muted-foreground">
+                {t(($) => $.admin.mcp.empty)}
+              </EmptyTitle>
+            </EmptyHeader>
+          </Empty>
         )}
         {serverNames.map((name) => (
           <McpServerRow
@@ -166,7 +178,12 @@ export function AdminMcpDefaultsSection({ wsId }: { wsId: string }) {
             onSetEnvVar={(envName, value, onSuccess) => setEnvVar(name, envName, value, onSuccess)}
           />
         ))}
-        <div className="flex items-center gap-2 px-4 py-3">
+        <div
+          className={cn(
+            'flex items-center gap-2 px-4 py-3',
+            serverNames.length === 0 && 'bg-primary/5',
+          )}
+        >
           <Input
             className="sm:w-64"
             value={newServerName}
@@ -176,7 +193,7 @@ export function AdminMcpDefaultsSection({ wsId }: { wsId: string }) {
             autoComplete="off"
           />
           <Button
-            variant="outline"
+            variant={serverNames.length === 0 ? 'default' : 'outline'}
             size="sm"
             onClick={addServer}
             disabled={updateConfig.isPending || newServerName.trim() === ''}

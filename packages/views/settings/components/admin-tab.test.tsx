@@ -104,6 +104,7 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
+import { toast } from 'sonner';
 import { AdminTab } from './admin-tab';
 
 function member(
@@ -186,7 +187,6 @@ describe('AdminTab LLM section', () => {
       target: { value: 'sk-new-key' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
 
     await waitFor(() => expect(mocks.updateConfig).toHaveBeenCalledTimes(1));
     const patch = mocks.updateConfig.mock.calls[0]![0] as Record<string, unknown>;
@@ -202,7 +202,6 @@ describe('AdminTab LLM section', () => {
       target: { value: 'openai/coding-large' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
 
     await waitFor(() => expect(mocks.updateConfig).toHaveBeenCalledTimes(1));
     const patch = mocks.updateConfig.mock.calls[0]![0] as Record<string, unknown>;
@@ -210,30 +209,34 @@ describe('AdminTab LLM section', () => {
     expect('llm_api_key' in patch).toBe(false);
   });
 
-  it('does not PUT the workspace config until the confirm is accepted (§3 L2)', async () => {
+  it('saves base_url/model straight away, with a success toast and no confirm (§3 L86)', async () => {
     renderWithI18n(<AdminTab />);
     fireEvent.change(screen.getByLabelText('Base URL'), {
       target: { value: 'https://new.example/v1' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(screen.getByText('Apply the workspace LLM configuration?')).toBeTruthy();
-    expect(mocks.updateConfig).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(screen.queryByText('Apply the workspace LLM configuration?')).toBeNull();
     await waitFor(() => expect(mocks.updateConfig).toHaveBeenCalledTimes(1));
+    expect(mocks.updateConfig.mock.calls[0]![0]).toEqual({
+      llm_base_url: 'https://new.example/v1',
+    });
+    expect(toast.success).toHaveBeenCalledWith('Workspace configuration saved');
   });
 
-  it('cancelling the config confirm sends nothing', () => {
+  it('warns under the fields that a missing key stops the gateway from working (§3 L92)', () => {
+    configRef.current = { ...(configRef.current as object), has_llm_api_key: false };
     renderWithI18n(<AdminTab />);
-    fireEvent.change(screen.getByLabelText('Base URL'), {
-      target: { value: 'https://new.example/v1' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(
+      screen.getByText("No key is set yet — the gateway won't answer requests until one is."),
+    ).toBeTruthy();
+  });
 
-    expect(mocks.updateConfig).not.toHaveBeenCalled();
-    expect(screen.queryByText('Apply the workspace LLM configuration?')).toBeNull();
+  it('does not show the no-key warning once a key is set', () => {
+    renderWithI18n(<AdminTab />);
+    expect(
+      screen.queryByText("No key is set yet — the gateway won't answer requests until one is."),
+    ).toBeNull();
   });
 
   it('clears the stored key with an explicit empty-string write', async () => {

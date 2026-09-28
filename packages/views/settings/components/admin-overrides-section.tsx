@@ -193,7 +193,15 @@ function OverrideRow({
         <div className="truncate text-xs text-muted-foreground">{member.email}</div>
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
-        {!hasOverride && <Badge variant="outline">{t(($) => $.admin.overrides.none_badge)}</Badge>}
+        {/* §3 L97: an icon (muted, like the role badges above) tells "no
+            override" apart from the filled, icon-less badges below at a
+            glance, instead of relying on reading the text of each one. */}
+        {!hasOverride && (
+          <Badge variant="outline" className="text-muted-foreground">
+            <ShieldOff className="h-3 w-3" />
+            {t(($) => $.admin.overrides.none_badge)}
+          </Badge>
+        )}
         {override?.llm_base_url ? (
           <Badge variant="secondary">{t(($) => $.admin.overrides.base_url_badge)}</Badge>
         ) : null}

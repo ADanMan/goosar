@@ -147,6 +147,19 @@ describe('Settings IntegrationsTab', () => {
     expect(row).toHaveTextContent(enSettings.integrations.configurable_by.deployment_admin);
   });
 
+  it('does not point the viewer at "the deployment administrator" when they are one (§3 L93)', () => {
+    dataRef.current = {
+      '"slack"': { configured: false, installations: [] },
+      '"admins"': [{ user_id: 'user-1' }],
+    };
+    renderTab();
+
+    const row = screen.getByTestId('integration-row-slack');
+    expect(row).toHaveTextContent(enSettings.integrations.status.not_configured);
+    expect(row).toHaveTextContent(enSettings.integrations.configurable_by.workspace_admin);
+    expect(row).not.toHaveTextContent(enSettings.integrations.configurable_by.deployment_admin);
+  });
+
   it('names Composio a per-member integration', () => {
     dataRef.current = { '"composio","connections"': [] };
     renderTab();

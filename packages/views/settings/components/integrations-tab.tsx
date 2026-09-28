@@ -11,6 +11,7 @@ import { GitHubMark } from './github-mark';
 import { ApiError } from '@goosar/core/api';
 import { composioConnectionsOptions, composioToolkitsOptions } from '@goosar/core/composio';
 import { useConfigStore, useFeatureEnabled } from '@goosar/core/config';
+import { deploymentAdminsOptions } from '@goosar/core/deployment/admin';
 import { COMPOSIO_MCP_APPS_FLAG } from '@goosar/core/feature-flags';
 import { githubInstallationsOptions } from '@goosar/core/github';
 import { useWorkspaceId } from '@goosar/core/hooks';
@@ -76,6 +77,12 @@ export function IntegrationsTab() {
   });
 
   const vcsAvailable = useConfigStore((s) => s.vcsIntegrationAvailable);
+
+  // §3 L93: whether the viewer can actually complete deployment-level setup
+  // themselves — the "configurable by: deployment admin" note below should
+  // reflect their real role, not just an integration's not_configured status.
+  const { data: deploymentAdmins } = useQuery(deploymentAdminsOptions());
+  const isDeploymentAdmin = Array.isArray(deploymentAdmins);
 
   const github = useQuery(githubInstallationsOptions(wsId));
   const slack = useQuery({ ...slackInstallationsOptions(wsId), enabled: !!wsId });
@@ -164,6 +171,7 @@ export function IntegrationsTab() {
             key={entry.id}
             entry={entry}
             locale={locale}
+            isDeploymentAdmin={isDeploymentAdmin}
             onConfigure={() => setOpen(entry.id)}
           />
         ))}
@@ -186,16 +194,24 @@ export function IntegrationsTab() {
 function IntegrationRow({
   entry,
   locale,
+  isDeploymentAdmin,
   onConfigure,
 }: {
   entry: IntegrationEntry;
   locale: string;
+  isDeploymentAdmin: boolean;
   onConfigure: () => void;
 }) {
   const { t } = useT('settings');
 
+  // §3 L93: a not_configured card only needs a deployment admin's attention
+  // when the viewer isn't one themselves — otherwise it is on them, and the
+  // hint should name whoever entry.configurableBy already says is normally
+  // responsible instead of pointing them at "someone else".
   const configurer: IntegrationConfigurableBy =
-    entry.status.kind === 'not_configured' ? 'deployment_admin' : entry.configurableBy;
+    entry.status.kind === 'not_configured' && !isDeploymentAdmin
+      ? 'deployment_admin'
+      : entry.configurableBy;
 
   return (
     <div
