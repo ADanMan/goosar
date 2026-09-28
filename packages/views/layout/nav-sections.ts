@@ -72,3 +72,23 @@ export const NAV_LABEL_KEYS_FOR_BREADCRUMB: Record<
   autopilot: 'autopilots',
   settings: 'settings',
 };
+
+// Ключ nav.* для крошки CommandBar на конкретном пути. По умолчанию — подпись
+// раздела рельсы (NAV_LABEL_KEYS_FOR_BREADCRUMB), но у «Исполнителей» и
+// «Отрядов» общий раздел 'crew' с одной подписью «Исполнители» на двоих —
+// без этой развязки на /squads крошка показывала «Гусар › Исполнители» при
+// заголовке страницы «Отряды» (T-032 §3.2). Крошка должна называть текущую
+// страницу, а не родительский раздел.
+export function navBreadcrumbLabelKey(
+  p: WorkspacePaths,
+  pathname: string,
+  section: NavSection | null,
+): 'inbox' | 'chat' | 'issues' | 'projects' | 'agents' | 'squads' | 'autopilots' | 'settings' | null {
+  if (!section) return null;
+  if (section === 'crew') {
+    const isUnder = (href: string) => pathname === href || pathname.startsWith(href + '/');
+    if (isUnder(p.squads())) return 'squads';
+    return 'agents';
+  }
+  return NAV_LABEL_KEYS_FOR_BREADCRUMB[section];
+}

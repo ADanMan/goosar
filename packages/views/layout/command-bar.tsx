@@ -1,14 +1,15 @@
 'use client';
 
 import { Search, SquarePen, ChevronRight } from 'lucide-react';
-import { useCurrentWorkspace } from '@goosar/core/paths';
+import { useCurrentWorkspace, useWorkspacePaths } from '@goosar/core/paths';
 import { useIssueDraftStore } from '@goosar/core/issues/stores/draft-store';
 import { openCreateIssueWithPreference } from '@goosar/core/issues/stores/create-mode-store';
 import { useShortcut } from '@goosar/core/shortcuts';
+import { useNavigation } from '../navigation';
 import { useSearchStore } from '../search/search-store';
 import { ShortcutKeycaps } from '../common/shortcut-keycaps';
 import { useT } from '../i18n';
-import { NAV_LABEL_KEYS_FOR_BREADCRUMB, type NavSection } from './nav-sections';
+import { navBreadcrumbLabelKey, type NavSection } from './nav-sections';
 
 // ponytail: `search` namespace already ships `trigger.label` ("Поиск"/"Search")
 // for this exact button on the old sidebar — reused as-is, no new locale key.
@@ -30,17 +31,20 @@ export function CommandBar({ activeSection }: CommandBarProps) {
   const { t } = useT('layout');
   const { t: tSearch } = useT('search');
   const workspace = useCurrentWorkspace();
+  const p = useWorkspacePaths();
+  const { pathname } = useNavigation();
   const searchShortcut = useShortcut('openSearch');
   const createIssueShortcut = useShortcut('createIssue');
+  const breadcrumbLabelKey = navBreadcrumbLabelKey(p, pathname, activeSection);
 
   return (
     <div className="flex h-12 shrink-0 items-center gap-2 border-b border-sidebar-border px-3">
       <nav aria-label="breadcrumb" className="flex min-w-0 items-center gap-1 text-sm text-muted-foreground">
         <span className="truncate font-medium text-foreground">{workspace?.name ?? 'Goosar'}</span>
-        {activeSection && (
+        {breadcrumbLabelKey && (
           <>
             <ChevronRight className="size-3.5 shrink-0" />
-            <span className="truncate">{t(($) => $.nav[NAV_LABEL_KEYS_FOR_BREADCRUMB[activeSection]])}</span>
+            <span className="truncate">{t(($) => $.nav[breadcrumbLabelKey])}</span>
           </>
         )}
       </nav>
