@@ -23,6 +23,7 @@ import { IssueActionsContextMenu } from '../actions';
 import { LabelChip } from '../../labels/label-chip';
 import { IssueAgentActivityIndicator } from './issue-agent-activity-indicator';
 import { useIssueSurfaceSelection } from '../surface/selection-context';
+import { useT } from '../../i18n';
 
 export interface ChildProgress {
   done: number;
@@ -55,6 +56,7 @@ function ListRowContent({
     'onClick' | 'onMouseDown' | 'onPointerDown'
   >;
 }) {
+  const { t } = useT('issues');
   const selection = useIssueSurfaceSelection();
   const selected = selection.selectedIds.has(issue.id);
   const toggle = selection.toggle;
@@ -175,7 +177,7 @@ function ListRowContent({
               />
               {issue.assignee_type === 'agent' && (
                 <span
-                  aria-label="агент"
+                  aria-label={t(($) => $.list.assignee_agent_aria)}
                   className="absolute -right-0.5 -bottom-0.5 size-2 rounded-full bg-accent-beak ring-1 ring-background"
                 />
               )}

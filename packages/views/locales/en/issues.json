@@ -211,7 +211,8 @@
   },
   "list": {
     "empty_status": "No tasks",
-    "add_issue_tooltip": "Add task"
+    "add_issue_tooltip": "Add task",
+    "assignee_agent_aria": "Agent"
   },
   "swimlane": {
     "no_parent": "No parent",

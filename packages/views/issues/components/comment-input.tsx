@@ -189,7 +189,13 @@ function CommentInput({ issueId, onSubmit }: CommentInputProps) {
       {!lazy.ready && (
         <div
           data-testid="comment-composer-shell"
-          role="button"
+          // Announced as a text field, not a generic button — this shell
+          // swaps for the real editor on first intent, but a screen-reader
+          // user tabbing in should hear a comment field, not "button"
+          // (docs/33-ux-review.md §3.1, L42). Enter/Space still mount the
+          // real editor and hand it focus, same as clicking.
+          role="textbox"
+          aria-multiline="true"
           tabIndex={0}
           aria-label={t(($) => $.comment.leave_comment_placeholder)}
           className="flex-1 min-h-0 cursor-text px-3 py-2"

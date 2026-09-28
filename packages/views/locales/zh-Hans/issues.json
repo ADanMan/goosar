@@ -209,7 +209,8 @@
   },
   "list": {
     "empty_status": "无 任务",
-    "add_issue_tooltip": "新建 任务"
+    "add_issue_tooltip": "新建 任务",
+    "assignee_agent_aria": "智能体"
   },
   "swimlane": {
     "no_parent": "无父级",
