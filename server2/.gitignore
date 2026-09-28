@@ -1,0 +1,6 @@
+# бинарники сборки
+/server
+/import
+/admin
+/goosar_admin
+*.test
