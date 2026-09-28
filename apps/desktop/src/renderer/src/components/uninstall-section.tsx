@@ -4,6 +4,7 @@ import { Button } from '@goosar/ui/components/ui/button';
 import { Checkbox } from '@goosar/ui/components/ui/checkbox';
 import { cn } from '@goosar/ui/lib/utils';
 import { SettingsCard, SettingsRow, SettingsSection } from '@goosar/views/settings';
+import { useT } from '@goosar/views/i18n';
 
 import {
   formatBytes,
@@ -95,16 +96,17 @@ function Banner({
 }
 
 function OutcomeReport({ outcome }: { outcome: UninstallOutcome }) {
+  const { t } = useT('settings');
+
   if (outcome.status === 'blocked') {
     return (
       <Banner
         tone="error"
         icon={<AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />}
-        title="Nothing was removed"
+        title={t(($) => $.desktop.uninstall.outcome_blocked_title)}
       >
         <p className="mt-0.5 break-words text-sm text-muted-foreground">
-          {outcome.daemon.detail ??
-            'The local daemon is still running, and deleting its files while it holds them open would leave a worse mess than not deleting them.'}
+          {outcome.daemon.detail ?? t(($) => $.desktop.uninstall.outcome_blocked_fallback)}
         </p>
       </Banner>
     );
@@ -115,7 +117,9 @@ function OutcomeReport({ outcome }: { outcome: UninstallOutcome }) {
       <Banner
         tone="warning"
         icon={<AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />}
-        title={`Removed ${outcome.removed.length}. Some of it is still on this computer.`}
+        title={t(($) => $.desktop.uninstall.outcome_partial_title, {
+          count: outcome.removed.length,
+        })}
       >
         <ul className="mt-2 divide-y divide-surface-border">
           {outcome.failed.map((failure) => (
@@ -126,7 +130,7 @@ function OutcomeReport({ outcome }: { outcome: UninstallOutcome }) {
           ))}
         </ul>
         <p className="mt-2 text-xs text-muted-foreground">
-          Remove these by hand, or try again once whatever is holding them has let go.
+          {t(($) => $.desktop.uninstall.outcome_partial_hint)}
         </p>
       </Banner>
     );
@@ -137,7 +141,7 @@ function OutcomeReport({ outcome }: { outcome: UninstallOutcome }) {
       <Banner
         tone="neutral"
         icon={<Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" />}
-        title="There was nothing left to remove."
+        title={t(($) => $.desktop.uninstall.outcome_nothing_to_remove_title)}
       />
     );
   }
@@ -146,12 +150,14 @@ function OutcomeReport({ outcome }: { outcome: UninstallOutcome }) {
     <Banner
       tone="neutral"
       icon={<Check className="mt-0.5 size-4 shrink-0 text-success" />}
-      title={`Removed ${outcome.removed.length} ${outcome.removed.length === 1 ? 'item' : 'items'}.`}
+      title={t(($) => $.desktop.uninstall.outcome_success_title, {
+        count: outcome.removed.length,
+      })}
     >
       {outcome.manualSteps.length > 0 && (
         <div className="mt-2">
           <p className="text-xs text-muted-foreground">
-            One thing is left, and the app cannot do it while it is running:
+            {t(($) => $.desktop.uninstall.outcome_success_manual_note)}
           </p>
           <ManualStepList steps={outcome.manualSteps} />
         </div>
@@ -161,6 +167,7 @@ function OutcomeReport({ outcome }: { outcome: UninstallOutcome }) {
 }
 
 export function UninstallSection() {
+  const { t } = useT('settings');
   const [plan, setPlan] = useState<UninstallPlan | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
   const [planning, setPlanning] = useState(false);
@@ -207,16 +214,18 @@ export function UninstallSection() {
 
   return (
     <SettingsSection
-      title="Uninstall"
-      description="Remove what Goosar put on this computer. Nothing is deleted until you have seen the list."
+      title={t(($) => $.desktop.uninstall.title)}
+      description={t(($) => $.desktop.uninstall.description)}
     >
       <SettingsCard>
         <SettingsRow
-          label="Review what would be removed"
-          description="Reads the disk and lists every file and folder this app created, with its size. Nothing is deleted by looking."
+          label={t(($) => $.desktop.uninstall.review_label)}
+          description={t(($) => $.desktop.uninstall.review_description)}
         >
           <Button variant="outline" onClick={review} disabled={planning || running}>
-            {planning ? 'Reading…' : 'Show what would be removed'}
+            {planning
+              ? t(($) => $.desktop.uninstall.review_button_loading)
+              : t(($) => $.desktop.uninstall.review_button)}
           </Button>
         </SettingsRow>
       </SettingsCard>
@@ -225,7 +234,7 @@ export function UninstallSection() {
         <Banner
           tone="error"
           icon={<AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />}
-          title="Could not read what is installed"
+          title={t(($) => $.desktop.uninstall.plan_error_title)}
         >
           <p className="mt-0.5 break-words text-sm text-muted-foreground">{planError}</p>
         </Banner>
@@ -235,7 +244,7 @@ export function UninstallSection() {
         <Banner
           tone="neutral"
           icon={<Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" />}
-          title="Nothing installed by this app is left on this computer."
+          title={t(($) => $.desktop.uninstall.nothing_installed_title)}
         >
           {plan.manualSteps.length > 0 && (
             <div className="mt-2">
@@ -248,7 +257,7 @@ export function UninstallSection() {
       {plan !== null && hasAnything && (
         <SettingsCard>
           <div className="px-4 py-3">
-            <p className="text-sm font-medium">Will be removed</p>
+            <p className="text-sm font-medium">{t(($) => $.desktop.uninstall.will_be_removed)}</p>
             <ItemList items={plan.software} />
           </div>
 
@@ -263,12 +272,10 @@ export function UninstallSection() {
                 />
                 <span className="min-w-0 leading-5">
                   <span className="text-sm font-medium">
-                    Also delete my agent configuration, agents, skills, schedules, and history
+                    {t(($) => $.desktop.uninstall.keep_user_data_label)}
                   </span>
                   <span className="mt-0.5 block text-xs text-muted-foreground">
-                    These are yours, not the app&apos;s: the configuration file holds a working LLM
-                    API key, and once deleted it cannot be brought back — reinstalling restores the
-                    software, never your files.
+                    {t(($) => $.desktop.uninstall.keep_user_data_description)}
                   </span>
                 </span>
               </label>
@@ -280,21 +287,23 @@ export function UninstallSection() {
 
           {plan.kept.length > 0 && (
             <div className="px-4 py-3">
-              <p className="text-sm font-medium">Left alone</p>
+              <p className="text-sm font-medium">{t(($) => $.desktop.uninstall.left_alone)}</p>
               <KeptList items={plan.kept} />
             </div>
           )}
 
           {plan.manualSteps.length > 0 && (
             <div className="px-4 py-3">
-              <p className="text-sm font-medium">You will have to do this yourself</p>
+              <p className="text-sm font-medium">
+                {t(($) => $.desktop.uninstall.manual_steps_label)}
+              </p>
               <ManualStepList steps={plan.manualSteps} />
             </div>
           )}
 
           <SettingsRow
-            label="Remove them"
-            description="The local daemon is stopped first. If it will not stop, nothing is deleted."
+            label={t(($) => $.desktop.uninstall.remove_row_label)}
+            description={t(($) => $.desktop.uninstall.remove_row_description)}
           >
             <Button
               variant="destructive"
@@ -302,8 +311,11 @@ export function UninstallSection() {
               disabled={running || selected.length === 0}
             >
               {running
-                ? 'Removing…'
-                : `Remove ${selected.length} ${selected.length === 1 ? 'item' : 'items'} (${formatBytes(totalBytes(selected))})`}
+                ? t(($) => $.desktop.uninstall.remove_button_loading)
+                : t(($) => $.desktop.uninstall.remove_button, {
+                    count: selected.length,
+                    size: formatBytes(totalBytes(selected)),
+                  })}
             </Button>
           </SettingsRow>
         </SettingsCard>
@@ -313,12 +325,11 @@ export function UninstallSection() {
         <Banner
           tone="error"
           icon={<AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />}
-          title="The uninstall did not report back"
+          title={t(($) => $.desktop.uninstall.run_error_title)}
         >
           <p className="mt-0.5 break-words text-sm text-muted-foreground">{runError}</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Some of it may have been removed and some not — the app never heard the answer. Read the
-            list again to see what is still there.
+            {t(($) => $.desktop.uninstall.run_error_body)}
           </p>
         </Banner>
       )}

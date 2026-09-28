@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+vi.mock('@goosar/views/i18n', async () => {
+  const { settingsI18nMock } = await import('../../../../test/i18n-settings-mock');
+  return await settingsI18nMock();
+});
+
 import { UninstallSection } from './uninstall-section';
 import type {
   UninstallItem,

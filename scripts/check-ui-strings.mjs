@@ -28,10 +28,9 @@ const GUARDED_DIRS = [
 
 // Untranslated components that predate #430 and are out of its scope. They are
 // named here rather than silently excluded so the debt stays visible: a new file
-// in a guarded directory is checked from its first commit, these three are not.
+// in a guarded directory is checked from its first commit, these two are not.
 const LEGACY_FILES = new Set([
   'apps/desktop/src/renderer/src/components/route-error-page.tsx',
-  'apps/desktop/src/renderer/src/components/uninstall-section.tsx',
   'apps/desktop/src/renderer/src/components/update-notification.tsx',
 ]);
 
