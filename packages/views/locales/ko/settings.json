@@ -943,6 +943,16 @@
       "run_error_title": "제거 결과를 확인하지 못했어요",
       "title": "제거",
       "will_be_removed": "삭제될 항목"
+    },
+    "route_error": {
+      "close_tab": "탭 닫기",
+      "go_to_issues": "이슈로 이동",
+      "not_found_description": "이 주소와 일치하는 항목이 Goosar에 없어요. 링크를 통해 여기로 왔다면, 페이지가 아니라 다른 사람의 컴퓨터에 있는 파일을 가리키고 있을 가능성이 높아요.",
+      "not_found_title": "이 페이지는 존재하지 않아요",
+      "reload_tab": "탭 새로고침",
+      "report_error": "오류 신고",
+      "unexpected_description": "경로 수준의 렌더링 오류가 데스크톱 앱 전체에 영향을 주기 전에 차단됐어요. 이 탭을 새로고침하거나, 계속 반복되면 보고서를 보내주세요.",
+      "unexpected_title": "이 탭에서 문제가 발생했어요"
     }
   },
   "members": {

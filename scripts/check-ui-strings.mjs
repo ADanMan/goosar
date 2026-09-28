@@ -26,13 +26,10 @@ const GUARDED_DIRS = [
   'packages/views/onboarding',
 ];
 
-// Untranslated components that predate #430 and are out of its scope. They are
+// Untranslated components that predate #430 and are out of its scope. It is
 // named here rather than silently excluded so the debt stays visible: a new file
-// in a guarded directory is checked from its first commit, these two are not.
-const LEGACY_FILES = new Set([
-  'apps/desktop/src/renderer/src/components/route-error-page.tsx',
-  'apps/desktop/src/renderer/src/components/update-notification.tsx',
-]);
+// in a guarded directory is checked from its first commit, this one is not.
+const LEGACY_FILES = new Set(['apps/desktop/src/renderer/src/components/update-notification.tsx']);
 
 // Words that are names, not copy: brands, products, commands, env fragments.
 // They are stripped before the sentence heuristic runs, so `<span>Kerberos</span>`

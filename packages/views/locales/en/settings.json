@@ -1027,6 +1027,16 @@
       "run_error_title": "The uninstall did not report back",
       "title": "Uninstall",
       "will_be_removed": "Will be removed"
+    },
+    "route_error": {
+      "close_tab": "Close tab",
+      "go_to_issues": "Go to issues",
+      "not_found_description": "Nothing in Goosar matches this address. If you got here from a link, it probably points at a file on someone else's computer rather than a page.",
+      "not_found_title": "This page doesn't exist",
+      "reload_tab": "Reload tab",
+      "report_error": "Report error",
+      "unexpected_description": "A route-level renderer error was contained before it could take down the desktop shell. Reload this tab, or send the report if it keeps happening.",
+      "unexpected_title": "Something went wrong in this tab"
     }
   },
   "members": {

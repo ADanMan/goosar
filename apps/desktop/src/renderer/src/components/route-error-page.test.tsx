@@ -2,6 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 
+vi.mock('@goosar/views/i18n', async () => {
+  const { settingsI18nMock } = await import('../../../../test/i18n-settings-mock');
+  return await settingsI18nMock();
+});
+
 const openModal = vi.fn();
 const reloadActiveTab = vi.fn();
 const closeActiveTab = vi.fn();

@@ -1016,6 +1016,16 @@
       "run_error_title": "アンインストールの結果が確認できませんでした",
       "title": "アンインストール",
       "will_be_removed": "削除される内容"
+    },
+    "route_error": {
+      "close_tab": "タブを閉じる",
+      "go_to_issues": "課題に移動",
+      "not_found_description": "この住所に一致するものは Goosar にありません。リンクからここに来た場合、それはページではなく他の人のコンピューター上のファイルを指している可能性が高いです。",
+      "not_found_title": "このページは存在しません",
+      "reload_tab": "タブを再読み込み",
+      "report_error": "エラーを報告",
+      "unexpected_description": "ルートレベルのレンダリングエラーは、デスクトップアプリ全体に影響する前に食い止められました。このタブを再読み込みするか、繰り返し発生する場合はレポートを送信してください。",
+      "unexpected_title": "このタブで問題が発生しました"
     }
   },
   "members": {

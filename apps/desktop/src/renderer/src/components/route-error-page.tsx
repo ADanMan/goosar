@@ -3,6 +3,7 @@ import { isRouteErrorResponse, useLocation, useRouteError } from 'react-router-d
 import { AlertTriangle, Compass, RotateCw, Send, X } from 'lucide-react';
 import { Button } from '@goosar/ui/components/ui/button';
 import { useModalStore } from '@goosar/core/modals';
+import { useT } from '@goosar/views/i18n';
 import { useTabStore } from '@/stores/tab-store';
 
 type DesktopAppInfo = {
@@ -57,6 +58,7 @@ export function DesktopRouteErrorPage() {
 }
 
 function DesktopNotFoundPage() {
+  const { t } = useT('settings');
   const location = useLocation();
   const recoveryRoute = useRecoveryRoute();
 
@@ -69,10 +71,9 @@ function DesktopNotFoundPage() {
         <Compass className="h-6 w-6" aria-hidden="true" />
       </div>
       <div className="space-y-2">
-        <h2 className="text-lg font-semibold">This page doesn&apos;t exist</h2>
+        <h2 className="text-lg font-semibold">{t(($) => $.desktop.route_error.not_found_title)}</h2>
         <p className="max-w-lg text-sm text-muted-foreground">
-          Nothing in Goosar matches this address. If you got here from a link, it probably points at
-          a file on someone else&apos;s computer rather than a page.
+          {t(($) => $.desktop.route_error.not_found_description)}
         </p>
         <p className="max-w-lg truncate font-mono text-xs text-muted-foreground">
           {location.pathname}
@@ -87,12 +88,12 @@ function DesktopNotFoundPage() {
               useTabStore.getState().navigateActiveSession(recoveryRoute, { replace: true })
             }
           >
-            Go to issues
+            {t(($) => $.desktop.route_error.go_to_issues)}
           </Button>
         ) : null}
         <Button type="button" onClick={() => useTabStore.getState().closeActiveTab()}>
           <X className="mr-2 h-4 w-4" aria-hidden="true" />
-          Close tab
+          {t(($) => $.desktop.route_error.close_tab)}
         </Button>
       </div>
     </div>
@@ -100,6 +101,7 @@ function DesktopNotFoundPage() {
 }
 
 function DesktopUnexpectedErrorPage({ error }: { error: unknown }) {
+  const { t } = useT('settings');
   const location = useLocation();
   const recoveryRoute = useRecoveryRoute();
   const report = useMemo(
@@ -126,10 +128,9 @@ function DesktopUnexpectedErrorPage({ error }: { error: unknown }) {
         <AlertTriangle className="h-6 w-6" aria-hidden="true" />
       </div>
       <div className="space-y-2">
-        <h2 className="text-lg font-semibold">Something went wrong in this tab</h2>
+        <h2 className="text-lg font-semibold">{t(($) => $.desktop.route_error.unexpected_title)}</h2>
         <p className="max-w-lg text-sm text-muted-foreground">
-          A route-level renderer error was contained before it could take down the desktop shell.
-          Reload this tab, or send the report if it keeps happening.
+          {t(($) => $.desktop.route_error.unexpected_description)}
         </p>
         <p className="max-w-lg truncate text-xs text-muted-foreground">{message}</p>
       </div>
@@ -140,7 +141,7 @@ function DesktopUnexpectedErrorPage({ error }: { error: unknown }) {
           onClick={() => useTabStore.getState().reloadActiveTab()}
         >
           <RotateCw className="mr-2 h-4 w-4" aria-hidden="true" />
-          Reload tab
+          {t(($) => $.desktop.route_error.reload_tab)}
         </Button>
         {recoveryRoute ? (
           <Button
@@ -150,7 +151,7 @@ function DesktopUnexpectedErrorPage({ error }: { error: unknown }) {
               useTabStore.getState().navigateActiveSession(recoveryRoute, { replace: true })
             }
           >
-            Go to issues
+            {t(($) => $.desktop.route_error.go_to_issues)}
           </Button>
         ) : null}
         <Button
@@ -159,7 +160,7 @@ function DesktopUnexpectedErrorPage({ error }: { error: unknown }) {
           onClick={() => useTabStore.getState().closeActiveTab()}
         >
           <X className="mr-2 h-4 w-4" aria-hidden="true" />
-          Close tab
+          {t(($) => $.desktop.route_error.close_tab)}
         </Button>
         <Button
           type="button"
@@ -171,7 +172,7 @@ function DesktopUnexpectedErrorPage({ error }: { error: unknown }) {
           }
         >
           <Send className="mr-2 h-4 w-4" aria-hidden="true" />
-          Report error
+          {t(($) => $.desktop.route_error.report_error)}
         </Button>
       </div>
     </div>

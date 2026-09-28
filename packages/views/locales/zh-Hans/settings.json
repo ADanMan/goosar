@@ -1016,6 +1016,16 @@
       "run_error_title": "卸载没有返回结果",
       "title": "卸载",
       "will_be_removed": "将被删除"
+    },
+    "route_error": {
+      "close_tab": "关闭标签页",
+      "go_to_issues": "前往任务",
+      "not_found_description": "Goosar 中没有与此地址匹配的内容。如果你是通过链接进入此处的，它很可能指向别人电脑上的文件，而不是一个页面。",
+      "not_found_title": "此页面不存在",
+      "reload_tab": "重新加载标签页",
+      "report_error": "报告错误",
+      "unexpected_description": "路由层级的渲染错误已被拦截，未影响整个桌面应用。请重新加载此标签页，如果反复出现，请发送报告。",
+      "unexpected_title": "此标签页出现了问题"
     }
   },
   "members": {
