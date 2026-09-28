@@ -15,6 +15,12 @@ export function FloatingChat() {
   if (pathname === wsPaths.chat() || pathname.startsWith(`${wsPaths.chat()}/`)) {
     return null;
   }
+  // На мастере создания агента чат с агентами заведомо нерабочий (агентов ещё
+  // нет) и только отвлекает поверх шага мастера — скрываем виджет на этом
+  // маршруте (T-033, docs/33-ux-review.md).
+  if (pathname === wsPaths.newAgent()) {
+    return null;
+  }
 
   return (
     <>
