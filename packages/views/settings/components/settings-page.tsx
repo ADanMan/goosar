@@ -23,6 +23,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@goosar/ui/components/ui/tabs';
 import { Skeleton } from '@goosar/ui/components/ui/skeleton';
 import { useIsMobile } from '@goosar/ui/hooks/use-mobile';
+import { cn } from '@goosar/ui/lib/utils';
 import { useAuthStore } from '@goosar/core/auth';
 import { useCurrentWorkspace } from '@goosar/core/paths';
 import { memberListOptions } from '@goosar/core/workspace/queries';
@@ -113,6 +114,15 @@ const LEGACY_WORKSPACE_TAB_REDIRECTS: Record<string, string> = {
 const SETTINGS_TAB_TRIGGER_CLASS =
   'h-8 shrink-0 px-2.5 hover:bg-surface-hover data-active:!bg-surface-selected data-active:!text-surface-selected-foreground data-active:hover:!bg-surface-selected md:!w-full md:px-2 md:after:hidden';
 
+// §3 L91: on the narrow layout the rail stays a flat row instead of the
+// grouped column it is at md+, but the group label is kept as a compact
+// divider (uppercase, no padding to spare) rather than `hidden` outright —
+// it is still the only way to tell personal/workspace/deployment tabs apart
+// short of reading each icon. Callers add their own md:pt-* (the desktop
+// layout still wants more space above the 2nd/3rd group than the 1st).
+const SETTINGS_TAB_GROUP_LABEL_CLASS =
+  'flex shrink-0 items-center whitespace-nowrap px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground md:block md:pb-1 md:text-xs md:font-medium md:normal-case md:tracking-normal';
+
 export interface ExtraSettingsTab {
   value: string;
   label: string;
@@ -191,7 +201,12 @@ export function SettingsPage({
       {/* Structural navigation; bounded setting groups remain in the content surface.
           Stays on the content surface color (no shell tint): the desktop's active
           tab merges into the card top, and a tinted panel under the first tabs
-          breaks that seam (MUL-4439). Zoning comes from the divider instead. */}
+          breaks that seam (MUL-4439). Zoning comes from the divider instead.
+
+          §3 L98: this rail is intentionally NOT independently collapsible,
+          unlike the app's primary sidebar — it is a settings-only nested
+          panel (HIG "Sidebars"), and the asymmetry is deliberate, not a gap
+          to close on the next pass through this file. */}
       <div className="shrink-0 overflow-x-auto border-b border-surface-border p-2 md:w-56 md:overflow-y-auto md:border-b-0 md:border-r md:p-4">
         <h1 className="sr-only text-sm font-semibold md:not-sr-only md:mb-4 md:px-2">
           {t(($) => $.page.title)}
@@ -201,7 +216,7 @@ export function SettingsPage({
           className="flex w-max min-w-full flex-row items-center gap-1 p-0 md:w-full md:flex-col md:items-stretch"
         >
           {/* My Account group */}
-          <span className="hidden px-2 pb-1 pt-2 text-xs font-medium text-muted-foreground md:block">
+          <span className={cn(SETTINGS_TAB_GROUP_LABEL_CLASS, 'md:pt-2')}>
             {t(($) => $.page.my_account)}
           </span>
           {ACCOUNT_TAB_KEYS.map((key) => {
@@ -221,7 +236,12 @@ export function SettingsPage({
           ))}
 
           {/* Workspace group */}
-          <span className="hidden truncate px-2 pb-1 pt-4 text-xs font-medium text-muted-foreground md:block">
+          <span
+            className={cn(
+              SETTINGS_TAB_GROUP_LABEL_CLASS,
+              'max-w-[8rem] truncate md:max-w-none md:pt-4',
+            )}
+          >
             {workspaceName ?? t(($) => $.page.workspace_fallback)}
           </span>
           {workspaceTabKeys.map((key) => {
@@ -242,7 +262,7 @@ export function SettingsPage({
               role (see the gate above). */}
           {isDeploymentAdmin && (
             <>
-              <span className="hidden px-2 pb-1 pt-4 text-xs font-medium text-muted-foreground md:block">
+              <span className={cn(SETTINGS_TAB_GROUP_LABEL_CLASS, 'md:pt-4')}>
                 {t(($) => $.page.deployment_group)}
               </span>
               <TabsTrigger value="deployment" className={SETTINGS_TAB_TRIGGER_CLASS}>
