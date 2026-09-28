@@ -57,6 +57,7 @@
     "not_found_title": "Компьютер не найден",
     "not_found_hint": "Возможно, он офлайн, удалён или больше вам недоступен.",
     "metrics": {
+      "machine": "Компьютер",
       "runtimes": "Среды выполнения",
       "runtimes_hint_one": "{{count}} онлайн",
       "runtimes_hint_few": "{{count}} онлайн",
@@ -73,6 +74,7 @@
       "workload_idle": "Все свободны",
       "workload_hint": "{{running}} в работе · {{queued}} в очереди",
       "cli": "CLI",
+      "last_online": "Последний раз онлайн",
       "cloud_worker": "Облачный узел",
       "local_daemon": "Локальный демон"
     },

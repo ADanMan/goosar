@@ -51,6 +51,7 @@
     "not_found_title": "未找到机器",
     "not_found_hint": "它可能已离线、被移除，或你已无权访问。",
     "metrics": {
+      "machine": "机器",
       "runtimes": "运行时",
       "runtimes_hint_other": "{{count}} 个在线",
       "health": "健康度",
@@ -61,6 +62,7 @@
       "workload_idle": "全部空闲",
       "workload_hint": "{{running}} 个运行中 · {{queued}} 个排队中",
       "cli": "CLI",
+      "last_online": "最近在线",
       "cloud_worker": "云端 worker",
       "local_daemon": "本地守护进程"
     },

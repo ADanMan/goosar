@@ -236,11 +236,31 @@ function MachineList({
 
   return (
     <div className="overflow-hidden rounded-lg border bg-card">
+      <MachineListHeader />
       <div className="divide-y">
         {machines.map((machine) => (
           <MachineRow key={machine.id} machine={machine} />
         ))}
       </div>
+    </div>
+  );
+}
+
+// Заголовок столбцов, выровненный по тем же ширинам и точкам
+// адаптивности, что и колонки MachineRow ниже.
+function MachineListHeader() {
+  const { t } = useT('runtimes');
+  return (
+    <div className="flex items-center gap-3 border-b bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground">
+      <span className="w-10 shrink-0" aria-hidden="true" />
+      <span className="min-w-0 flex-1">{t(($) => $.machine.metrics.machine)}</span>
+      <span className="hidden w-36 shrink-0 md:block">{t(($) => $.machine.metrics.health)}</span>
+      <span className="hidden w-40 shrink-0 lg:block">{t(($) => $.machine.metrics.runtimes)}</span>
+      <span className="hidden w-36 shrink-0 xl:block">{t(($) => $.machine.metrics.workload)}</span>
+      <span className="hidden w-28 shrink-0 text-right lg:block">
+        {t(($) => $.machine.metrics.last_online)}
+      </span>
+      <span className="w-4 shrink-0" aria-hidden="true" />
     </div>
   );
 }

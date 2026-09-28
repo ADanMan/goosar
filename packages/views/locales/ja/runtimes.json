@@ -51,6 +51,7 @@
     "not_found_title": "マシンが見つかりません",
     "not_found_hint": "オフライン、削除済み、またはアクセスできなくなった可能性があります。",
     "metrics": {
+      "machine": "マシン",
       "runtimes": "ランタイム",
       "runtimes_hint_other": "オンライン {{count}} 個",
       "health": "状態",
@@ -61,6 +62,7 @@
       "workload_idle": "すべてアイドル",
       "workload_hint": "実行中 {{running}} 件 · キュー待ち {{queued}} 件",
       "cli": "CLI",
+      "last_online": "最終オンライン",
       "cloud_worker": "クラウドワーカー",
       "local_daemon": "ローカルデーモン"
     },
