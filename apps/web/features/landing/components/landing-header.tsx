@@ -11,6 +11,12 @@ import { useDashboardCtaHref } from '../utils/use-dashboard-cta';
 import { formatStarCount, useGithubStars } from '../utils/github-stars';
 import { GitHubMark, githubUrl, headerButtonClassName, type LandingVariant } from './shared';
 
+// Mirrors the header-button split in shared.tsx: `dark` and `hero` both
+// float over the always-dark hero/rail band, `light` sits on the plain page.
+function isInverseVariant(variant: LandingVariant) {
+  return variant !== 'light';
+}
+
 export function LandingHeader({ variant = 'dark' }: { variant?: LandingVariant }) {
   const { t } = useLocale();
   const user = useAuthStore((s) => s.user);
@@ -24,7 +30,7 @@ export function LandingHeader({ variant = 'dark' }: { variant?: LandingVariant }
     <header
       className={cn(
         'relative inset-x-0 top-0 z-30',
-        variant === 'light' ? 'border-b border-[#1c1917]/8 bg-white' : 'absolute bg-transparent',
+        variant === 'light' ? 'border-b border-border bg-background' : 'absolute bg-transparent',
       )}
     >
       <div className="mx-auto flex h-[76px] max-w-[1320px] items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -33,22 +39,14 @@ export function LandingHeader({ variant = 'dark' }: { variant?: LandingVariant }
             <GoosarIcon
               className={cn(
                 'size-10',
-                variant === 'dark'
-                  ? 'text-white'
-                  : variant === 'light'
-                    ? 'text-[#1c1917]'
-                    : 'text-[#1c1917] dark:text-white',
+                isInverseVariant(variant) ? 'text-inverse-foreground' : 'text-foreground',
               )}
               noSpin
             />
             <span
               className={cn(
-                'text-[18px] font-semibold tracking-[0.04em] lowercase sm:text-[20px]',
-                variant === 'dark'
-                  ? 'text-white/92'
-                  : variant === 'light'
-                    ? 'text-[#1c1917]'
-                    : 'text-[#1c1917] dark:text-white/92',
+                'text-base font-semibold tracking-[0.04em] lowercase sm:text-lg',
+                isInverseVariant(variant) ? 'text-inverse-foreground' : 'text-foreground',
               )}
             >
               goosar
@@ -98,12 +96,10 @@ export function LandingHeader({ variant = 'dark' }: { variant?: LandingVariant }
       {isMenuOpen ? (
         <div
           className={cn(
-            'absolute left-4 right-4 top-[calc(100%+8px)] z-50 rounded-[14px] border p-2 shadow-[0_18px_60px_rgba(0,0,0,0.18)] backdrop-blur-xl md:hidden',
-            variant === 'dark'
-              ? 'border-white/14 bg-[#141210]/95 text-white'
-              : variant === 'light'
-                ? 'border-[#1c1917]/10 bg-white text-[#1c1917]'
-                : 'border-[#1c1917]/10 bg-white/95 text-[#1c1917] dark:border-white/14 dark:bg-[#1a1715]/95 dark:text-white',
+            'absolute left-4 right-4 top-[calc(100%+8px)] z-50 rounded-xl border p-2 shadow-md backdrop-blur-xl md:hidden',
+            isInverseVariant(variant)
+              ? 'border-inverse-foreground/15 bg-inverse/95 text-inverse-foreground'
+              : 'border-border bg-card/95 text-foreground',
           )}
         >
           <div>
@@ -152,22 +148,18 @@ function GitHubStarsBadge({ label }: { label: string }) {
 
 function navLinkClassName(variant: LandingVariant) {
   return cn(
-    'text-[14px] font-medium transition-colors',
-    variant === 'dark'
-      ? 'text-white/72 hover:text-white'
-      : variant === 'light'
-        ? 'text-[#1c1917]/64 hover:text-[#1c1917]'
-        : 'text-[#1c1917]/64 hover:text-[#1c1917] dark:text-white/72 dark:hover:text-white',
+    'text-sm font-medium transition-colors',
+    isInverseVariant(variant)
+      ? 'text-inverse-muted-foreground hover:text-inverse-foreground'
+      : 'text-muted-foreground hover:text-foreground',
   );
 }
 
 function mobileNavLinkClassName(variant: LandingVariant) {
   return cn(
-    'flex min-h-11 items-center gap-2 rounded-[10px] px-3 text-[14px] font-medium transition-colors',
-    variant === 'dark'
-      ? 'text-white/76 hover:bg-white/8 hover:text-white'
-      : variant === 'light'
-        ? 'text-[#1c1917]/68 hover:bg-[#1c1917]/5 hover:text-[#1c1917]'
-        : 'text-[#1c1917]/68 hover:bg-[#1c1917]/5 hover:text-[#1c1917] dark:text-white/76 dark:hover:bg-white/8 dark:hover:text-white',
+    'flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-medium transition-colors',
+    isInverseVariant(variant)
+      ? 'text-inverse-muted-foreground hover:bg-inverse-foreground/10 hover:text-inverse-foreground'
+      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
   );
 }

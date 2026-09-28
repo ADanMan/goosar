@@ -82,37 +82,37 @@ function VersionInfoFooter({
   const d = t.download.footer;
 
   return (
-    <section className="bg-white pb-16 text-[#1c1917] sm:pb-20">
-      <div className="mx-auto flex max-w-[920px] flex-wrap items-center gap-x-6 gap-y-2 border-t border-[#1c1917]/8 px-4 pt-8 text-[13px] text-[#1c1917]/60 sm:px-6 lg:px-8">
+    <section className="bg-background pb-16 text-foreground sm:pb-20">
+      <div className="mx-auto flex max-w-[920px] flex-wrap items-center gap-x-6 gap-y-2 border-t border-border px-4 pt-8 text-xs text-muted-foreground sm:px-6 lg:px-8">
         {version ? (
           <>
             <span>{d.currentVersion.replace('{version}', version)}</span>
-            <span aria-hidden className="text-[#1c1917]/25">
+            <span aria-hidden className="text-muted-foreground/60">
               ·
             </span>
             <Link
               href={releaseHtmlUrl}
-              className="underline decoration-[#1c1917]/30 underline-offset-4 hover:text-[#1c1917] hover:decoration-[#1c1917]/70"
+              className="underline decoration-border underline-offset-4 hover:text-foreground hover:decoration-foreground/70"
               target="_blank"
               rel="noreferrer"
             >
               {d.releaseNotes.replace('{version}', version)}
             </Link>
-            <span aria-hidden className="text-[#1c1917]/25">
+            <span aria-hidden className="text-muted-foreground/60">
               ·
             </span>
           </>
         ) : (
           <>
             <span>{d.versionUnavailable}</span>
-            <span aria-hidden className="text-[#1c1917]/25">
+            <span aria-hidden className="text-muted-foreground/60">
               ·
             </span>
           </>
         )}
         <Link
           href={ALL_RELEASES_URL}
-          className="underline decoration-[#1c1917]/30 underline-offset-4 hover:text-[#1c1917] hover:decoration-[#1c1917]/70"
+          className="underline decoration-border underline-offset-4 hover:text-foreground hover:decoration-foreground/70"
           target="_blank"
           rel="noreferrer"
         >

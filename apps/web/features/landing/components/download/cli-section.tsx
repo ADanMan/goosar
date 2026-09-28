@@ -21,12 +21,12 @@ export function CliSection() {
   const installCmd = installCommand(appUrl);
 
   return (
-    <section id="cli" className="bg-[#f7f7f5] py-20 text-[#1c1917] sm:py-24">
+    <section id="cli" className="bg-muted py-20 text-foreground sm:py-24">
       <div className="mx-auto max-w-[820px] px-4 sm:px-6 lg:px-8">
-        <h2 className="font-[family-name:var(--font-serif)] text-[2.2rem] leading-[1.1] tracking-[-0.03em] sm:text-[2.6rem]">
+        <h2 className="font-[family-name:var(--font-serif)] text-xl leading-[1.1] tracking-[-0.03em] sm:text-2xl">
           {d.title}
         </h2>
-        <p className="mt-4 max-w-[620px] text-[15px] leading-7 text-[#1c1917]/72">{d.sub}</p>
+        <p className="mt-4 max-w-[620px] text-sm leading-7 text-muted-foreground">{d.sub}</p>
 
         <div className="mt-10 flex flex-col gap-5">
           <CommandBlock
@@ -43,7 +43,7 @@ export function CliSection() {
           />
         </div>
 
-        <p className="mt-6 text-[13px] text-[#1c1917]/60">{d.sshNote}</p>
+        <p className="mt-6 text-xs text-muted-foreground">{d.sshNote}</p>
       </div>
     </section>
   );
@@ -71,17 +71,17 @@ function CommandBlock({
 
   return (
     <div>
-      <p className="mb-2 text-[12px] font-medium uppercase tracking-[0.08em] text-[#1c1917]/55">
+      <p className="mb-2 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
         {label}
       </p>
-      <div className="flex items-start gap-3 rounded-xl border border-[#1c1917]/10 bg-white px-4 py-3 font-mono text-[13.5px]">
-        <Terminal className="mt-0.5 size-4 shrink-0 text-[#1c1917]/55" aria-hidden />
+      <div className="flex items-start gap-3 rounded-xl border border-border bg-card px-4 py-3 font-mono text-sm">
+        <Terminal className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
         <code className="min-w-0 flex-1 whitespace-pre-wrap break-all">{cmd}</code>
         <button
           type="button"
           onClick={onCopy}
           aria-label={copied ? copiedLabel : copyLabel}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-medium text-[#1c1917]/70 transition-colors hover:bg-[#1c1917]/5 hover:text-[#1c1917]"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           {copied ? (
             <>

@@ -39,7 +39,7 @@ export default async function LandingLayout({ children }: { children: React.Reac
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <div className={`landing-light h-full overflow-x-hidden overflow-y-auto bg-white`}>
+      <div className={`landing-light h-full overflow-x-hidden overflow-y-auto bg-background`}>
         <LocaleProvider initialLocale={initialLocale}>
           <GithubStarsProvider stars={githubStars}>{children}</GithubStarsProvider>
         </LocaleProvider>

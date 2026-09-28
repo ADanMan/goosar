@@ -10,12 +10,12 @@ export function CloudSection() {
   const [submitted, setSubmitted] = useState(false);
 
   return (
-    <section className="bg-white py-20 text-[#1c1917] sm:py-24">
+    <section className="bg-background py-20 text-foreground sm:py-24">
       <div className="mx-auto max-w-[720px] px-4 sm:px-6 lg:px-8">
-        <h2 className="font-[family-name:var(--font-serif)] text-[2.2rem] leading-[1.1] tracking-[-0.03em] sm:text-[2.6rem]">
+        <h2 className="font-[family-name:var(--font-serif)] text-xl leading-[1.1] tracking-[-0.03em] sm:text-2xl">
           {d.title}
         </h2>
-        <p className="mt-4 max-w-[560px] text-[15px] leading-7 text-[#1c1917]/72">{d.sub}</p>
+        <p className="mt-4 max-w-[560px] text-sm leading-7 text-muted-foreground">{d.sub}</p>
 
         <div className="mt-10">
           <CloudWaitlistExpand

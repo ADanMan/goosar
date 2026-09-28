@@ -18,13 +18,13 @@ export function DownloadHero({ detected, assets, versionUnavailable }: Props) {
   const content = resolveContent(detected, assets, versionUnavailable, d);
 
   return (
-    <section className="relative overflow-hidden bg-[#141210] text-white">
+    <section className="relative overflow-hidden bg-inverse text-inverse-foreground">
       <BackdropGradient />
       <div className="relative z-10 mx-auto max-w-[1120px] px-4 pb-24 pt-32 text-center sm:px-6 sm:pt-40 lg:px-8 lg:pb-28">
-        <h1 className="mx-auto max-w-[880px] font-[family-name:var(--font-serif)] text-[3rem] leading-[1.02] tracking-[-0.035em] drop-shadow-[0_10px_34px_rgba(0,0,0,0.32)] sm:text-[4rem] lg:text-[5rem]">
+        <h1 className="mx-auto max-w-[880px] font-[family-name:var(--font-serif)] text-2xl leading-[1.02] tracking-[-0.035em] drop-shadow-lg sm:text-3xl">
           {content.title}
         </h1>
-        <p className="mx-auto mt-6 max-w-[620px] text-[15px] leading-7 text-white/84 sm:text-[17px]">
+        <p className="mx-auto mt-6 max-w-[620px] text-sm leading-7 text-inverse-foreground sm:text-base">
           {content.sub}
         </p>
 
@@ -44,11 +44,13 @@ export function DownloadHero({ detected, assets, versionUnavailable }: Props) {
         </div>
 
         {content.hint ? (
-          <p className="mx-auto mt-5 max-w-[520px] text-[13px] text-white/64">{content.hint}</p>
+          <p className="mx-auto mt-5 max-w-[520px] text-xs text-inverse-muted-foreground">
+            {content.hint}
+          </p>
         ) : null}
 
         {versionUnavailable ? (
-          <p className="mx-auto mt-6 max-w-[520px] text-[12px] uppercase tracking-[0.14em] text-white/50">
+          <p className="mx-auto mt-6 max-w-[520px] text-xs uppercase tracking-[0.14em] text-inverse-muted-foreground">
             {t.download.footer.versionUnavailable}
           </p>
         ) : null}
@@ -181,7 +183,7 @@ function PrimaryCta({
     return (
       <span
         aria-disabled="true"
-        className="inline-flex cursor-not-allowed items-center justify-center gap-2 rounded-[12px] border border-white/15 bg-white/8 px-5 py-3 text-[14px] font-semibold text-white/60"
+        className="inline-flex h-10 cursor-not-allowed items-center justify-center gap-2 rounded-md border border-inverse-foreground/15 bg-inverse-foreground/5 px-4 text-sm font-medium text-inverse-muted-foreground"
       >
         {children}
       </span>
@@ -201,7 +203,7 @@ function BackdropGradient() {
       className="pointer-events-none absolute inset-0"
       style={{
         background:
-          'radial-gradient(ellipse 70% 50% at 50% 0%, rgba(249,115,22,0.16), transparent 60%), radial-gradient(ellipse 50% 40% at 50% 80%, rgba(249,115,22,0.06), transparent 60%)',
+          'radial-gradient(ellipse 70% 50% at 50% 0%, color-mix(in oklch, var(--brand) 35%, transparent), transparent 60%), radial-gradient(ellipse 50% 40% at 50% 80%, color-mix(in oklch, var(--brand) 15%, transparent), transparent 60%)',
       }}
     />
   );

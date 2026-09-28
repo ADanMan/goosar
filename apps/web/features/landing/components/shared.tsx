@@ -32,32 +32,38 @@ export function ImageIcon({ className }: { className?: string }) {
 
 export type LandingVariant = 'dark' | 'light' | 'hero';
 
+// Both `dark` and `hero` float the header over an always-dark band (the
+// download hero and the homepage hero share the same --inverse/--rail
+// surface in both themes), so they share one inverse treatment; `light`
+// is the plain-page header (e.g. /about).
+function isInverseVariant(variant: LandingVariant) {
+  return variant !== 'light';
+}
+
+// One primary-button shape for every landing CTA: header, hero, and the
+// section CTAs that route through it. Same height/padding/radius/type for
+// solid and ghost so buttons of equal importance always read the same.
+const BUTTON_BASE =
+  'inline-flex h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-medium transition-colors';
+
 export function headerButtonClassName(tone: 'ghost' | 'solid', variant: LandingVariant = 'dark') {
+  if (tone === 'solid') {
+    return cn(BUTTON_BASE, 'bg-brand text-brand-foreground hover:bg-brand/90');
+  }
   return cn(
-    'inline-flex items-center justify-center gap-2 rounded-[11px] px-4 py-2.5 text-[13px] font-semibold transition-colors',
-    variant === 'dark'
-      ? tone === 'solid'
-        ? 'bg-white text-[#1c1917] hover:bg-white/92'
-        : 'border border-white/18 bg-black/16 text-white backdrop-blur-sm hover:bg-black/24'
-      : variant === 'light'
-        ? tone === 'solid'
-          ? 'bg-[#1c1917] text-white hover:bg-[#1c1917]/88'
-          : 'border border-[#1c1917]/12 bg-white text-[#1c1917] hover:bg-[#1c1917]/5'
-        : tone === 'solid'
-          ? 'bg-[#1c1917] text-white hover:bg-[#1c1917]/88 dark:bg-white dark:text-[#1c1917] dark:hover:bg-white/92'
-          : 'border border-[#1c1917]/12 bg-white/70 text-[#1c1917] backdrop-blur-sm hover:bg-white dark:border-white/18 dark:bg-black/16 dark:text-white dark:hover:bg-black/24',
+    BUTTON_BASE,
+    isInverseVariant(variant)
+      ? 'text-inverse-foreground hover:bg-inverse-foreground/10'
+      : 'text-foreground hover:bg-muted',
   );
 }
 
-export function heroButtonClassName(tone: 'ghost' | 'solid', variant: 'dark' | 'hero' = 'dark') {
+export function heroButtonClassName(tone: 'ghost' | 'solid') {
+  if (tone === 'solid') {
+    return cn(BUTTON_BASE, 'bg-brand text-brand-foreground hover:bg-brand/90');
+  }
   return cn(
-    'inline-flex items-center justify-center gap-2 rounded-[12px] px-5 py-3 text-[14px] font-semibold transition-colors',
-    variant === 'dark'
-      ? tone === 'solid'
-        ? 'bg-white text-[#1c1917] hover:bg-white/92'
-        : 'border border-white/18 bg-black/16 text-white backdrop-blur-sm hover:bg-black/24'
-      : tone === 'solid'
-        ? 'bg-[#1c1917] text-white hover:bg-[#1c1917]/88 dark:bg-white dark:text-[#1c1917] dark:hover:bg-white/92'
-        : 'border border-[#1c1917]/12 bg-white text-[#1c1917] hover:bg-[#1c1917]/5 dark:border-white/18 dark:bg-white/5 dark:text-white dark:hover:bg-white/10',
+    BUTTON_BASE,
+    'border border-inverse-foreground/20 text-inverse-foreground backdrop-blur-sm hover:bg-inverse-foreground/10',
   );
 }

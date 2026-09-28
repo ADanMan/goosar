@@ -9,18 +9,18 @@ export function FAQSection() {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   return (
-    <section id="faq" className="bg-[#f8f8f8] text-[#1c1917]">
+    <section id="faq" className="bg-muted text-foreground">
       <div className="mx-auto max-w-[860px] px-4 py-24 sm:px-6 sm:py-32 lg:py-40">
         <div className="text-center">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#1c1917]/40">
+          <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
             {t.faq.label}
           </p>
-          <h2 className="mt-4 font-[family-name:var(--font-serif)] text-[2.6rem] leading-[1.05] tracking-[-0.03em] sm:text-[3.4rem] lg:text-[4.2rem]">
+          <h2 className="mt-4 font-[family-name:var(--font-serif)] text-xl leading-[1.05] tracking-[-0.03em] sm:text-2xl">
             {t.faq.headline}
           </h2>
         </div>
 
-        <div className="mt-14 divide-y divide-[#1c1917]/10 sm:mt-16">
+        <div className="mt-14 divide-y divide-border sm:mt-16">
           {t.faq.items.map((faq, i) => (
             <div key={i}>
               <button
@@ -28,12 +28,12 @@ export function FAQSection() {
                 onClick={() => setOpenIndex(openIndex === i ? null : i)}
                 className="flex w-full items-start justify-between gap-4 py-6 text-left"
               >
-                <span className="text-[16px] font-semibold leading-snug text-[#1c1917] sm:text-[17px]">
+                <span className="text-base font-semibold leading-snug text-foreground sm:text-lg">
                   {faq.question}
                 </span>
                 <span
                   className={cn(
-                    'mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-[#1c1917]/12 text-[#1c1917]/40 transition-transform',
+                    'mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition-transform',
                     openIndex === i && 'rotate-45',
                   )}
                 >
@@ -57,7 +57,7 @@ export function FAQSection() {
                 )}
               >
                 <div className="overflow-hidden">
-                  <p className="pb-6 pr-12 text-[14px] leading-[1.7] text-[#1c1917]/56 sm:text-[15px]">
+                  <p className="pb-6 pr-12 text-sm leading-[1.7] text-muted-foreground">
                     {faq.answer}
                   </p>
                 </div>
