@@ -730,3 +730,4403 @@ paths:
       x-events:
         - name: issue:updated
           when: как у updateIssue (move — это PUT с вычисленным position)
+  /api/issues/{id}/comments/trigger-preview:
+    post:
+      operationId: previewCommentTriggers
+      tags: [IssueComments]
+      summary: Показать, каких агентов запустил бы этот комментарий, без публикации
+      description: >
+        Симулирует определение целей упоминания/маршрутизации комментария
+        (см. C.md, «Правила запуска агентов из комментария») для ещё не
+        отправленного или редактируемого (`editing_comment_id`) комментария;
+        не создаёт комментарий и не ставит задачи в очередь. Пустой `content`
+        возвращает пустой список.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CommentTriggerPreviewRequest'}
+      responses:
+        '200':
+          description: Прогноз агентов, которых бы запустил комментарий, и заблокированных целей
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommentTriggerPreviewResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /api/issues/{id}/comments:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: createIssueComment
+      tags: [IssueComments]
+      summary: Добавить комментарий к задаче
+      description: |
+        `type` по умолчанию `comment` (другие системные значения:
+        `status_change`, `progress_update`, `system` — выставляются сервером
+        для автоматических записей, не для этого эндпоинта напрямую).
+        `parent_id` делает комментарий ответом в треде; если родитель был
+        порождён как триггер для активной задачи агента с уже установленным
+        `trigger_comment_id`, ответ обязан быть направлен либо на этот
+        триггер-комментарий, либо на один из "коалесцированных" (см. C.md) —
+        иначе 409.
+
+        Комментарий, начинающийся с `/note` (без учёта регистра, с любыми
+        ведущими пробелами), никогда не запускает агентов — это заметка.
+
+        `suppress_agent_ids` исключает перечисленных агентов из авто-запуска
+        по этому конкретному комментарию (например, чтобы явно не разбудить
+        одного из нескольких упомянутых).
+
+        Публикация комментария от имени агента отменяет отложенные эскалации
+        (deferred escalation) по этой связке задача+агент и может авто-снять
+        резолюцию треда, если родительский комментарий был отмечен решённым, а
+        кто-то ответил в него.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateCommentRequest'}
+      responses:
+        '201':
+          description: Комментарий создан; `trigger_outcomes` показывает, что случилось с каждой целью запуска
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IssueComment'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: Комментарий-триггер агентской задачи должен быть ответом в её тред, а не новым топ-уровневым комментарием
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: comment:created
+          when: всегда при успешном создании
+          payload: "{ comment, issue_title, issue_assignee_type, issue_assignee_id, issue_status }"
+        - name: task:queued / task:dispatch (через подсистему задач)
+          when: комментарий упоминает агента/лидера отряда, является ответом автору предыдущего сообщения в треде или продолжает диалог с активным агентом — см. «Правила запуска агентов из комментария» в C.md
+    get:
+      operationId: listIssueComments
+      tags: [IssueComments]
+      summary: Список комментариев задачи с гибкой пагинацией/фильтрацией по треду
+      description: |
+        Поддерживаемые режимы (взаимно исключающие правила см. ниже):
+
+        - без параметров — все комментарии задачи (до 2000);
+        - `since` (RFC3339) — только созданные после указанного момента;
+        - `thread=<comment_id>` — все сообщения треда, корень которого —
+          указанный комментарий; с `tail=<N>` — только последние N ответов
+          треда плюс корень, с курсором `before`+`before_id` для более старых
+          страниц (композитный курсор — оба параметра только вместе);
+        - `recent=<N>` — N последних *тредов* (по времени последней
+          активности), с тем же курсором `before`+`before_id` для более
+          старых тредов;
+        - `roots_only=true` — только корневые комментарии (без ответов), с
+          `reply_count`/`last_activity_at` в ответе на каждый;
+        - `fold=true` — сворачивает решённые треды: показывает только
+          корень и его комментарий-резолюцию (если разрешён явным ответом) с
+          `folded_count` скрытых сообщений и `thread_resolved: true`; не
+          сочетается с `since`, `tail`, `roots_only` (для решённого треда без
+          явной резолюции-ответа остаётся показан целиком).
+        - `summary=true` — обрезает `content` каждого комментария до 200
+          символов рун, отмечая `content_truncated: true`.
+
+        Несовместимые комбинации возвращают 400 (`thread`+`recent`,
+        `roots_only` вместе с `thread`/`recent`/`tail`/курсором,
+        `tail` без `thread`, курсор без `recent` или без `thread`+`tail`).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - {name: since, in: query, schema: {type: string, format: date-time}}
+        - {name: thread, in: query, schema: {type: string, format: uuid}}
+        - {name: recent, in: query, schema: {type: integer}}
+        - {name: tail, in: query, schema: {type: integer}}
+        - {name: before, in: query, schema: {type: string, format: date-time}}
+        - {name: before_id, in: query, schema: {type: string, format: uuid}}
+        - {name: roots_only, in: query, schema: {type: boolean}}
+        - {name: fold, in: query, schema: {type: boolean}}
+        - {name: summary, in: query, schema: {type: boolean}}
+      responses:
+        '200':
+          description: Список комментариев (плоский массив, не объект); курсор для следующей страницы — в заголовках ответа
+          headers:
+            X-Goosar-Next-Before: {schema: {type: string}, description: RFC3339 время для следующей страницы курсора}
+            X-Goosar-Next-Before-Id: {schema: {type: string}, description: ID для следующей страницы курсора}
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/IssueComment'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404':
+          description: thread anchor не найден в этой задаче, либо сама задача не найдена
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/issues/{id}/timeline:
+    get:
+      operationId: listIssueTimeline
+      tags: [Issues]
+      summary: Объединённая лента активности задачи (комментарии, изменения полей, системные события)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Хронологический список записей ленты
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/IssueTimelineEntry'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/issues/{id}/subscribers:
+    get:
+      operationId: listIssueSubscribers
+      tags: [IssueSubscribers]
+      summary: Список подписчиков задачи
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Список подписчиков
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/IssueSubscriber'}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /api/issues/{id}/subscribe:
+    post:
+      operationId: subscribeToIssue
+      tags: [IssueSubscribers]
+      summary: Подписаться на задачу (или подписать другого участника воркспейса)
+      description: >
+        По умолчанию подписывает вызывающего актора с причиной `manual`.
+        Подписка другого пользователя (`user_type`/`user_id` в теле, отличные
+        от вызывающего) разрешена только человеку с ролью owner/admin в
+        воркспейсе; целевой пользователь должен быть участником воркспейса
+        (member) или существующим агентом.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id: {type: string, format: uuid}
+                user_type: {type: string, enum: [member, agent]}
+      responses:
+        '200':
+          description: Подписка оформлена
+          content:
+            application/json:
+              schema: {type: object, properties: {subscribed: {type: boolean}}}
+        '403':
+          description: Попытка подписать чужого пользователя без прав owner/admin, либо цель не принадлежит воркспейсу
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: subscriber:added
+          payload: "{ issue_id, user_type, user_id, reason: \"manual\" }"
+
+  /api/issues/{id}/unsubscribe:
+    post:
+      operationId: unsubscribeFromIssue
+      tags: [IssueSubscribers]
+      summary: Отписаться от задачи (или отписать другого участника)
+      description: Права на отписку чужого пользователя — как у subscribeToIssue.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id: {type: string, format: uuid}
+                user_type: {type: string, enum: [member, agent]}
+      responses:
+        '200':
+          description: Подписка снята
+          content:
+            application/json:
+              schema: {type: object, properties: {subscribed: {type: boolean}}}
+        '403':
+          description: Недостаточно прав, чтобы отписать чужого пользователя
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: subscriber:removed
+          payload: "{ issue_id, user_type, user_id }"
+
+  /api/issues/{id}/active-task:
+    get:
+      operationId: getActiveTaskForIssue
+      tags: [IssueTasks]
+      summary: Список активных (незавершённых) запусков агентов на задаче
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: "Активные задачи агентов (статусы queued/dispatched/running/waiting_local_directory/deferred)"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tasks: {type: array, items: {$ref: '#/components/schemas/AgentTask'}}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /api/issues/{id}/tasks/{taskId}/cancel:
+    post:
+      operationId: cancelIssueTask
+      tags: [IssueTasks]
+      summary: Отменить конкретный запуск агента на задаче
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: taskId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Отменённая задача агента
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AgentTask'}
+        '400':
+          description: Задачу нельзя отменить в её текущем состоянии
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '404':
+          description: Задача агента не найдена или не принадлежит указанной задаче
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: task:cancelled
+          when: через подсистему задач (публикуется TaskService, не хендлером напрямую)
+
+  /api/issues/{id}/rerun:
+    post:
+      operationId: rerunIssue
+      tags: [IssueTasks]
+      summary: Перезапустить агента на задаче
+      description: >
+        Опционально `task_id` — предыдущий запуск, контекст которого нужно
+        унаследовать (например, чтобы продолжить с той же ветки/SHA). Право
+        вызвать агента проверяется так же, как при обычном назначении
+        (canInvokeAgent); при отсутствии прав — 403
+        `invocation_not_allowed`.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                task_id: {type: string, format: uuid}
+      responses:
+        '202':
+          description: Новый запуск поставлен в очередь
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AgentTask'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '403':
+          description: Вызывающий не имеет права запускать этого агента на этой задаче
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: task:queued
+          when: через подсистему задач
+
+  /api/issues/{id}/task-runs:
+    get:
+      operationId: listIssueTaskRuns
+      tags: [IssueTasks]
+      summary: Вся история запусков агентов на задаче (все статусы, не только активные)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Список запусков задачи
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AgentTask'}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /api/issues/{id}/usage:
+    get:
+      operationId: getIssueUsage
+      tags: [IssueTasks]
+      summary: Сводка потребления токенов/стоимости всех запусков агентов на задаче
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Агрегаты по токенам и стоимости
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IssueUsageSummary'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/issues/{id}/reactions:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: addIssueReaction
+      tags: [IssueReactions]
+      summary: Поставить эмодзи-реакцию на задачу
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [emoji]
+              properties: {emoji: {type: string}}
+      responses:
+        '201':
+          description: Реакция добавлена
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IssueReaction'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+      x-events:
+        - name: issue_reaction:added
+          payload: "{ reaction, issue_id, issue_title, issue_status, creator_type, creator_id }"
+    delete:
+      operationId: removeIssueReaction
+      tags: [IssueReactions]
+      summary: Снять свою эмодзи-реакцию с задачи
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [emoji]
+              properties: {emoji: {type: string}}
+      responses:
+        '204': {description: Реакция снята}
+        '400': {$ref: '#/components/responses/BadRequest'}
+      x-events:
+        - name: issue_reaction:removed
+          payload: "{ issue_id, emoji, actor_type, actor_id }"
+
+  /api/issues/{id}/attachments:
+    get:
+      operationId: listIssueAttachments
+      tags: [Issues]
+      summary: Список вложений, прикреплённых непосредственно к задаче (не к комментариям)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Список вложений
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Attachment'}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /api/issues/{id}/children:
+    get:
+      operationId: listIssueChildren
+      tags: [Issues]
+      summary: Прямые дочерние задачи данной задачи
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Дочерние задачи
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  issues: {type: array, items: {$ref: '#/components/schemas/Issue'}}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /api/issues/{id}/labels:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: listIssueLabels
+      tags: [IssueLabels]
+      summary: Метки, прикреплённые к задаче
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      responses:
+        '200':
+          description: Список меток
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {labels: {type: array, items: {$ref: '#/components/schemas/Label'}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+    post:
+      operationId: attachIssueLabel
+      tags: [IssueLabels]
+      summary: Прикрепить метку к задаче
+      description: "Метка должна существовать в воркспейсе и иметь resource_type = issue."
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label_id]
+              properties: {label_id: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Актуальный список меток задачи после прикрепления
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {labels: {type: array, items: {$ref: '#/components/schemas/Label'}}}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404':
+          description: Метка (типа issue) не найдена в воркспейсе
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: issue_labels:changed
+          payload: "{ issue_id, labels }"
+
+  /api/issues/{id}/labels/{labelId}:
+    delete:
+      operationId: detachIssueLabel
+      tags: [IssueLabels]
+      summary: Открепить метку от задачи
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: labelId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Актуальный список меток задачи после открепления
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {labels: {type: array, items: {$ref: '#/components/schemas/Label'}}}
+        '404':
+          description: Метка (типа issue) не найдена в воркспейсе
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: issue_labels:changed
+          payload: "{ issue_id, labels }"
+  /api/issues/{id}/metadata:
+    get:
+      operationId: listIssueMetadata
+      tags: [IssueMetadata]
+      summary: Получить произвольные метаданные задачи (плоский словарь key→примитив)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Словарь метаданных
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {metadata: {type: object, additionalProperties: {type: [string, number, boolean]}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /api/issues/{id}/metadata/{key}:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: key, in: path, required: true, schema: {type: string, pattern: '^[a-zA-Z_][a-zA-Z0-9_.-]{0,63}$'}}
+    put:
+      operationId: setIssueMetadataKey
+      tags: [IssueMetadata]
+      summary: Установить одно значение метаданных задачи
+      description: >
+        Значение — только примитив (строка/число/булево), не объект и не
+        массив, не null (для удаления — DELETE на этот же путь). Ключ должен
+        соответствовать `^[a-zA-Z_][a-zA-Z0-9_.-]{0,63}$`. Задача не может
+        иметь больше 50 ключей метаданных одновременно, а весь блок metadata —
+        не больше 8 КБ в сериализованном виде (иначе 400).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties:
+                value: {description: Примитив — строка, число или булево}
+      responses:
+        '200':
+          description: Полный обновлённый словарь метаданных
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {metadata: {type: object, additionalProperties: {type: [string, number, boolean]}}}
+        '400':
+          description: Неверный ключ/значение, превышен лимит в 50 ключей или 8 КБ
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: issue_metadata:changed
+          payload: "{ issue_id, metadata }"
+    delete:
+      operationId: deleteIssueMetadataKey
+      tags: [IssueMetadata]
+      summary: Удалить один ключ метаданных задачи
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      responses:
+        '200':
+          description: Полный обновлённый словарь метаданных
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {metadata: {type: object, additionalProperties: {type: [string, number, boolean]}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: issue_metadata:changed
+          payload: "{ issue_id, metadata }"
+
+  /api/issues/{id}/properties/{propertyId}:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: propertyId, in: path, required: true, schema: {type: string, format: uuid}}
+    put:
+      operationId: setIssuePropertyValue
+      tags: [IssueProperties]
+      summary: Установить значение кастомного свойства для задачи
+      description: >
+        Формат `value` зависит от типа определения свойства: `text`/`url` —
+        непустая строка (в пределах лимита длины), `number` — число,
+        `checkbox` — булево, `date` — строка `YYYY-MM-DD`, `select` — ID
+        одного из вариантов конфигурации свойства, `multi_select` — непустой
+        массив ID вариантов (дубликаты схлопываются, порядок нормализуется по
+        порядку вариантов в определении). Архивированному определению
+        свойства нельзя присвоить новое значение (400). Итоговый JSON-блок
+        `properties` задачи ограничен 16 КБ.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [value]
+              properties: {value: {}}
+      responses:
+        '200':
+          description: Полный обновлённый словарь свойств задачи
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {properties: {$ref: '#/components/schemas/IssuePropertyValues'}}
+        '400':
+          description: Значение не подходит под тип свойства, свойство архивировано, либо превышен лимит 16 КБ
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '404':
+          description: Определение свойства не найдено в воркспейсе
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: issue_properties:changed
+          payload: "{ issue_id, properties }"
+    delete:
+      operationId: deleteIssuePropertyValue
+      tags: [IssueProperties]
+      summary: Снять значение кастомного свойства с задачи
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      responses:
+        '200':
+          description: Полный обновлённый словарь свойств задачи
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {properties: {$ref: '#/components/schemas/IssuePropertyValues'}}
+        '404':
+          description: Определение свойства не найдено в воркспейсе
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: issue_properties:changed
+          payload: "{ issue_id, properties }"
+
+  /api/issues/{id}/pull-requests:
+    get:
+      operationId: listIssuePullRequests
+      tags: [Issues]
+      summary: Список pull request'ов, связанных с задачей
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Список связанных pull request'ов
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/IssuePullRequestLink'}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /api/issues/{id}/squad-evaluated:
+    post:
+      operationId: recordSquadLeaderEvaluation
+      tags: [Squads]
+      summary: Записать решение лидера отряда по задаче (взял в работу / не взял / ошибка)
+      description: >
+        Вызывается только самим агентом-лидером отряда, на который назначена
+        задача, и только в рамках его собственного активного запуска
+        (заголовок `X-Task-ID` обязателен и должен принадлежать этой задаче
+        и этому лидеру); человек или другой агент получит 403. Записывает
+        запись активности `squad_leader_evaluated` с исходом
+        (`action`/`no_action`/`failed`) и произвольной причиной.
+      security: [{bearerAuth: []}]
+      x-roles: [agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: X-Task-ID, in: header, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [outcome]
+              properties:
+                outcome: {type: string, enum: [action, no_action, failed]}
+                reason: {type: string}
+      responses:
+        '201':
+          description: Запись активности создана
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: {type: string, format: uuid}
+                  action: {type: string, enum: [squad_leader_evaluated]}
+                  created_at: {type: string, format: date-time}
+        '400':
+          description: Неверный outcome, либо задача не назначена на отряд
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '403':
+          description: Вызывающий — не тот лидер отряда, на который назначена задача
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '404':
+          description: Отряд не найден, либо задача агента не привязана к этой задаче
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: activity:created
+          payload: "{ issue_id, entry: { type: activity, id, actor_type: agent, actor_id, action: squad_leader_evaluated, details, created_at } }"
+
+  /api/tasks/{taskId}/messages:
+    get:
+      operationId: listTaskMessages
+      tags: [IssueTasks]
+      summary: Лог сообщений (стенограмма) одного запуска агента
+      description: >
+        Задача должна принадлежать текущему воркспейсу запроса — иначе 404,
+        даже если она существует в другом воркспейсе. `since` — вернуть
+        только сообщения с номером последовательности (seq) больше указанного,
+        для инкрементального опроса.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: taskId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: since, in: query, schema: {type: integer}, description: "seq, с которого выдавать сообщения (эксклюзивно)"}
+      responses:
+        '200':
+          description: Список сообщений запуска
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/TaskMessage'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/properties:
+    get:
+      operationId: listProperties
+      tags: [Properties]
+      summary: Список определений кастомных свойств задач воркспейса
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: include_archived, in: query, schema: {type: boolean, default: false}}
+      responses:
+        '200':
+          description: Список определений свойств
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  properties: {type: array, items: {$ref: '#/components/schemas/Property'}}
+                  total: {type: integer}
+    post:
+      operationId: createProperty
+      tags: [Properties]
+      summary: Создать определение кастомного свойства задач
+      description: >
+        Только владелец/админ воркспейса (не агент). Имя — до 32 символов,
+        без управляющих символов, не совпадает с зарезервированными
+        встроенными именами полей задачи (status, priority, assignee, project,
+        parent, stage, label(s), start_date, due_date, title, description,
+        creator, created_at, updated_at, metadata, properties). Тип — один из
+        `text, number, select, multi_select, date, checkbox, url`; для
+        `select`/`multi_select` обязателен непустой `config.options` (до 50
+        вариантов, уникальные имена и ID, ID — UUID, генерируется автоматически
+        если не передан). Воркспейс не может иметь больше 20 неархивированных
+        свойств одновременно (защищено advisory-локом на всё время операции).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreatePropertyRequest'}
+      responses:
+        '201':
+          description: Определение свойства создано
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Property'}
+        '400':
+          description: Невалидное имя/тип/конфигурация опций либо превышен лимит 20 активных свойств
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '403':
+          description: Вызывающий не владелец/админ, либо является агентом
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '409':
+          description: Свойство с таким именем уже существует
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: property:created
+          payload: "{ property }"
+
+  /api/properties/{id}:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: getProperty
+      tags: [Properties]
+      summary: Получить одно определение свойства
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      responses:
+        '200':
+          description: Определение свойства
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Property'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      operationId: updateProperty
+      tags: [Properties]
+      summary: Изменить определение свойства (переименовать, изменить варианты, архивировать)
+      description: >
+        Только владелец/админ. Удаление варианта из `config.options`, который
+        ещё используется хотя бы в одной задаче, запрещено (409, с перечнем
+        занятых вариантов) — сначала нужно очистить значения. Разархивирование
+        подчиняется тому же лимиту в 20 активных свойств, что и создание.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdatePropertyRequest'}
+      responses:
+        '200':
+          description: Обновлённое определение свойства
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Property'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: Имя уже занято, либо удаляемые варианты ещё используются в задачах
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: property:updated
+          payload: "{ property }"
+  /api/labels:
+    get:
+      operationId: listLabels
+      tags: [Labels]
+      summary: Список меток воркспейса
+      description: >
+        `resource_type` по умолчанию `issue`; значения `agent`/`skill`
+        доступны только при включённом флаге ресурсных меток для воркспейса
+        (иначе 404).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: resource_type, in: query, schema: {type: string, enum: [issue, agent, skill], default: issue}}
+      responses:
+        '200':
+          description: Список меток с количеством использований
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  labels: {type: array, items: {$ref: '#/components/schemas/Label'}}
+                  total: {type: integer}
+        '404':
+          description: resource_type отличен от issue, а ресурсные метки выключены в воркспейсе
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+    post:
+      operationId: createLabel
+      tags: [Labels]
+      summary: Создать метку
+      description: >
+        Имя — до 32 символов без управляющих символов, уникально в пределах
+        `(workspace, resource_type)`. Цвет — 6-значный HEX (с `#` или без,
+        нормализуется к нижнему регистру с `#`).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateLabelRequest'}
+      responses:
+        '201':
+          description: Метка создана
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Label'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404':
+          description: resource_type отличен от issue при выключенных ресурсных метках
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '409':
+          description: Метка с таким именем и resource_type уже существует
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: label:created
+          payload: "{ label }"
+
+  /api/labels/{id}:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: getLabel
+      tags: [Labels]
+      summary: Получить метку по ID
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      responses:
+        '200':
+          description: Метка
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Label'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    put:
+      operationId: updateLabel
+      tags: [Labels]
+      summary: Изменить метку (имя, описание, цвет)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateLabelRequest'}
+      responses:
+        '200':
+          description: Обновлённая метка
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Label'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: Имя уже занято в этом resource_type
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: label:updated
+          payload: "{ label }"
+    delete:
+      operationId: deleteLabel
+      tags: [Labels]
+      summary: Удалить метку
+      description: >
+        Также удаляет все привязки этой метки к задачам, агентам и навыкам
+        (в одной транзакции).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      responses:
+        '204': {description: Удалено}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: label:deleted
+          payload: "{ label_id }"
+  /api/projects/search:
+    get:
+      operationId: searchProjects
+      tags: [Projects]
+      summary: Полнотекстовый поиск проектов по названию и описанию
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: q, in: query, required: true, schema: {type: string}}
+        - {name: limit, in: query, schema: {type: integer, default: 20, maximum: 50}}
+        - {name: offset, in: query, schema: {type: integer, default: 0}}
+        - {name: include_closed, in: query, schema: {type: boolean, default: false}, description: Включать проекты в статусах completed/cancelled}
+      responses:
+        '200':
+          description: Результаты поиска
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SearchProjectsResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '503':
+          description: Поиск превысил лимит времени БД
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/projects:
+    get:
+      operationId: listProjects
+      tags: [Projects]
+      summary: Список проектов воркспейса
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: status, in: query, schema: {type: string, enum: [planned, in_progress, paused, completed, cancelled]}}
+        - {name: priority, in: query, schema: {type: string, enum: [urgent, high, medium, low, none]}}
+      responses:
+        '200':
+          description: Список проектов с числом задач/ресурсов
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  projects: {type: array, items: {$ref: '#/components/schemas/Project'}}
+                  total: {type: integer}
+    post:
+      operationId: createProject
+      tags: [Projects]
+      summary: Создать проект (опционально сразу с привязанными ресурсами)
+      description: >
+        `resources[].resource_type` — `github_repo` (нормализуется URL) или
+        `local_directory` (абсолютный путь + `daemon_id`); на один демон в
+        рамках проекта допускается не более одного `local_directory`
+        (иначе 400 уже на этапе валидации запроса).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateProjectRequest'}
+      responses:
+        '201':
+          description: Проект создан (с резолвед ресурсами, если были переданы)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Project'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '409':
+          description: Один из переданных ресурсов уже привязан к проекту
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: project:created
+          payload: "{ project }"
+        - name: project_resource:created
+          when: за каждый ресурс, переданный в resources при создании
+          payload: "{ resource, project_id }"
+
+  /api/projects/{id}:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: getProject
+      tags: [Projects]
+      summary: Получить проект по ID
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      responses:
+        '200':
+          description: Проект
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Project'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    put:
+      operationId: updateProject
+      tags: [Projects]
+      summary: Изменить проект
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateProjectRequest'}
+      responses:
+        '200':
+          description: Обновлённый проект
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Project'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: project:updated
+          payload: "{ project }"
+    delete:
+      operationId: deleteProject
+      tags: [Projects]
+      summary: Удалить проект
+      description: >
+        Только владелец/админ воркспейса. Перед удалением снимает привязку
+        проекта у чат-сессий, которые использовали его как контекст.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      responses:
+        '204': {description: Удалено}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: project:deleted
+          payload: "{ project_id }"
+
+  /api/projects/{id}/resources:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: listProjectResources
+      tags: [ProjectResources]
+      summary: Список ресурсов (репозиториев/локальных каталогов), привязанных к проекту
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      responses:
+        '200':
+          description: Список ресурсов
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  resources: {type: array, items: {$ref: '#/components/schemas/ProjectResource'}}
+                  total: {type: integer}
+        '404': {$ref: '#/components/responses/NotFound'}
+    post:
+      operationId: createProjectResource
+      tags: [ProjectResources]
+      summary: Привязать ресурс к проекту
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateProjectResourceRequest'}
+      responses:
+        '201':
+          description: Ресурс привязан
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProjectResource'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: >
+            Ресурс уже привязан, либо на этом демоне уже есть local_directory
+            в этом проекте
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: project_resource:created
+          payload: "{ resource, project_id }"
+
+  /api/projects/{id}/resources/{resourceId}:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: resourceId, in: path, required: true, schema: {type: string, format: uuid}}
+    put:
+      operationId: updateProjectResource
+      tags: [ProjectResources]
+      summary: Изменить привязанный ресурс (ссылку, метку, позицию)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateProjectResourceRequest'}
+      responses:
+        '200':
+          description: Обновлённый ресурс
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProjectResource'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: Конфликт уникальности ресурса или local_directory на этом демоне
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: project_resource:updated
+          payload: "{ resource, project_id }"
+    delete:
+      operationId: deleteProjectResource
+      tags: [ProjectResources]
+      summary: Отвязать ресурс от проекта
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      responses:
+        '204': {description: Удалено}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: project_resource:deleted
+          payload: "{ project_id, resource_id }"
+  /api/squads:
+    get:
+      operationId: listSquads
+      tags: [Squads]
+      summary: Список отрядов воркспейса
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      responses:
+        '200':
+          description: Список отрядов (с превью до 3 участников и их общим числом)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Squad'}
+    post:
+      operationId: createSquad
+      tags: [Squads]
+      summary: Создать отряд
+      description: >
+        `leader_id` — существующий агент воркспейса, к которому у вызывающего
+        участника есть право обращения (owner/admin — всегда; иначе как у
+        обычного вызова агента). Лидер автоматически добавляется первым
+        участником отряда с ролью `leader`.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, leader_id]
+              properties:
+                name: {type: string}
+                description: {type: string}
+                leader_id: {type: string, format: uuid}
+                avatar_url: {type: string}
+      responses:
+        '201':
+          description: Отряд создан
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Squad'}
+        '400':
+          description: leader_id не является агентом воркспейса
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '403':
+          description: У вызывающего нет права использовать этого агента как лидера
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: squad:created
+          payload: "{ squad }"
+
+  /api/squads/{id}:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: getSquad
+      tags: [Squads]
+      summary: Получить отряд по ID
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      responses:
+        '200':
+          description: Отряд
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Squad'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    put:
+      operationId: updateSquad
+      tags: [Squads]
+      summary: Изменить отряд (имя, описание, инструкции, лидера)
+      description: >
+        Изменять может владелец/админ воркспейса или создатель отряда. Смена
+        `leader_id` требует права на использование нового агента (как при
+        создании) и автоматически добавляет его в участники с ролью `leader`,
+        если он ещё не входит в отряд.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin, "squad-creator"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: {type: string}
+                description: {type: string}
+                instructions: {type: string}
+                leader_id: {type: string, format: uuid}
+                avatar_url: {type: string}
+      responses:
+        '200':
+          description: Обновлённый отряд
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Squad'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: squad:updated
+          payload: "{ squad }"
+    delete:
+      operationId: deleteSquad
+      tags: [Squads]
+      summary: Архивировать (удалить) отряд
+      description: >
+        Мягкое удаление — ставит `archived_at`. Перед архивацией переносит на
+        лидера отряда все задачи и автопилоты, назначенные на отряд. Уже
+        архивированный отряд повторно архивировать нельзя (400).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin, "squad-creator"]
+      responses:
+        '204': {description: Отряд архивирован}
+        '400':
+          description: Отряд уже архивирован
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+      x-events:
+        - name: squad:deleted
+          payload: "{ squad_id, leader_id }"
+
+  /api/squads/{id}/members:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: listSquadMembers
+      tags: [Squads]
+      summary: Список участников отряда
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      responses:
+        '200':
+          description: Список участников
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/SquadMember'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    post:
+      operationId: addSquadMember
+      tags: [Squads]
+      summary: Добавить участника (агента или человека) в отряд
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin, "squad-creator"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [member_type, member_id]
+              properties:
+                member_type: {type: string, enum: [agent, member]}
+                member_id: {type: string, format: uuid}
+                role: {type: string}
+      responses:
+        '201':
+          description: Участник добавлен
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SquadMember'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409':
+          description: Этот участник уже в отряде
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: squad:updated
+          payload: "{ squad_id }"
+    delete:
+      operationId: removeSquadMember
+      tags: [Squads]
+      summary: Удалить участника из отряда
+      description: Лидера отряда удалить нельзя, пока он не заменён (400).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin, "squad-creator"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [member_type, member_id]
+              properties:
+                member_type: {type: string, enum: [agent, member]}
+                member_id: {type: string, format: uuid}
+      responses:
+        '204': {description: Участник удалён}
+        '400':
+          description: Попытка удалить текущего лидера отряда
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404':
+          description: Такой участник не найден в отряде
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: squad:updated
+          payload: "{ squad_id }"
+
+  /api/squads/{id}/members/status:
+    get:
+      operationId: listSquadMemberStatus
+      tags: [Squads]
+      summary: Живой статус каждого участника отряда (онлайн/занят) и его активные задачи
+      description: >
+        Для агентов статус выводится из состояния runtime и наличия активного
+        запуска: `working` — есть активная задача; `idle` — runtime online и
+        задач нет; `unstable` — runtime не online, но был на связи <5 минут
+        назад; `offline` — иначе; `archived` — агент архивирован. Для
+        участников-людей статус не вычисляется (поле `status` — null).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Статусы участников
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SquadMemberStatusList'}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /api/squads/{id}/members/role:
+    patch:
+      operationId: updateSquadMemberRole
+      tags: [Squads]
+      summary: Изменить роль участника внутри отряда
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin, "squad-creator"]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [member_type, member_id, role]
+              properties:
+                member_type: {type: string, enum: [agent, member]}
+                member_id: {type: string, format: uuid}
+                role: {type: string}
+      responses:
+        '200':
+          description: Обновлённый участник
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SquadMember'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404':
+          description: Такой участник не найден в отряде
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: squad:updated
+          payload: "{ squad_id }"
+  /api/autopilots:
+    get:
+      operationId: listAutopilots
+      tags: [Autopilots]
+      summary: Список автопилотов воркспейса
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: status, in: query, schema: {type: string, enum: [active, paused, archived]}}
+      responses:
+        '200':
+          description: Список автопилотов (с типами их триггеров, следующим запуском и can_write для вызывающего)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  autopilots: {type: array, items: {$ref: '#/components/schemas/Autopilot'}}
+                  total: {type: integer}
+    post:
+      operationId: createAutopilot
+      tags: [Autopilots]
+      summary: Создать автопилот
+      description: >
+        Требует человека-участника (`RequireHumanActor`). `assignee_type` по
+        умолчанию `agent` (либо `squad`); исполнитель должен существовать,
+        не быть архивированным и быть доступным вызывающему для запуска.
+        `execution_mode` — `create_issue` (автопилот создаёт новую задачу на
+        каждый триггер) или `run_only` (запускает исполнителя без создания
+        задачи). Создание всегда фиксирует первую версию правила
+        (`autopilot_rule_version`) для истории конфигурации.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateAutopilotRequest'}
+      responses:
+        '201':
+          description: Автопилот создан
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Autopilot'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+      x-events:
+        - name: autopilot:created
+          payload: "{ autopilot }"
+
+  /api/autopilots/cron-preview:
+    get:
+      operationId: previewAutopilotCron
+      tags: [Autopilots]
+      summary: Показать ближайшие 3 срабатывания cron-выражения в заданной таймзоне
+      description: Не требует существующего автопилота — чистая функция валидации/вычисления расписания.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: expr, in: query, required: true, schema: {type: string}}
+        - {name: tz, in: query, schema: {type: string, default: UTC}, description: IANA-имя таймзоны}
+      responses:
+        '200':
+          description: Ближайшие моменты срабатывания
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  next_runs: {type: array, items: {type: string, format: date-time}}
+        '400':
+          description: Невалидное cron-выражение или таймзона
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: {type: string}
+                  code: {type: string, enum: [invalid_cron, invalid_timezone]}
+
+  /api/autopilots/{id}:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: getAutopilot
+      tags: [Autopilots]
+      summary: Получить автопилот целиком (с триггерами и коллабораторами)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      responses:
+        '200':
+          description: Автопилот, его триггеры и коллабораторы
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  autopilot: {$ref: '#/components/schemas/Autopilot'}
+                  triggers: {type: array, items: {$ref: '#/components/schemas/AutopilotTrigger'}}
+                  collaborators: {type: array, items: {$ref: '#/components/schemas/AutopilotCollaborator'}}
+        '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      operationId: updateAutopilot
+      tags: [Autopilots]
+      summary: Изменить автопилот
+      description: >
+        Требует человека-участника с правом записи (создатель, владелец/админ
+        воркспейса или коллаборатор). Существенное изменение правила
+        (исполнитель, execution_mode, шаблон заголовка и т.п. — то, что
+        реально меняет поведение) создаёт новую версию правила и обновляет
+        `published_by` у всех триггеров автопилота, чтобы последующие запуски
+        были атрибутированы актуальному автору конфигурации.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["autopilot-creator", owner, admin, "autopilot-collaborator"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateAutopilotRequest'}
+      responses:
+        '200':
+          description: Обновлённый автопилот
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Autopilot'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: autopilot:updated
+          payload: "{ autopilot }"
+    delete:
+      operationId: deleteAutopilot
+      tags: [Autopilots]
+      summary: Архивировать автопилот
+      description: Мягкое удаление (status → archived), с записью новой версии правила.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["autopilot-creator", owner, admin, "autopilot-collaborator"]
+      responses:
+        '204': {description: Автопилот архивирован}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: autopilot:deleted
+          payload: "{ autopilot_id }"
+
+  /api/autopilots/{id}/trigger:
+    post:
+      operationId: triggerAutopilot
+      tags: [Autopilots]
+      summary: Запустить автопилот вручную прямо сейчас
+      description: Автопилот должен быть в статусе `active`; создаёт AutopilotRun с source=manual.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["autopilot-creator", owner, admin, "autopilot-collaborator"]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Созданный прогон (может быть сразу skipped с reason_code, если запуск отклонён бизнес-правилами)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AutopilotRun'}
+        '400':
+          description: Автопилот не активен
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+      x-events:
+        - name: autopilot:run_start
+          when: через AutopilotService.DispatchAutopilotManual
+
+  /api/autopilots/{id}/runs:
+    get:
+      operationId: listAutopilotRuns
+      tags: [AutopilotRuns]
+      summary: История прогонов автопилота
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: limit, in: query, schema: {type: integer, default: 20, maximum: 100}}
+        - {name: offset, in: query, schema: {type: integer, default: 0}}
+      responses:
+        '200':
+          description: Список прогонов (укороченная форма, без сырых payload)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  runs: {type: array, items: {$ref: '#/components/schemas/AutopilotRun'}}
+                  total: {type: integer}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /api/autopilots/{id}/runs/{runId}:
+    get:
+      operationId: getAutopilotRun
+      tags: [AutopilotRuns]
+      summary: Один прогон автопилота целиком (с полным trigger_payload и result)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: runId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Прогон автопилота
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AutopilotRun'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /api/autopilots/{id}/deliveries:
+    get:
+      operationId: listAutopilotDeliveries
+      tags: [AutopilotDeliveries]
+      summary: История входящих вебхук-доставок автопилота
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: limit, in: query, schema: {type: integer, default: 20, maximum: 100}}
+        - {name: offset, in: query, schema: {type: integer, default: 0}}
+      responses:
+        '200':
+          description: Список доставок (без тела запроса/ответа — см. getAutopilotDelivery для деталей)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deliveries: {type: array, items: {$ref: '#/components/schemas/WebhookDelivery'}}
+                  total: {type: integer}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /api/autopilots/{id}/deliveries/{deliveryId}:
+    get:
+      operationId: getAutopilotDelivery
+      tags: [AutopilotDeliveries]
+      summary: Одна вебхук-доставка целиком (с сырым телом и заголовками)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: deliveryId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Доставка (полная форма)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WebhookDelivery'}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /api/autopilots/{id}/deliveries/{deliveryId}/replay:
+    post:
+      operationId: replayAutopilotDelivery
+      tags: [AutopilotDeliveries]
+      summary: Повторно обработать ранее полученную вебхук-доставку
+      description: >
+        Требует право записи на автопилот. Нельзя реплеить доставку, у которой
+        подпись не прошла проверку (`signature_status=invalid` или
+        `status=rejected`), у которой нет сохранённого тела, либо чей триггер
+        сейчас отключён; автопилот должен быть `active`. Реплей создаёт новую
+        запись WebhookDelivery со ссылкой `replayed_from_delivery_id` на
+        исходную и снова прогоняет её через диспетчер автопилота.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["autopilot-creator", owner, admin, "autopilot-collaborator"]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: deliveryId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '201':
+          description: Новая (реплейная) доставка, уже обработанная
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WebhookDelivery'}
+        '400':
+          description: Доставку нельзя реплеить (см. описание условий)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: autopilot:run_start / autopilot:run_done
+          when: через AutopilotService.DispatchAutopilot при реплее
+
+  /api/autopilots/{id}/triggers:
+    post:
+      operationId: createAutopilotTrigger
+      tags: [AutopilotTriggers]
+      summary: Добавить триггер автопилоту (расписание, вебхук или API)
+      description: >
+        Требует человека-участника с правом записи. `kind: webhook` генерирует
+        уникальный `webhook_token`, по которому строится публичный URL
+        приёма; `kind: schedule` требует `cron_expression` и вычисляет
+        `next_run_at`. `event_filters` (для webhook) ограничивает, какие
+        входящие события провайдера (например GitHub) реально запускают
+        автопилот.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["autopilot-creator", owner, admin, "autopilot-collaborator"]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateAutopilotTriggerRequest'}
+      responses:
+        '201':
+          description: Триггер создан (webhook_token/URL видны только в этом и последующих ответах владельцу с правом записи)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AutopilotTrigger'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+      x-events:
+        - name: autopilot:updated
+          payload: "{ autopilot_id, trigger (без webhook_token/webhook_path/webhook_url) }"
+
+  /api/autopilots/{id}/triggers/{triggerId}:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: triggerId, in: path, required: true, schema: {type: string, format: uuid}}
+    patch:
+      operationId: updateAutopilotTrigger
+      tags: [AutopilotTriggers]
+      summary: Изменить триггер (включить/выключить, расписание, ярлык, фильтры событий)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["autopilot-creator", owner, admin, "autopilot-collaborator"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateAutopilotTriggerRequest'}
+      responses:
+        '200':
+          description: Обновлённый триггер
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AutopilotTrigger'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: autopilot:updated
+          payload: "{ autopilot_id, trigger }"
+    delete:
+      operationId: deleteAutopilotTrigger
+      tags: [AutopilotTriggers]
+      summary: Удалить триггер автопилота
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["autopilot-creator", owner, admin, "autopilot-collaborator"]
+      responses:
+        '204': {description: Удалено}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: autopilot:updated
+          payload: "{ autopilot_id, trigger_id }"
+
+  /api/autopilots/{id}/triggers/{triggerId}/rotate-webhook-token:
+    post:
+      operationId: rotateAutopilotTriggerWebhookToken
+      tags: [AutopilotTriggers]
+      summary: Перевыпустить секретный токен вебхук-триггера
+      description: >
+        Только для триггеров `kind: webhook`. Старый токен сразу становится
+        недействителен; повторяет генерацию до 3 раз при коллизии.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["autopilot-creator", owner, admin, "autopilot-collaborator"]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: triggerId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Триггер с новым webhook_token/webhook_url
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AutopilotTrigger'}
+        '400':
+          description: Триггер не является webhook-триггером
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: autopilot:updated
+          payload: "{ autopilot_id, trigger (без webhook_token/webhook_path/webhook_url в broadcast-версии) }"
+
+  /api/autopilots/{id}/triggers/{triggerId}/signing-secret:
+    put:
+      operationId: setAutopilotTriggerSigningSecret
+      tags: [AutopilotTriggers]
+      summary: Установить или очистить секрет для проверки подписи вебхука
+      description: >
+        Только для `kind: webhook`. Пустая строка снимает секрет (подпись
+        перестаёт проверяться); непустой секрет должен быть не короче 16
+        символов.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["autopilot-creator", owner, admin, "autopilot-collaborator"]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: triggerId, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [signing_secret]
+              properties: {signing_secret: {type: string}}
+      responses:
+        '200':
+          description: Обновлённый триггер
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AutopilotTrigger'}
+        '400':
+          description: Триггер не webhook-триггер, либо секрет короче 16 символов
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: autopilot:updated
+          payload: "{ autopilot_id, trigger }"
+
+  /api/autopilots/{id}/collaborators:
+    post:
+      operationId: addAutopilotCollaborator
+      tags: [Autopilots]
+      summary: Дать участнику право управлять автопилотом
+      description: >
+        Управление доступом (в отличие от обычного управления содержимым
+        автопилота) разрешено только создателю автопилота или владельцу/
+        админу воркспейса, не самим коллабораторам.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["autopilot-creator", owner, admin]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties: {user_id: {type: string, format: uuid}}
+      responses:
+        '201':
+          description: Актуальный список коллабораторов
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  collaborators: {type: array, items: {$ref: '#/components/schemas/AutopilotCollaborator'}}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+      x-events:
+        - name: autopilot:updated
+          payload: "{ autopilot_id }"
+
+  /api/autopilots/{id}/collaborators/{userId}:
+    delete:
+      operationId: removeAutopilotCollaborator
+      tags: [Autopilots]
+      summary: Отозвать право коллаборатора на управление автопилотом
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["autopilot-creator", owner, admin]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: userId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Актуальный список коллабораторов
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  collaborators: {type: array, items: {$ref: '#/components/schemas/AutopilotCollaborator'}}
+        '403': {$ref: '#/components/responses/Forbidden'}
+      x-events:
+        - name: autopilot:updated
+          payload: "{ autopilot_id }"
+  /api/pins:
+    get:
+      operationId: listPins
+      tags: [Pins]
+      summary: Список закреплённых вызывающим пользователем элементов (задачи/проекты)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      responses:
+        '200':
+          description: Список закреплений вызывающего пользователя, отсортированных по позиции
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Pin'}
+    post:
+      operationId: createPin
+      tags: [Pins]
+      summary: Закрепить задачу или проект
+      description: Новая закладка получает позицию "в конец" (максимум текущих + 1).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [item_type, item_id]
+              properties:
+                item_type: {type: string, enum: [issue, project]}
+                item_id: {type: string, format: uuid}
+      responses:
+        '201':
+          description: Закладка создана
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Pin'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404':
+          description: Задача/проект не найдены
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '409':
+          description: Элемент уже закреплён
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: pin:created
+          payload: "{ pin }"
+
+  /api/pins/reorder:
+    put:
+      operationId: reorderPins
+      tags: [Pins]
+      summary: Переставить закладки вызывающего пользователя
+      description: Принимает список `{id, position}`; применяется по одной записи, без атомарности между ними.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id: {type: string, format: uuid}
+                      position: {type: number}
+      responses:
+        '204': {description: Порядок обновлён}
+        '400': {$ref: '#/components/responses/BadRequest'}
+      x-events:
+        - name: pin:reordered
+          payload: "{ items }"
+
+  /api/pins/{itemType}/{itemId}:
+    delete:
+      operationId: deletePin
+      tags: [Pins]
+      summary: Снять закрепление
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: itemType, in: path, required: true, schema: {type: string, enum: [issue, project]}}
+        - {name: itemId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '204': {description: Закладка снята}
+      x-events:
+        - name: pin:deleted
+          payload: "{ item_type, item_id }"
+
+  /api/attachments/{id}:
+    get:
+      operationId: getAttachment
+      tags: [Attachments]
+      summary: Метаданные вложения (со ссылкой на скачивание)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Вложение (с временной подписанной ссылкой на скачивание, если применимо)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Attachment'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    delete:
+      operationId: deleteAttachment
+      tags: [Attachments]
+      summary: Удалить вложение (и файл в объектном хранилище)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '204': {description: Удалено}
+        '404': {$ref: '#/components/responses/NotFound'}
+
+  /api/attachments/{id}/content:
+    get:
+      operationId: getAttachmentContent
+      tags: [Attachments]
+      summary: Инлайн-превью текстового содержимого вложения
+      description: >
+        Только для текстоподобных файлов малого размера (лимит зависит от
+        content-type/расширения); для остальных — 415. Требует настроенное
+        объектное хранилище (иначе 503).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Содержимое файла как текст
+          content:
+            text/plain: {schema: {type: string}}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '413':
+          description: Файл превышает лимит инлайн-превью для своего типа
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '415':
+          description: Тип файла не поддерживает текстовое превью
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '503':
+          description: Объектное хранилище не настроено
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/comments/{commentId}:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: commentId, in: path, required: true, schema: {type: string, format: uuid}}
+    put:
+      operationId: updateComment
+      tags: [Comments]
+      summary: Отредактировать комментарий
+      description: >
+        Только автор комментария или владелец/админ воркспейса. Если
+        `content` реально меняется, сервер отменяет все ещё не выполненные
+        задачи агентов, которые были поставлены в очередь именно этим
+        комментарием как триггером, и заново прогоняет обновлённый текст
+        через ту же логику определения целей, что при создании (см.
+        «Правила запуска агентов из комментария» в C.md) — агентам, чьи
+        задачи выжили после отмены (например, уже выполнялись), новый текст
+        передаётся как обновление контекста, а не новый запуск.
+        `attachment_ids`, если передан (даже пустой список), полностью
+        заменяет набор вложений комментария.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["comment-author", owner, admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateCommentRequest'}
+      responses:
+        '200':
+          description: Обновлённый комментарий (с trigger_outcomes для повторного запуска)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IssueComment'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: comment:updated
+          payload: "{ comment }"
+    delete:
+      operationId: deleteComment
+      tags: [Comments]
+      summary: Удалить комментарий
+      description: >
+        Только автор или владелец/админ. Удаляет вложения комментария (файлы
+        в хранилище — тоже) и отменяет ещё не выполненные задачи агентов,
+        поставленные этим комментарием как триггером; для выживших задач
+        (например, уже начавших выполнение) заново прогоняется логика запуска
+        по следующему уцелевшему комментарию треда.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["comment-author", owner, admin]
+      responses:
+        '204': {description: Удалено}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: comment:deleted
+          payload: "{ comment_id, issue_id }"
+
+  /api/comments/{commentId}/resolve:
+    post:
+      operationId: resolveComment
+      tags: [Comments]
+      summary: Отметить комментарий (и тем самым его тред) решённым
+      description: >
+        Разрешение треда единственно: если в этом же треде была резолюция на
+        другом комментарии, она автоматически снимается (публикуя
+        `comment:unresolved` для неё) в одной транзакции с установкой новой.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: commentId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Обновлённый комментарий
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IssueComment'}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: comment:unresolved
+          when: если в треде была другая резолюция — за каждую снятую
+          payload: "{ comment }"
+        - name: comment:resolved
+          when: только если комментарий не был уже решён
+          payload: "{ comment }"
+    delete:
+      operationId: unresolveComment
+      tags: [Comments]
+      summary: Снять пометку "решено" с комментария
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: commentId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Обновлённый комментарий
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IssueComment'}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: comment:unresolved
+          when: только если комментарий действительно был решён
+          payload: "{ comment }"
+
+  /api/comments/{commentId}/reactions:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: commentId, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: addCommentReaction
+      tags: [Comments]
+      summary: Поставить эмодзи-реакцию на комментарий
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [emoji]
+              properties: {emoji: {type: string}}
+      responses:
+        '201':
+          description: Реакция добавлена
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommentReaction'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: reaction:added
+          payload: "{ reaction, issue_id, issue_title, issue_status, comment_id, comment_author_type, comment_author_id }"
+    delete:
+      operationId: removeCommentReaction
+      tags: [Comments]
+      summary: Снять свою эмодзи-реакцию с комментария
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [emoji]
+              properties: {emoji: {type: string}}
+      responses:
+        '204': {description: Реакция снята}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: reaction:removed
+          payload: "{ comment_id, issue_id, emoji, actor_type, actor_id }"
+  /api/agents:
+    get:
+      operationId: listAgents
+      tags: [Agents]
+      summary: Список агентов воркспейса, видимых вызывающему
+      description: >
+        Участнику-человеку без собственного «личного помощника» сервер может
+        автоматически создать его (тихая инициализация); аналогично, если в
+        воркспейсе ещё нет ни одного системного ролевого агента — он тоже
+        может быть создан по факту этого запроса. Приватные агенты, к которым
+        у вызывающего участника нет прав вызова, из списка исключаются.
+        `mcp_config` и `composio_toolkit_allowlist` в каждом элементе
+        маскируются/скрываются по тем же правилам видимости секретов, что и
+        у getAgent.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: include_archived, in: query, schema: {type: boolean, default: false}}
+      responses:
+        '200':
+          description: Список агентов, видимых вызывающему
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/Agent'}
+    post:
+      operationId: createAgent
+      tags: [Agents]
+      summary: Создать агента
+      description: >
+        `runtime_id` обязателен и должен быть агент-рантаймом воркспейса,
+        доступным вызывающему (приватный рантайм — только его владельцу или
+        админу); провайдер рантайма должен быть разрешён политикой
+        воркспейса. `visibility`/`permission_mode`+`invocation_targets` задают
+        права вызова агента (см. C.md, «Модель прав вызова агента»);
+        `visibility` — устаревший алиас над `permission_mode`. `mcp_config`,
+        если передан, валидируется политикой MCP воркспейса и шифруется перед
+        сохранением. `skill_ids` — сразу привязываемые навыки (должны
+        принадлежать воркспейсу).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateAgentRequest'}
+      responses:
+        '201':
+          description: Агент создан
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Agent'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '403':
+          description: Рантайм приватный и недоступен вызывающему, либо провайдер запрещён политикой воркспейса
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '409':
+          description: Агент с таким именем уже существует в воркспейсе
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: agent:created
+          payload: "{ agent }"
+
+  /api/agents/from-template:
+    post:
+      operationId: createAgentFromTemplate
+      tags: [Agents]
+      summary: Создать агента из готового шаблона (с набором навыков)
+      description: >
+        Шаблон (`template_slug`) описывает предустановленный набор навыков —
+        часть из них поставляется вместе с сервером (vendored), часть
+        подгружается по URL источника при первом использовании и затем
+        переиспользуется по имени в рамках воркспейса. Если хотя бы один
+        внешний источник недоступен — вся операция отменяется (422 со списком
+        неудачных URL) без создания агента. В остальном поведение и права —
+        как у createAgent; `extra_skill_ids` добавляет навыки сверх тех, что
+        несёт сам шаблон.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateAgentFromTemplateRequest'}
+      responses:
+        '201':
+          description: Агент создан из шаблона
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CreateAgentFromTemplateResponse'}
+        '400':
+          description: Неизвестный template_slug либо не указан runtime_id/name
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '403':
+          description: Один из навыков шаблона требует источник, не разрешённый политикой сервера
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '422':
+          description: Один или несколько источников навыков шаблона недоступны
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: {type: string}
+                  failed_urls: {type: array, items: {type: string}}
+      x-events:
+        - name: agent:created
+          payload: "{ agent }"
+  /api/agents/{id}:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: getAgent
+      tags: [Agents]
+      summary: Получить агента целиком
+      description: >
+        Доступ к приватному агенту (не входящему в область видимости
+        вызывающего) — 403. Секреты (`mcp_config`, значения окружения,
+        `composio_toolkit_allowlist`) видны в открытом виде только владельцу
+        агента (или воркспейсу с настройкой "всегда раскрывать секреты" —
+        тогда и владельцу/админу); иначе — маскируются или скрываются.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      responses:
+        '200':
+          description: Агент
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Agent'}
+        '403':
+          description: Нет доступа к этому приватному агенту
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    put:
+      operationId: updateAgent
+      tags: [Agents]
+      summary: Изменить агента
+      description: >
+        Многие поля доступны любому, кто может управлять агентом
+        (владелец агента, либо владелец/админ воркспейса), но часть полей —
+        `instructions`, `custom_args`, `runtime_config` (несёт учётные данные
+        шлюза), выбор `runtime_id`, права вызова (`permission_mode`/
+        `invocation_targets`/`visibility`) и `composio_toolkit_allowlist` —
+        изменяет только владелец агента; попытка не-владельца реально
+        изменить такое поле — 403 (запрос с тем же значением, что уже
+        сохранено, молча игнорируется, а не отклоняется). `custom_env` через
+        этот эндпоинт не принимается — только через
+        `PUT /api/agents/{id}/env`. Секретные значения `mcp_config`,
+        показанные ранее в маскированном виде, распознаются по спец-маркеру и
+        не перезаписывают реальное значение той же строки, если она не менялась.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["agent-owner", owner, admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateAgentRequest'}
+      responses:
+        '200':
+          description: Обновлённый агент
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Agent'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '403':
+          description: Попытка не-владельца изменить поле, доступное только владельцу
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '409':
+          description: Агент с таким именем уже существует
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: agent:status
+          payload: "{ agent }"
+
+  /api/agents/{id}/archive:
+    post:
+      operationId: archiveAgent
+      tags: [Agents]
+      summary: Архивировать агента
+      description: Отменяет все активные задачи агента. Повторная архивация уже архивированного агента — 409.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["agent-owner", owner, admin]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Архивированный агент
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Agent'}
+        '409':
+          description: Агент уже архивирован
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: agent:archived
+          payload: "{ agent }"
+
+  /api/agents/{id}/restore:
+    post:
+      operationId: restoreAgent
+      tags: [Agents]
+      summary: Восстановить архивированного агента
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["agent-owner", owner, admin]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Восстановленный агент
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Agent'}
+        '409':
+          description: Агент не архивирован
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: agent:restored
+          payload: "{ agent }"
+
+  /api/agents/{id}/cancel-tasks:
+    post:
+      operationId: cancelAgentTasks
+      tags: [Agents]
+      summary: Отменить все активные запуски агента
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["agent-owner", owner, admin]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Число отменённых задач
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {cancelled: {type: integer}}
+      x-events:
+        - name: task:cancelled
+          when: за каждую отменённую задачу, через подсистему задач
+
+  /api/agents/{id}/tasks:
+    get:
+      operationId: listAgentTasks
+      tags: [Agents]
+      summary: История всех запусков этого агента (все задачи, все статусы)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Список запусков
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AgentTask'}
+        '403':
+          description: Нет доступа к этому приватному агенту
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+  /api/agents/{id}/skills:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: listAgentSkills
+      tags: [AgentSkills]
+      summary: Список навыков, привязанных к агенту
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      responses:
+        '200':
+          description: Список навыков с флагом enabled
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AgentSkillSummary'}
+    put:
+      operationId: setAgentSkills
+      tags: [AgentSkills]
+      summary: Полностью заменить набор навыков агента
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["agent-owner", owner, admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [skill_ids]
+              properties: {skill_ids: {type: array, items: {type: string, format: uuid}}}
+      responses:
+        '200':
+          description: Новый набор навыков агента
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AgentSkillSummary'}
+        '400':
+          description: Один из навыков не принадлежит воркспейсу
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: agent:status
+          payload: "{ agent_id, skills }"
+
+  /api/agents/{id}/skills/add:
+    post:
+      operationId: addAgentSkills
+      tags: [AgentSkills]
+      summary: Добавить навыки агенту, не трогая уже привязанные
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["agent-owner", owner, admin]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [skill_ids]
+              properties: {skill_ids: {type: array, items: {type: string, format: uuid}}}
+      responses:
+        '200':
+          description: Полный набор навыков агента после добавления
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AgentSkillSummary'}
+        '400':
+          description: Один из навыков не принадлежит воркспейсу
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: agent:status
+          payload: "{ agent_id, skills }"
+
+  /api/agents/{id}/skills/{skillId}/enabled:
+    put:
+      operationId: setAgentSkillEnabled
+      tags: [AgentSkills]
+      summary: Включить/выключить конкретный привязанный навык агента без отвязки
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["agent-owner", owner, admin]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: skillId, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties: {enabled: {type: boolean}}
+      responses:
+        '200':
+          description: Полный набор навыков агента
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AgentSkillSummary'}
+        '404':
+          description: Навык не привязан к этому агенту
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: agent:status
+          payload: "{ agent_id, skills }"
+
+  /api/agents/{id}/skills/{skillId}:
+    delete:
+      operationId: removeAgentSkill
+      tags: [AgentSkills]
+      summary: Отвязать навык от агента
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["agent-owner", owner, admin]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: skillId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Полный набор навыков агента после отвязки
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AgentSkillSummary'}
+      x-events:
+        - name: agent:status
+          payload: "{ agent_id, skills }"
+
+  /api/agents/{id}/runtime-skills/enabled:
+    put:
+      operationId: setAgentRuntimeSkillEnabled
+      tags: [AgentSkills]
+      summary: Включить/выключить встроенный навык рантайма (не пользовательский Skill) для агента
+      description: >
+        Отдельный механизм от AgentSkills: относится к навыкам, которые
+        поставляются самим исполняемым рантаймом агента (провайдеры
+        `runtime-c`/`runtime-e`, режим `local`), а не к сущностям Skill
+        воркспейса. Список выключенных навыков рантайма хранится прямо на
+        агенте (`disabled_runtime_skills`) и обнуляется/переоценивается, если
+        агент перепривязан на другой рантайм.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["agent-owner", owner, admin]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [runtime_id, root, key, enabled]
+              properties:
+                runtime_id: {type: string, format: uuid}
+                root: {type: string, enum: [provider, universal, plugin]}
+                key: {type: string, maxLength: 512}
+                name: {type: string}
+                plugin: {type: string, description: Обязателен при root=plugin, только для провайдера runtime-c}
+                enabled: {type: boolean}
+      responses:
+        '204': {description: Настройка сохранена}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404':
+          description: Указанный runtime не найден в воркспейсе
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '409':
+          description: Агент больше не привязан к указанному runtime_id
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: agent:status
+          payload: "{ agent }"
+
+  /api/agents/{id}/labels:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: listAgentLabels
+      tags: [Agents]
+      summary: Метки, прикреплённые к агенту
+      description: Доступно только при включённом флаге ресурсных меток для воркспейса (иначе 404).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      responses:
+        '200':
+          description: Список меток
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {labels: {type: array, items: {$ref: '#/components/schemas/Label'}}}
+        '404':
+          description: Ресурсные метки выключены в воркспейсе
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+    post:
+      operationId: attachAgentLabel
+      tags: [Agents]
+      summary: Прикрепить метку (типа agent) к агенту
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["agent-owner", owner, admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label_id]
+              properties: {label_id: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Актуальный список меток агента
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {labels: {type: array, items: {$ref: '#/components/schemas/Label'}}}
+        '404':
+          description: Метка типа agent не найдена в воркспейсе, либо ресурсные метки выключены
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: label:updated
+          payload: "{ label }"
+
+  /api/agents/{id}/labels/{labelId}:
+    delete:
+      operationId: detachAgentLabel
+      tags: [Agents]
+      summary: Открепить метку от агента
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["agent-owner", owner, admin]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: labelId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Актуальный список меток агента
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {labels: {type: array, items: {$ref: '#/components/schemas/Label'}}}
+        '404':
+          description: Ресурсные метки выключены в воркспейсе
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: label:updated
+          payload: "{ label_id, resource_type: agent }"
+  /api/agents/{id}/env:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: getAgentEnv
+      tags: [AgentEnv]
+      summary: Получить пользовательские переменные окружения агента
+      description: >
+        Доступ — владелец агента, либо владелец/админ воркспейса (участник
+        без этих прав получает 403). Не-владельцу значения всегда
+        маскируются (`****`), видны только имена ключей; владельцу — реальные
+        значения. Каждое чтение (маскированное перечисление ключей или
+        раскрытие значений) обязательно пишет запись в журнал активности —
+        если запись в журнал не удалась, эндпоинт отказывает в ответе
+        (500), а не отдаёт данные без следа.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["agent-owner", owner, admin, member]
+      responses:
+        '200':
+          description: Переменные окружения (маскированные или в открытом виде — см. values_masked)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AgentEnv'}
+        '403':
+          description: Нет прав на просмотр переменных окружения этого агента
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '500':
+          description: Не удалось записать аудит-лог обращения к секретам; выдача данных отменена
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+    put:
+      operationId: updateAgentEnv
+      tags: [AgentEnv]
+      summary: Изменить пользовательские переменные окружения агента
+      description: >
+        Полностью описывает желаемое состояние: ключи, отсутствующие в теле,
+        удаляются. Не-владелец агента может передавать только ключи, значение
+        которых равно маркеру `****` (то есть "оставить как есть") — попытка
+        реально задать/изменить значение чужим агентом-невладельцем — 403 (с
+        отдельной записью в аудит `agent_env_update_refused`). Значение,
+        которое начинается с `****`, но не равно ему целиком, — ошибка (это
+        типичная опечатка поверх маски). Каждое успешное изменение пишет в
+        аудит списки добавленных/удалённых/изменённых/сохранённых ключей.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: ["agent-owner", owner, admin, member]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                custom_env: {type: object, additionalProperties: {type: string}}
+      responses:
+        '200':
+          description: Итоговые переменные окружения (маскированные для не-владельца)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AgentEnv'}
+        '400':
+          description: Значение похоже на испорченный маркер маски
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '403':
+          description: Не-владелец попытался реально изменить значение переменной
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: agent:status
+          payload: "{ agent }"
+
+  /api/agents/{id}/mcp-servers:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: listAgentMcpServers
+      tags: [AgentMcpServers]
+      summary: Список MCP-серверов воркспейса, привязанных к агенту (с флагом enabled)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      responses:
+        '200':
+          description: Список привязанных MCP-серверов
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AgentMcpServer'}
+    post:
+      operationId: addAgentMcpServer
+      tags: [AgentMcpServers]
+      summary: Привязать общий MCP-сервер воркспейса к агенту
+      description: >
+        Только владелец/админ воркспейса, не сами агенты. `server_id` —
+        MCP-сервер, зарегистрированный на уровне воркспейса или включённый
+        для деплоймента; должен существовать и быть доступен в этом
+        воркспейсе.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [server_id]
+              properties: {server_id: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Актуальный список привязанных MCP-серверов
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AgentMcpServer'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '403':
+          description: Вызывающий — агент или не owner/admin воркспейса
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '404':
+          description: MCP-сервер не найден в этом воркспейсе
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/agents/{id}/mcp-servers/{serverId}/enabled:
+    put:
+      operationId: setAgentMcpServerEnabled
+      tags: [AgentMcpServers]
+      summary: Включить/выключить привязанный MCP-сервер агента
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: serverId, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties: {enabled: {type: boolean}}
+      responses:
+        '200':
+          description: Актуальный список привязанных MCP-серверов
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AgentMcpServer'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404':
+          description: Этот MCP-сервер не привязан к агенту
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/agents/{id}/mcp-servers/{serverId}:
+    delete:
+      operationId: removeAgentMcpServer
+      tags: [AgentMcpServers]
+      summary: Отвязать MCP-сервер от агента
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: serverId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Актуальный список привязанных MCP-серверов
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AgentMcpServer'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404':
+          description: Этот MCP-сервер не привязан к агенту
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+components:
+  responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Unauthorized:
+      description: Не аутентифицирован
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Forbidden:
+      description: Недостаточно прав
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    NotFound:
+      description: Не найдено
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+  schemas:
+    IssueStatus:
+      type: string
+      enum: [backlog, todo, in_progress, in_review, done, blocked, cancelled]
+    IssuePriority:
+      type: string
+      enum: [urgent, high, medium, low, none]
+    IssueActorType:
+      type: string
+      enum: [member, agent, squad]
+      description: squad допустим только как assignee_type задачи, не как creator_type (создатель — всегда member или agent)
+
+    Issue:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        number: {type: integer, description: Монотонно возрастающий номер задачи в пределах воркспейса}
+        identifier: {type: string, description: "Человекочитаемый ключ вида PREFIX-NUMBER, например ENG-42"}
+        title: {type: string}
+        description: {type: string, nullable: true}
+        status: {$ref: '#/components/schemas/IssueStatus'}
+        priority: {$ref: '#/components/schemas/IssuePriority'}
+        assignee_type: {allOf: [{$ref: '#/components/schemas/IssueActorType'}], nullable: true}
+        assignee_id: {type: string, format: uuid, nullable: true}
+        creator_type: {type: string, enum: [member, agent]}
+        creator_id: {type: string, format: uuid}
+        parent_issue_id: {type: string, format: uuid, nullable: true}
+        project_id: {type: string, format: uuid, nullable: true}
+        position: {type: number, format: double, description: Порядковая позиция для ручной сортировки (дробное число, см. moveIssue)}
+        stage: {type: integer, nullable: true, minimum: 1, description: "Необязательный номер под-этапа внутри статуса, для многошаговых воркфлоу"}
+        start_date: {type: string, format: date, nullable: true}
+        due_date: {type: string, format: date, nullable: true}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        metadata:
+          type: object
+          additionalProperties: {type: [string, number, boolean]}
+        properties: {$ref: '#/components/schemas/IssuePropertyValues'}
+        reactions:
+          type: array
+          items: {$ref: '#/components/schemas/IssueReaction'}
+        attachments:
+          type: array
+          items: {$ref: '#/components/schemas/Attachment'}
+        labels:
+          type: array
+          items: {$ref: '#/components/schemas/Label'}
+
+    IssuePropertyValues:
+      type: object
+      description: "Словарь {property_definition_id (UUID): значение}, тип значения зависит от типа определения свойства"
+      additionalProperties: {}
+
+    IssueListResponse:
+      type: object
+      properties:
+        issues: {type: array, items: {$ref: '#/components/schemas/Issue'}}
+        total: {type: integer}
+
+    SearchIssuesResponse:
+      type: object
+      properties:
+        issues:
+          type: array
+          items:
+            allOf:
+              - {$ref: '#/components/schemas/Issue'}
+              - type: object
+                properties:
+                  match_source: {type: string, enum: [title, description, comment]}
+                  matched_snippet: {type: string, nullable: true}
+                  matched_description_snippet: {type: string, nullable: true}
+                  matched_comment_snippet: {type: string, nullable: true}
+        total: {type: integer}
+
+    ChildIssueProgressEntry:
+      type: object
+      properties:
+        parent_issue_id: {type: string, format: uuid}
+        total: {type: integer}
+        done: {type: integer, description: "Число дочерних задач в терминальном статусе (done или cancelled)"}
+
+    IssueAssigneeGroup:
+      type: object
+      properties:
+        id: {type: string, description: "assignee:<type>:<id> либо assignee:unassigned"}
+        assignee_type: {allOf: [{$ref: '#/components/schemas/IssueActorType'}], nullable: true}
+        assignee_id: {type: string, format: uuid, nullable: true}
+        issues: {type: array, items: {$ref: '#/components/schemas/Issue'}}
+        total: {type: integer}
+
+    GroupedIssuesResponse:
+      type: object
+      properties:
+        groups: {type: array, items: {$ref: '#/components/schemas/IssueAssigneeGroup'}}
+
+    CreateIssueRequest:
+      type: object
+      required: [title]
+      properties:
+        title: {type: string}
+        description: {type: string, nullable: true}
+        status: {$ref: '#/components/schemas/IssueStatus'}
+        priority: {$ref: '#/components/schemas/IssuePriority'}
+        assignee_type: {allOf: [{$ref: '#/components/schemas/IssueActorType'}], nullable: true}
+        assignee_id: {type: string, format: uuid, nullable: true}
+        parent_issue_id: {type: string, format: uuid, nullable: true}
+        project_id: {type: string, format: uuid, nullable: true}
+        stage: {type: integer, minimum: 1}
+        start_date: {type: string, format: date, nullable: true}
+        due_date: {type: string, format: date, nullable: true}
+        attachment_ids: {type: array, items: {type: string, format: uuid}}
+        label_ids: {type: array, items: {type: string, format: uuid}}
+        allow_duplicate:
+          type: boolean
+          default: false
+          description: Обойти проверку на активный дубликат по похожему заголовку
+      description: >
+        status по умолчанию todo, priority — none. assignee_type/assignee_id
+        должны быть переданы вместе или не переданы вовсе.
+
+    UpdateIssueRequest:
+      type: object
+      properties:
+        title: {type: string}
+        description: {type: string, nullable: true}
+        status: {$ref: '#/components/schemas/IssueStatus'}
+        priority: {$ref: '#/components/schemas/IssuePriority'}
+        assignee_type: {allOf: [{$ref: '#/components/schemas/IssueActorType'}], nullable: true}
+        assignee_id: {type: string, format: uuid, nullable: true}
+        position: {type: number, format: double}
+        start_date: {type: string, format: date, nullable: true}
+        due_date: {type: string, format: date, nullable: true}
+        parent_issue_id: {type: string, format: uuid, nullable: true}
+        project_id: {type: string, format: uuid, nullable: true}
+        stage: {type: integer, minimum: 1, nullable: true}
+        attachment_ids: {type: array, items: {type: string, format: uuid}, description: "Присутствие ключа с непустым списком добавляет вложения; полностью не заменяет список"}
+        suppress_run:
+          type: boolean
+          default: false
+          description: Не запускать агента, даже если сработало правило автозапуска
+        handoff_note:
+          type: string
+          description: Дополнительный контекст, передаваемый агенту, если постановка в очередь всё же происходит
+
+    MoveIssueRequest:
+      type: object
+      required: [before_id, after_id]
+      properties:
+        status: {$ref: '#/components/schemas/IssueStatus'}
+        assignee_type: {allOf: [{$ref: '#/components/schemas/IssueActorType'}], nullable: true}
+        assignee_id: {type: string, format: uuid, nullable: true}
+        parent_issue_id: {type: string, format: uuid, nullable: true}
+        project_id: {type: string, format: uuid, nullable: true}
+        before_id: {type: string, format: uuid, nullable: true, description: "ID соседа сверху, либо null"}
+        after_id: {type: string, format: uuid, nullable: true, description: "ID соседа снизу, либо null"}
+
+    BatchUpdateIssuesRequest:
+      type: object
+      required: [issue_ids, updates]
+      properties:
+        issue_ids: {type: array, items: {type: string, format: uuid}}
+        updates: {$ref: '#/components/schemas/UpdateIssueRequest'}
+
+    QuickCreateIssueRequest:
+      type: object
+      required: [prompt]
+      properties:
+        agent_id: {type: string, format: uuid, description: "Ровно одно из agent_id/squad_id обязательно"}
+        squad_id: {type: string, format: uuid}
+        prompt: {type: string}
+        priority: {type: string, enum: [urgent, high, medium, low]}
+        due_date: {type: string, format: date}
+        project_id: {type: string, format: uuid}
+        parent_issue_id: {type: string, format: uuid}
+        attachment_ids: {type: array, items: {type: string, format: uuid}}
+
+    IssueTriggerPreviewRequest:
+      type: object
+      properties:
+        issue_ids: {type: array, items: {type: string, format: uuid}, maxItems: 500}
+        is_create: {type: boolean, default: false}
+        assignee_type: {allOf: [{$ref: '#/components/schemas/IssueActorType'}], nullable: true}
+        assignee_id: {type: string, format: uuid, nullable: true}
+        status: {$ref: '#/components/schemas/IssueStatus'}
+
+    IssueTriggerPreviewResponse:
+      type: object
+      properties:
+        triggers:
+          type: array
+          items:
+            type: object
+            properties:
+              issue_id: {type: string, format: uuid}
+              agent_id: {type: string, format: uuid}
+              source: {type: string, enum: [assign, status]}
+              handoff_supported: {type: boolean}
+        total_count: {type: integer}
+
+    IssueReaction:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        issue_id: {type: string, format: uuid}
+        actor_type: {type: string, enum: [member, agent]}
+        actor_id: {type: string, format: uuid}
+        emoji: {type: string}
+        created_at: {type: string, format: date-time}
+
+    IssueSubscriber:
+      type: object
+      properties:
+        issue_id: {type: string, format: uuid}
+        user_type: {type: string, enum: [member, agent]}
+        user_id: {type: string, format: uuid}
+        reason: {type: string, enum: [creator, assignee, commenter, mentioned, manual, autopilot]}
+        created_at: {type: string, format: date-time}
+
+    IssueTimelineEntry:
+      type: object
+      description: Единица ленты активности задачи — комментарий, изменение поля или системная запись
+      properties:
+        type: {type: string}
+        id: {type: string, format: uuid}
+        actor_type: {type: string, enum: [member, agent, system]}
+        actor_id: {type: string, format: uuid, nullable: true}
+        action: {type: string}
+        details: {type: object, additionalProperties: true}
+        created_at: {type: string, format: date-time}
+
+    IssuePullRequestLink:
+      type: object
+      properties:
+        issue_id: {type: string, format: uuid}
+        provider: {type: string}
+        url: {type: string}
+        number: {type: integer}
+        title: {type: string, nullable: true}
+        state: {type: string, nullable: true}
+        created_at: {type: string, format: date-time}
+
+    IssueUsageSummary:
+      type: object
+      properties:
+        total_input_tokens: {type: integer}
+        total_output_tokens: {type: integer}
+        total_cache_read_tokens: {type: integer}
+        total_cache_write_tokens: {type: integer}
+        cost_usd_ticks: {type: integer, description: Стоимость в минимальных единицах (тиках), см. общий раздел биллинга}
+        uncosted_input_tokens: {type: integer}
+        uncosted_output_tokens: {type: integer}
+        uncosted_cache_read_tokens: {type: integer}
+        uncosted_cache_write_tokens: {type: integer}
+        task_count: {type: integer}
+    AgentTask:
+      type: object
+      description: >
+        Один запуск агента на задаче (полная модель определена в разделе
+        контракта, посвящённом подсистеме задач/демонов; здесь показаны поля,
+        видимые через маршруты issues/agents этой части).
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        issue_id: {type: string, format: uuid, nullable: true}
+        agent_id: {type: string, format: uuid, nullable: true}
+        status:
+          type: string
+          enum: [queued, dispatched, running, completed, failed, cancelled, waiting_local_directory, deferred]
+        created_at: {type: string, format: date-time}
+        dispatched_at: {type: string, format: date-time, nullable: true}
+        started_at: {type: string, format: date-time, nullable: true}
+        completed_at: {type: string, format: date-time, nullable: true}
+      additionalProperties: true
+
+    TaskMessage:
+      type: object
+      properties:
+        task_id: {type: string, format: uuid}
+        issue_id: {type: string, format: uuid, nullable: true}
+        seq: {type: integer}
+        role: {type: string}
+        content: {type: object, additionalProperties: true}
+        created_at: {type: string, format: date-time}
+      additionalProperties: true
+
+    IssueTableActorRef:
+      type: object
+      required: [type, id]
+      properties:
+        type: {$ref: '#/components/schemas/IssueActorType'}
+        id: {type: string, format: uuid}
+
+    IssueTableScope:
+      type: object
+      description: |
+        `kind: workspace` — весь воркспейс; `project` — конкретный проект
+        (`project_id`); `assignee`/`creator` — конкретный актор (`actor`);
+        `my` — обзор "моё" с `relation`: `assigned` (назначено), `created`
+        (создано мной), `involved` (я как исполнитель через агента/отряд,
+        которым владею), `any` (любое из перечисленного).
+      required: [kind]
+      properties:
+        kind: {type: string, enum: [workspace, project, assignee, creator, my]}
+        assignee_types: {type: array, items: {$ref: '#/components/schemas/IssueActorType'}}
+        project_id: {type: string, format: uuid}
+        actor: {$ref: '#/components/schemas/IssueTableActorRef'}
+        relation: {type: string, enum: [assigned, created, involved, any]}
+
+    IssueTableDateFilter:
+      type: object
+      required: [field, start, end]
+      properties:
+        field: {type: string, enum: [created_at, updated_at]}
+        start: {type: string, format: date-time}
+        end: {type: string, format: date-time}
+
+    IssueTableFilters:
+      type: object
+      properties:
+        statuses: {type: array, items: {$ref: '#/components/schemas/IssueStatus'}}
+        priorities: {type: array, items: {$ref: '#/components/schemas/IssuePriority'}}
+        assignees: {type: array, items: {$ref: '#/components/schemas/IssueTableActorRef'}}
+        include_no_assignee: {type: boolean}
+        creators: {type: array, items: {$ref: '#/components/schemas/IssueTableActorRef'}}
+        project_ids: {type: array, items: {type: string, format: uuid}}
+        include_no_project: {type: boolean}
+        label_ids: {type: array, items: {type: string, format: uuid}}
+        properties:
+          type: object
+          description: "{property_definition_id: [значения]}"
+          additionalProperties: {type: array, items: {type: string}}
+        date: {$ref: '#/components/schemas/IssueTableDateFilter'}
+        working_only: {type: boolean, description: Только задачи, над которыми сейчас реально идёт запуск агента}
+        working_issue_ids: {type: array, items: {type: string, format: uuid}}
+        include_sub_issues: {type: boolean}
+
+    IssueTableSort:
+      type: object
+      properties:
+        field: {type: string}
+        direction: {type: string, enum: [asc, desc]}
+
+    IssueTableQuery:
+      type: object
+      properties:
+        scope: {$ref: '#/components/schemas/IssueTableScope'}
+        filters: {$ref: '#/components/schemas/IssueTableFilters'}
+        search: {type: string}
+        sort: {$ref: '#/components/schemas/IssueTableSort'}
+
+    IssueTableGroupSpec:
+      type: object
+      description: "kind: none|status|assignee|project|parent|compound|property (compound комбинирует primary+secondary, property требует property_id)"
+      properties:
+        kind: {type: string, enum: [none, status, assignee, project, parent, compound, property]}
+        property_id: {type: string, format: uuid}
+        include_empty: {type: boolean}
+        primary: {type: string}
+        secondary: {type: string}
+        secondary_values: {type: array, items: {type: string}}
+
+    IssueTablePage:
+      type: object
+      properties:
+        limit: {type: integer, default: 50, maximum: 100}
+        cursor: {type: string, nullable: true, description: Непрозрачный курсор из предыдущего ответа}
+
+    IssueTableGroupsRequest:
+      type: object
+      properties:
+        query: {$ref: '#/components/schemas/IssueTableQuery'}
+        group: {$ref: '#/components/schemas/IssueTableGroupSpec'}
+        page: {$ref: '#/components/schemas/IssueTablePage'}
+
+    IssueTableGroupsResponse:
+      type: object
+      properties:
+        groups:
+          type: array
+          items:
+            type: object
+            properties:
+              group_key: {type: string, nullable: true}
+              label: {type: string}
+              total: {type: integer}
+        next_cursor: {type: string, nullable: true}
+
+    IssueTableRowsRequest:
+      type: object
+      properties:
+        query: {$ref: '#/components/schemas/IssueTableQuery'}
+        group: {$ref: '#/components/schemas/IssueTableGroupSpec'}
+        group_key: {type: string, nullable: true}
+        hierarchy:
+          type: object
+          properties: {enabled: {type: boolean}}
+        parent_id: {type: string, format: uuid, nullable: true}
+        page: {$ref: '#/components/schemas/IssueTablePage'}
+
+    IssueTableRowsResponse:
+      type: object
+      properties:
+        query_fingerprint: {type: string, description: Хэш параметров запроса; курсор действителен только с тем же fingerprint}
+        group_key: {type: string, nullable: true}
+        parent_id: {type: string, nullable: true}
+        total: {type: integer}
+        branch_total: {type: integer, description: Число задач в текущей ветке иерархии (при hierarchy.enabled)}
+        rows:
+          type: array
+          items:
+            type: object
+            properties:
+              issue: {$ref: '#/components/schemas/Issue'}
+              direct_child_count: {type: integer}
+        next_cursor: {type: string, nullable: true}
+
+    IssueTableFacetSpec:
+      type: object
+      properties:
+        kind: {type: string, enum: [status, priority, assignee, creator, project, label, property]}
+        property_id: {type: string, format: uuid}
+
+    IssueTableFacetsRequest:
+      type: object
+      properties:
+        query: {$ref: '#/components/schemas/IssueTableQuery'}
+        facets: {type: array, items: {$ref: '#/components/schemas/IssueTableFacetSpec'}}
+        include_total: {type: boolean}
+
+    IssueTableFacetsResponse:
+      type: object
+      properties:
+        facets:
+          type: array
+          items:
+            type: object
+            properties:
+              kind: {type: string}
+              property_id: {type: string, format: uuid, nullable: true}
+              values:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    value: {type: string, nullable: true}
+                    label: {type: string}
+                    count: {type: integer}
+        total: {type: integer, nullable: true}
+    DispatchStatus:
+      type: string
+      enum: [queued, deferred, coalesced, blocked]
+      description: >
+        Итог попытки поставить агента в очередь по триггеру комментария:
+        queued — новая задача поставлена; deferred — отложено (например,
+        агент уже занят той же задачей); coalesced — объединено с уже
+        существующим ожидающим запуском того же агента на той же задаче;
+        blocked — отклонено (см. reason_code).
+
+    DispatchReasonCode:
+      type: string
+      enum:
+        - queued
+        - deferred
+        - coalesced
+        - already_active
+        - self_trigger_suppressed
+        - invocation_not_allowed
+        - attribution_blocked
+        - internal_error
+
+    CommentTriggerOutcome:
+      type: object
+      properties:
+        target_type: {type: string, enum: [agent, squad]}
+        target_id: {type: string, format: uuid}
+        status: {$ref: '#/components/schemas/DispatchStatus'}
+        reason_code: {$ref: '#/components/schemas/DispatchReasonCode'}
+
+    CommentReaction:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        comment_id: {type: string, format: uuid}
+        actor_type: {type: string, enum: [member, agent]}
+        actor_id: {type: string, format: uuid}
+        emoji: {type: string}
+        created_at: {type: string, format: date-time}
+
+    IssueComment:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        issue_id: {type: string, format: uuid}
+        author_type: {type: string, enum: [member, agent, system]}
+        author_id: {type: string, format: uuid}
+        content: {type: string}
+        type: {type: string, enum: [comment, status_change, progress_update, system]}
+        parent_id: {type: string, format: uuid, nullable: true}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        resolved_at: {type: string, format: date-time, nullable: true}
+        resolved_by_type: {type: string, enum: [member, agent], nullable: true}
+        resolved_by_id: {type: string, format: uuid, nullable: true}
+        source_task_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Виден только когда автор — агент, а тип комментария это допускает (внутреннее правило раскрытия атрибуции)
+        reactions: {type: array, items: {$ref: '#/components/schemas/CommentReaction'}}
+        attachments: {type: array, items: {$ref: '#/components/schemas/Attachment'}}
+        reply_count: {type: integer, description: "Только при roots_only=true"}
+        last_activity_at: {type: string, format: date-time, nullable: true, description: "Только при roots_only=true"}
+        content_truncated: {type: boolean, description: "Только при summary=true"}
+        thread_resolved: {type: boolean, description: "Только при fold=true"}
+        folded_count: {type: integer, description: "Только при fold=true — число скрытых сообщений треда"}
+        trigger_outcomes:
+          type: array
+          items: {$ref: '#/components/schemas/CommentTriggerOutcome'}
+          description: Только в ответе createIssueComment/updateComment — что произошло с целями авто-запуска
+
+    CreateCommentRequest:
+      type: object
+      required: [content]
+      properties:
+        content: {type: string}
+        type: {type: string, default: comment}
+        parent_id: {type: string, format: uuid, nullable: true}
+        attachment_ids: {type: array, items: {type: string, format: uuid}}
+        suppress_agent_ids: {type: array, items: {type: string, format: uuid}}
+
+    UpdateCommentRequest:
+      type: object
+      required: [content]
+      properties:
+        content: {type: string}
+        attachment_ids:
+          type: array
+          items: {type: string, format: uuid}
+          description: "Если ключ присутствует (даже как []), полностью заменяет вложения комментария"
+        suppress_agent_ids: {type: array, items: {type: string, format: uuid}}
+
+    CommentTriggerAgent:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        avatar_url: {type: string, nullable: true}
+        source:
+          type: string
+          enum: [issue_assignee, mention_agent, mention_squad_leader, thread_parent, conversation_continuation]
+        reason: {type: string}
+
+    CommentTriggerPreviewRequest:
+      type: object
+      properties:
+        content: {type: string}
+        parent_id: {type: string, format: uuid, nullable: true}
+        editing_comment_id: {type: string, format: uuid, nullable: true}
+
+    CommentTriggerPreviewResponse:
+      type: object
+      properties:
+        agents: {type: array, items: {$ref: '#/components/schemas/CommentTriggerAgent'}}
+        blocked: {type: array, items: {$ref: '#/components/schemas/CommentTriggerOutcome'}}
+
+    Attachment:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        issue_id: {type: string, format: uuid, nullable: true}
+        comment_id: {type: string, format: uuid, nullable: true}
+        chat_session_id: {type: string, format: uuid, nullable: true}
+        chat_message_id: {type: string, format: uuid, nullable: true}
+        uploader_type: {type: string, enum: [member, agent]}
+        uploader_id: {type: string, format: uuid}
+        filename: {type: string}
+        url: {type: string}
+        download_url: {type: string}
+        markdown_url: {type: string}
+        download_ticket_url: {type: string}
+        content_type: {type: string}
+        size_bytes: {type: integer}
+        created_at: {type: string, format: date-time}
+    Label:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        resource_type: {type: string, enum: [issue, agent, skill]}
+        name: {type: string, maxLength: 32}
+        description: {type: string}
+        color: {type: string, pattern: '^#[0-9a-f]{6}$'}
+        usage_count: {type: integer}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+
+    CreateLabelRequest:
+      type: object
+      required: [name, color]
+      properties:
+        resource_type: {type: string, enum: [issue, agent, skill], default: issue}
+        name: {type: string, maxLength: 32}
+        description: {type: string}
+        color: {type: string, description: "6-значный HEX, с # или без"}
+
+    UpdateLabelRequest:
+      type: object
+      properties:
+        name: {type: string, maxLength: 32}
+        description: {type: string}
+        color: {type: string}
+
+    PropertyType:
+      type: string
+      enum: [text, number, select, multi_select, date, checkbox, url]
+
+    PropertyOption:
+      type: object
+      required: [name, color]
+      properties:
+        id: {type: string, format: uuid, description: Генерируется автоматически, если не передан}
+        name: {type: string, maxLength: 32}
+        color: {type: string}
+
+    PropertyConfig:
+      type: object
+      properties:
+        options:
+          type: array
+          items: {$ref: '#/components/schemas/PropertyOption'}
+          maxItems: 50
+          description: Обязательно непустой для типов select/multi_select; пуст/отсутствует для остальных типов
+
+    Property:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        name: {type: string, maxLength: 32}
+        type: {$ref: '#/components/schemas/PropertyType'}
+        description: {type: string, maxLength: 500}
+        icon: {type: string, maxLength: 32}
+        config: {$ref: '#/components/schemas/PropertyConfig'}
+        position: {type: number, format: double}
+        archived: {type: boolean}
+        archived_at: {type: string, format: date-time, nullable: true}
+        usage_count: {type: integer}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+
+    CreatePropertyRequest:
+      type: object
+      required: [name, type]
+      properties:
+        name: {type: string, maxLength: 32}
+        type: {$ref: '#/components/schemas/PropertyType'}
+        description: {type: string, maxLength: 500}
+        icon: {type: string, maxLength: 32, description: Один из фиксированного набора ключей иконок сервера}
+        config: {$ref: '#/components/schemas/PropertyConfig'}
+
+    UpdatePropertyRequest:
+      type: object
+      properties:
+        name: {type: string, maxLength: 32}
+        description: {type: string, maxLength: 500}
+        icon: {type: string, maxLength: 32}
+        config: {$ref: '#/components/schemas/PropertyConfig'}
+        archived: {type: boolean, description: "true архивирует; false разархивирует (с учётом лимита в 20 активных свойств)"}
+    ProjectStatus:
+      type: string
+      enum: [planned, in_progress, paused, completed, cancelled]
+
+    Project:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        title: {type: string}
+        description: {type: string, nullable: true}
+        icon: {type: string, nullable: true}
+        status: {$ref: '#/components/schemas/ProjectStatus'}
+        priority: {$ref: '#/components/schemas/IssuePriority'}
+        lead_type: {type: string, enum: [member, agent], nullable: true}
+        lead_id: {type: string, format: uuid, nullable: true}
+        start_date: {type: string, format: date, nullable: true}
+        due_date: {type: string, format: date, nullable: true}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        issue_count: {type: integer}
+        done_count: {type: integer}
+        resource_count: {type: integer}
+
+    SearchProjectsResponse:
+      type: object
+      properties:
+        projects:
+          type: array
+          items:
+            allOf:
+              - {$ref: '#/components/schemas/Project'}
+              - type: object
+                properties:
+                  match_source: {type: string, enum: [title, description]}
+                  matched_snippet: {type: string, nullable: true}
+        total: {type: integer}
+
+    ProjectResourceRefPayload:
+      type: object
+      description: >
+        Форма зависит от resource_type: для github_repo — {url,
+        default_branch_hint?, ref?}; для local_directory — {local_path
+        (абсолютный путь), daemon_id, label?}.
+      additionalProperties: true
+
+    ProjectResource:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        project_id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        resource_type: {type: string, enum: [github_repo, local_directory]}
+        resource_ref: {$ref: '#/components/schemas/ProjectResourceRefPayload'}
+        label: {type: string, nullable: true}
+        position: {type: integer}
+        created_at: {type: string, format: date-time}
+        created_by: {type: string, format: uuid, nullable: true}
+
+    CreateProjectResourceRequest:
+      type: object
+      required: [resource_type, resource_ref]
+      properties:
+        resource_type: {type: string, enum: [github_repo, local_directory]}
+        resource_ref: {$ref: '#/components/schemas/ProjectResourceRefPayload'}
+        label: {type: string}
+        position: {type: integer}
+
+    UpdateProjectResourceRequest:
+      type: object
+      properties:
+        resource_ref: {$ref: '#/components/schemas/ProjectResourceRefPayload'}
+        label: {type: string, nullable: true}
+        position: {type: integer}
+
+    CreateProjectRequest:
+      type: object
+      required: [title]
+      properties:
+        title: {type: string}
+        description: {type: string, nullable: true}
+        icon: {type: string, nullable: true}
+        status: {$ref: '#/components/schemas/ProjectStatus'}
+        priority: {$ref: '#/components/schemas/IssuePriority'}
+        lead_type: {type: string, enum: [member, agent], nullable: true}
+        lead_id: {type: string, format: uuid, nullable: true}
+        start_date: {type: string, format: date, nullable: true}
+        due_date: {type: string, format: date, nullable: true}
+        resources:
+          type: array
+          items: {$ref: '#/components/schemas/CreateProjectResourceRequest'}
+      description: status по умолчанию planned, priority — none.
+
+    UpdateProjectRequest:
+      type: object
+      properties:
+        title: {type: string}
+        description: {type: string, nullable: true}
+        icon: {type: string, nullable: true}
+        status: {$ref: '#/components/schemas/ProjectStatus'}
+        priority: {$ref: '#/components/schemas/IssuePriority'}
+        lead_type: {type: string, enum: [member, agent], nullable: true}
+        lead_id: {type: string, format: uuid, nullable: true}
+        start_date: {type: string, format: date, nullable: true}
+        due_date: {type: string, format: date, nullable: true}
+    SquadMemberPreview:
+      type: object
+      properties:
+        member_type: {type: string, enum: [agent, member]}
+        member_id: {type: string, format: uuid}
+        role: {type: string}
+
+    Squad:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        name: {type: string}
+        description: {type: string}
+        instructions: {type: string}
+        avatar_url: {type: string, nullable: true}
+        leader_id: {type: string, format: uuid}
+        creator_id: {type: string, format: uuid}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        archived_at: {type: string, format: date-time, nullable: true}
+        archived_by: {type: string, format: uuid, nullable: true}
+        member_count: {type: integer}
+        member_preview:
+          type: array
+          items: {$ref: '#/components/schemas/SquadMemberPreview'}
+          maxItems: 3
+          description: Первые до 3 участников для превью в списках
+
+    SquadMember:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        squad_id: {type: string, format: uuid}
+        member_type: {type: string, enum: [agent, member]}
+        member_id: {type: string, format: uuid}
+        role: {type: string, description: "Свободный текст; зарезервированное значение leader присваивается лидеру автоматически"}
+        created_at: {type: string, format: date-time}
+
+    SquadActiveIssueBrief:
+      type: object
+      properties:
+        issue_id: {type: string, format: uuid}
+        identifier: {type: string}
+        title: {type: string}
+        issue_status: {$ref: '#/components/schemas/IssueStatus'}
+
+    SquadMemberStatus:
+      type: object
+      properties:
+        member_type: {type: string, enum: [agent, member]}
+        member_id: {type: string, format: uuid}
+        status:
+          type: string
+          nullable: true
+          enum: [working, idle, unstable, offline, archived]
+          description: Вычисляется только для участников-агентов; для людей всегда null
+        active_issues: {type: array, items: {$ref: '#/components/schemas/SquadActiveIssueBrief'}}
+        last_active_at: {type: string, format: date-time, nullable: true}
+
+    SquadMemberStatusList:
+      type: object
+      properties:
+        members: {type: array, items: {$ref: '#/components/schemas/SquadMemberStatus'}}
+    AutopilotStatus:
+      type: string
+      enum: [active, paused, archived]
+
+    AutopilotSubscriber:
+      type: object
+      properties:
+        user_type: {type: string, enum: [member]}
+        user_id: {type: string, format: uuid}
+        created_at: {type: string, format: date-time}
+
+    Autopilot:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        title: {type: string}
+        description: {type: string, nullable: true}
+        project_id: {type: string, format: uuid, nullable: true}
+        assignee_type: {type: string, enum: [agent, squad]}
+        assignee_id: {type: string, format: uuid}
+        status: {$ref: '#/components/schemas/AutopilotStatus'}
+        execution_mode: {type: string, enum: [create_issue, run_only]}
+        issue_title_template: {type: string, nullable: true}
+        created_by_type: {type: string, enum: [member, agent]}
+        created_by_id: {type: string, format: uuid}
+        last_run_at: {type: string, format: date-time, nullable: true}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        trigger_kinds: {type: array, items: {type: string, enum: [schedule, webhook, api]}}
+        next_run_at: {type: string, format: date-time, nullable: true}
+        last_run_status: {type: string, nullable: true}
+        is_template: {type: boolean}
+        subscribers: {type: array, items: {$ref: '#/components/schemas/AutopilotSubscriber'}}
+        can_write: {type: boolean, description: Только в персонализированном ответе (списки/getAutopilot)}
+        can_manage_access: {type: boolean, description: Только в getAutopilot}
+
+    CreateAutopilotRequest:
+      type: object
+      required: [title, assignee_id, execution_mode]
+      properties:
+        title: {type: string}
+        description: {type: string, nullable: true}
+        project_id: {type: string, format: uuid, nullable: true}
+        assignee_type: {type: string, enum: [agent, squad], default: agent}
+        assignee_id: {type: string, format: uuid}
+        execution_mode: {type: string, enum: [create_issue, run_only]}
+        issue_title_template: {type: string, nullable: true}
+        subscribers: {type: array, items: {$ref: '#/components/schemas/SubscriberInput'}}
+
+    UpdateAutopilotRequest:
+      type: object
+      properties:
+        title: {type: string}
+        description: {type: string, nullable: true}
+        project_id: {type: string, format: uuid, nullable: true}
+        assignee_type: {type: string, enum: [agent, squad]}
+        assignee_id: {type: string, format: uuid}
+        status: {$ref: '#/components/schemas/AutopilotStatus'}
+        execution_mode: {type: string, enum: [create_issue, run_only]}
+        issue_title_template: {type: string, nullable: true}
+        subscribers: {type: array, items: {$ref: '#/components/schemas/SubscriberInput'}, description: "Если ключ присутствует, полностью заменяет список подписчиков"}
+
+    SubscriberInput:
+      type: object
+      required: [user_type, user_id]
+      properties:
+        user_type: {type: string, enum: [member]}
+        user_id: {type: string, format: uuid}
+
+    WebhookEventFilter:
+      type: object
+      description: Условие на входящее событие провайдера (например GitHub), при котором вебхук-триггер реально срабатывает
+      additionalProperties: true
+
+    AutopilotTriggerKind:
+      type: string
+      enum: [schedule, webhook, api]
+
+    AutopilotTrigger:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        autopilot_id: {type: string, format: uuid}
+        kind: {$ref: '#/components/schemas/AutopilotTriggerKind'}
+        enabled: {type: boolean}
+        cron_expression: {type: string, nullable: true}
+        timezone: {type: string, nullable: true}
+        next_run_at: {type: string, format: date-time, nullable: true}
+        webhook_token:
+          type: string
+          nullable: true
+          description: Виден только владельцу/коллаборатору с правом записи; в широковещательных событиях всегда скрыт
+        webhook_path: {type: string, nullable: true}
+        webhook_url: {type: string, nullable: true}
+        provider: {type: string, enum: [generic, github], nullable: true}
+        has_signing_secret: {type: boolean}
+        signing_secret_hint: {type: string, nullable: true}
+        label: {type: string, nullable: true}
+        last_fired_at: {type: string, format: date-time, nullable: true}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        event_filters: {type: array, items: {$ref: '#/components/schemas/WebhookEventFilter'}}
+
+    CreateAutopilotTriggerRequest:
+      type: object
+      required: [kind]
+      properties:
+        kind: {$ref: '#/components/schemas/AutopilotTriggerKind'}
+        cron_expression: {type: string, description: Обязателен при kind=schedule}
+        timezone: {type: string}
+        label: {type: string}
+        provider: {type: string, enum: [generic, github], description: Только для kind=webhook}
+        event_filters: {type: array, items: {$ref: '#/components/schemas/WebhookEventFilter'}}
+
+    UpdateAutopilotTriggerRequest:
+      type: object
+      properties:
+        enabled: {type: boolean}
+        cron_expression: {type: string}
+        timezone: {type: string}
+        label: {type: string}
+        event_filters: {type: array, items: {$ref: '#/components/schemas/WebhookEventFilter'}}
+
+    SetSigningSecretRequest:
+      type: object
+      required: [signing_secret]
+      properties:
+        signing_secret: {type: string, description: "Пустая строка снимает секрет; иначе минимум 16 символов"}
+
+    AutopilotCollaborator:
+      type: object
+      properties:
+        user_type: {type: string, enum: [member]}
+        user_id: {type: string, format: uuid}
+        granted_by: {type: string, format: uuid}
+        created_at: {type: string, format: date-time}
+
+    AutopilotRunStatus:
+      type: string
+      enum: [issue_created, running, completed, failed, skipped]
+
+    AutopilotRun:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        autopilot_id: {type: string, format: uuid}
+        trigger_id: {type: string, format: uuid, nullable: true}
+        source: {type: string, enum: [schedule, manual, webhook, api]}
+        status: {$ref: '#/components/schemas/AutopilotRunStatus'}
+        issue_id: {type: string, format: uuid, nullable: true}
+        task_id: {type: string, format: uuid, nullable: true}
+        triggered_at: {type: string, format: date-time}
+        completed_at: {type: string, format: date-time, nullable: true}
+        failure_reason: {type: string, nullable: true}
+        reason_code: {type: string, nullable: true, description: "Заполнен, когда status=skipped — почему запуск не состоялся"}
+        trigger_payload: {description: "Полный payload только в getAutopilotRun; в списках может отсутствовать"}
+        result: {description: "Полный result только в getAutopilotRun"}
+        created_at: {type: string, format: date-time}
+
+    WebhookDeliveryStatus:
+      type: string
+      enum: [queued, dispatched, rejected, ignored, failed]
+
+    WebhookDeliverySignatureStatus:
+      type: string
+      enum: [not_required, valid, invalid, missing]
+
+    WebhookDelivery:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        autopilot_id: {type: string, format: uuid}
+        trigger_id: {type: string, format: uuid}
+        provider: {type: string}
+        event: {type: string}
+        dedupe_key: {type: string, nullable: true}
+        dedupe_source: {type: string, nullable: true}
+        signature_status: {$ref: '#/components/schemas/WebhookDeliverySignatureStatus'}
+        status: {$ref: '#/components/schemas/WebhookDeliveryStatus'}
+        attempt_count: {type: integer}
+        dispatch_attempts: {type: integer}
+        available_at: {type: string, format: date-time}
+        content_type: {type: string, nullable: true}
+        response_status: {type: integer, nullable: true}
+        autopilot_run_id: {type: string, format: uuid, nullable: true}
+        replayed_from_delivery_id: {type: string, format: uuid, nullable: true}
+        error: {type: string, nullable: true}
+        received_at: {type: string, format: date-time}
+        last_attempt_at: {type: string, format: date-time}
+        created_at: {type: string, format: date-time}
+        selected_headers: {type: object, additionalProperties: {type: string}, description: "Только в детальном ответе (getAutopilotDelivery)"}
+        raw_body: {type: string, nullable: true, description: "Только в детальном ответе"}
+        response_body: {type: string, nullable: true, description: "Только в детальном ответе"}
+    Pin:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        user_id: {type: string, format: uuid}
+        item_type: {type: string, enum: [issue, project]}
+        item_id: {type: string, format: uuid}
+        position: {type: number, format: double}
+        created_at: {type: string, format: date-time}
+    AgentInvocationTarget:
+      type: object
+      description: >
+        Одна цель, которой разрешён вызов агента при permission_mode=public_to.
+        target_type=workspace не требует target_id (берётся ID текущего
+        воркспейса); member/team требуют target_id.
+      required: [target_type]
+      properties:
+        target_type: {type: string, enum: [workspace, member, team]}
+        target_id: {type: string, format: uuid, nullable: true}
+
+    AgentSkillSummary:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        name: {type: string}
+        description: {type: string}
+        config: {type: object, additionalProperties: true}
+        enabled: {type: boolean}
+        created_by: {type: string, format: uuid, nullable: true}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+
+    DisabledRuntimeSkill:
+      type: object
+      properties:
+        runtime_id: {type: string, format: uuid}
+        provider: {type: string, enum: [runtime-c, runtime-e]}
+        root: {type: string, enum: [provider, universal, plugin]}
+        key: {type: string}
+        name: {type: string}
+        plugin: {type: string, description: "Только при root=plugin"}
+
+    Agent:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        runtime_id: {type: string, format: uuid}
+        name: {type: string}
+        description: {type: string, maxLength: 255}
+        instructions: {type: string, description: "Изменяет только владелец агента"}
+        avatar_url: {type: string, nullable: true}
+        runtime_mode: {type: string, enum: [local, cloud]}
+        runtime_config:
+          type: object
+          additionalProperties: true
+          description: "Несёт учётные данные шлюза исполнения; поле gateway.token маскируется значением *** во всех ответах"
+        custom_args: {type: array, items: {type: string}, description: "Изменяет только владелец агента"}
+        mcp_config:
+          description: >
+            Конфигурация MCP-серверов агента. Полностью скрыта или
+            маскирована (mcp_config_redacted=true), если вызывающий не может
+            видеть секреты агента; см. mcp_config_encrypted/mcp_config_redacted.
+        has_custom_env: {type: boolean}
+        custom_env_key_count: {type: integer}
+        mcp_config_redacted: {type: boolean, description: mcp_config не удалось расшифровать/показать вызывающему}
+        mcp_config_encrypted: {type: boolean, description: Хранится в зашифрованном виде на сервере}
+        visibility: {type: string, enum: [private, workspace], description: "Устаревший производный вид permission_mode/invocation_targets"}
+        permission_mode: {type: string, enum: [private, public_to]}
+        invocation_targets: {type: array, items: {$ref: '#/components/schemas/AgentInvocationTarget'}}
+        status: {type: string, enum: [idle, working, blocked, error, offline]}
+        max_concurrent_tasks: {type: integer, default: 6}
+        model: {type: string}
+        thinking_level: {type: string}
+        service_tier: {type: string}
+        composio_toolkit_allowlist: {type: array, items: {type: string}, description: "Скрыт полностью, если функция выключена в воркспейсе, или заменён редактированной формой не-владельцу"}
+        composio_toolkit_allowlist_redacted: {type: boolean}
+        owner_id: {type: string, format: uuid, nullable: true}
+        skills: {type: array, items: {$ref: '#/components/schemas/AgentSkillSummary'}}
+        disabled_runtime_skills: {type: array, items: {$ref: '#/components/schemas/DisabledRuntimeSkill'}}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        archived_at: {type: string, format: date-time, nullable: true}
+        archived_by: {type: string, format: uuid, nullable: true}
+        system_key: {type: string, description: "Заполнен только для системных ролевых агентов (kind=system)"}
+
+    CreateAgentRequest:
+      type: object
+      required: [name, runtime_id]
+      properties:
+        name: {type: string}
+        description: {type: string, maxLength: 255}
+        instructions: {type: string}
+        avatar_url: {type: string, nullable: true}
+        runtime_id: {type: string, format: uuid}
+        runtime_config: {type: object, additionalProperties: true}
+        custom_env: {type: object, additionalProperties: {type: string}}
+        custom_args: {type: array, items: {type: string}}
+        mcp_config: {type: object, additionalProperties: true}
+        visibility: {type: string, enum: [private, workspace], default: private, deprecated: true}
+        permission_mode: {type: string, enum: [private, public_to]}
+        invocation_targets: {type: array, items: {$ref: '#/components/schemas/AgentInvocationTarget'}}
+        max_concurrent_tasks: {type: integer, default: 6}
+        model: {type: string}
+        thinking_level: {type: string}
+        service_tier: {type: string}
+        composio_toolkit_allowlist: {type: array, items: {type: string}}
+        skill_ids: {type: array, items: {type: string, format: uuid}}
+
+    UpdateAgentRequest:
+      type: object
+      properties:
+        name: {type: string}
+        description: {type: string, maxLength: 255}
+        instructions: {type: string, description: "Только владелец агента"}
+        avatar_url: {type: string, nullable: true}
+        runtime_id: {type: string, format: uuid, description: "Только владелец агента"}
+        runtime_config: {type: object, additionalProperties: true, description: "Только владелец агента"}
+        custom_args: {type: array, items: {type: string}, description: "Только владелец агента"}
+        mcp_config: {type: object, additionalProperties: true, nullable: true}
+        visibility: {type: string, enum: [private, workspace], deprecated: true, description: "Только владелец агента"}
+        permission_mode: {type: string, enum: [private, public_to], description: "Только владелец агента"}
+        invocation_targets: {type: array, items: {$ref: '#/components/schemas/AgentInvocationTarget'}, description: "Только владелец агента"}
+        status: {type: string, enum: [idle, working, blocked, error, offline]}
+        max_concurrent_tasks: {type: integer}
+        model: {type: string}
+        thinking_level: {type: string, description: "Пустая строка сбрасывает значение"}
+        service_tier: {type: string, description: "Пустая строка сбрасывает значение"}
+        composio_toolkit_allowlist: {type: array, items: {type: string}, nullable: true, description: "Только владелец агента"}
+
+    CreateAgentFromTemplateRequest:
+      type: object
+      required: [template_slug, name, runtime_id]
+      properties:
+        template_slug: {type: string}
+        name: {type: string}
+        runtime_id: {type: string, format: uuid}
+        model: {type: string}
+        visibility: {type: string, enum: [private, workspace], default: private, deprecated: true}
+        max_concurrent_tasks: {type: integer, default: 6}
+        permission_mode: {type: string, enum: [private, public_to]}
+        invocation_targets: {type: array, items: {$ref: '#/components/schemas/AgentInvocationTarget'}}
+        description: {type: string}
+        instructions: {type: string}
+        avatar_url: {type: string}
+        extra_skill_ids: {type: array, items: {type: string, format: uuid}}
+
+    CreateAgentFromTemplateResponse:
+      type: object
+      properties:
+        agent: {$ref: '#/components/schemas/Agent'}
+        imported_skill_ids: {type: array, items: {type: string, format: uuid}}
+
+    AgentEnv:
+      type: object
+      properties:
+        agent_id: {type: string, format: uuid}
+        custom_env:
+          type: object
+          additionalProperties: {type: string}
+          description: "Значения заменены на **** при values_masked=true"
+        values_masked: {type: boolean}
+
+    AgentMcpServer:
+      type: object
+      description: Общий MCP-сервер воркспейса в контексте конкретного агента
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        name: {type: string}
+        transport: {type: string}
+        source: {type: string}
+        credential_schema: {type: object, additionalProperties: true, nullable: true}
+        provided_keys: {type: array, items: {type: string}}
+        enabled: {type: boolean, description: Включён ли именно для этого агента}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
