@@ -40,13 +40,24 @@ const (
 	defaultRetention  = 7 * 24 * time.Hour
 )
 
-func New(db *store.Store, storage asset.Storage, logger *slog.Logger) *Deps {
+// New собирает Deps; jobTimeout/retention — GOOSAR_EXPORT_TIMEOUT/
+// GOOSAR_EXPORT_RETENTION (contract, «Хранение/retention»): 0 сводится к
+// встроенному дефолту этого пакета, а не к "без таймаута"/"без удаления" —
+// пустое значение обеих переменных контракт не документирует особо, в
+// отличие от GOOSAR_RETENTION_* (см. server2/docs/decisions.md).
+func New(db *store.Store, storage asset.Storage, jobTimeout, retention time.Duration, logger *slog.Logger) *Deps {
+	if jobTimeout <= 0 {
+		jobTimeout = defaultJobTimeout
+	}
+	if retention <= 0 {
+		retention = defaultRetention
+	}
 	return &Deps{
 		Store:      NewStore(db),
 		Storage:    storage,
 		Logger:     logger,
-		JobTimeout: defaultJobTimeout,
-		Retention:  defaultRetention,
+		JobTimeout: jobTimeout,
+		Retention:  retention,
 	}
 }
 

@@ -22,6 +22,10 @@ type sendCodeRequest struct {
 }
 
 func (d *Deps) handleSendCode(w http.ResponseWriter, r *http.Request) {
+	if !d.Config.AuthMethodEnabled("email") {
+		httpapi.WriteError(w, http.StatusNotFound, "email sign-in is not enabled on this server", "email_not_enabled")
+		return
+	}
 	ip := httpapi.ClientIP(r)
 	if !d.AuthIPLimiter.Enforce(w, ip, "too many requests") {
 		return
@@ -37,6 +41,10 @@ func (d *Deps) handleSendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !d.AuthEmailLimiter.Enforce(w, email, "too many requests for this email") {
+		return
+	}
+	if !d.Config.EmailAllowed(email) {
+		httpapi.WriteError(w, http.StatusForbidden, "this email is not allowed to sign in on this server", "email_not_allowed")
 		return
 	}
 
@@ -110,10 +118,11 @@ func (d *Deps) handleSendCode(w http.ResponseWriter, r *http.Request) {
 // magicLinkURL строит ссылку на страницу фронтенда, которая заберёт token из
 // query и вызовет POST /auth/verify-link (contract не фиксирует конкретный
 // путь фронтенда — решение этой сессии, см. server2/docs/decisions.md,
-// раздел T-029). Пусто, если FRONTEND_ORIGIN не задан — тогда письмо
-// ограничивается кодом (см. mail.LoginCodeMessage).
+// раздел T-029). GOOSAR_APP_URL (contract: "публичный адрес веб-приложения —
+// используется в письмах") — пусто, если ни он, ни FRONTEND_ORIGIN не
+// заданы — тогда письмо ограничивается кодом (см. mail.LoginCodeMessage).
 func (d *Deps) magicLinkURL(token string) string {
-	base := strings.TrimRight(d.Config.FrontendOrigin, "/")
+	base := strings.TrimRight(d.Config.AppURL, "/")
 	if base == "" {
 		return ""
 	}
@@ -201,7 +210,7 @@ func (d *Deps) issueSessionToken(w http.ResponseWriter, r *http.Request, acct Ac
 	}
 	token, err := d.Signer.Sign(Claims{
 		Sub: acct.ID, Email: acct.Email, Name: acct.Name, TV: acct.TokenEpoch, SID: sess.ID,
-	}, sessionTTL)
+	}, d.Config.AuthTokenTTL)
 	if err != nil {
 		return "", err
 	}
@@ -227,7 +236,12 @@ func (d *Deps) issueSessionToken(w http.ResponseWriter, r *http.Request, acct Ac
 // интернета; успешный вход через корпоративный каталог/IdP сам по себе уже
 // является предъявленным правом на аккаунт" (см. server2/docs/decisions.md,
 // раздел T-029).
+var errEmailNotAllowed = errors.New("authn: email не входит в ALLOWED_EMAILS/ALLOWED_EMAIL_DOMAINS")
+
 func (d *Deps) loginOrLinkExternal(r *http.Request, method, subject, email, name string) (Account, error) {
+	if !d.Config.EmailAllowed(email) {
+		return Account{}, errEmailNotAllowed
+	}
 	ctx := r.Context()
 	acct, err := d.Store.FindAccountByExternalSubject(ctx, method, subject)
 	switch {
@@ -354,13 +368,16 @@ func (d *Deps) handleListMethods(w http.ResponseWriter, r *http.Request) {
 	if !d.AuthVerifyIPLimiter.Enforce(w, ip, "too many requests") {
 		return
 	}
-	methods := []string{"email"}
+	methods := []string{}
 	resp := map[string]any{}
-	if d.Config.OIDC.IssuerURL != "" {
+	if d.Config.AuthMethodEnabled("email") {
+		methods = append(methods, "email")
+	}
+	if d.Config.AuthMethodEnabled("oidc") && d.Config.OIDC.IssuerURL != "" {
 		methods = append(methods, "oidc")
 		resp["oidc_display_name"] = d.Config.OIDC.DisplayName
 	}
-	if d.Config.LDAP.URL != "" {
+	if d.Config.AuthMethodEnabled("ldap") && d.Config.LDAPMethodAvailable() {
 		methods = append(methods, "ldap")
 		resp["ldap_display_name"] = d.Config.LDAP.DisplayName
 	}

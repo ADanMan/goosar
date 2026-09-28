@@ -17,6 +17,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -147,13 +148,71 @@ func Applied(ctx context.Context, pool *pgxpool.Pool) (map[int]bool, error) {
 // все 12 файлов не держала блокировки дольше необходимого, и чтобы частичный
 // сбой оставлял предыдущие миграции применёнными, а не откатывал всё сразу).
 // Возвращает версии, применённые в этом вызове (пусто, если всё уже было
-// применено раньше — вызов идемпотентен).
+// применено раньше — вызов идемпотентен). Без блокировки — для одноразовых
+// операторских вызовов (cmd/import, cmd/admin), где конкуренции нет; сервер
+// использует ApplyLocked.
 func Apply(ctx context.Context, pool *pgxpool.Pool, dir string) ([]int, error) {
 	files, err := Load(dir)
 	if err != nil {
 		return nil, err
 	}
-	return applyFiles(ctx, pool, files)
+	return applyFiles(ctx, pool, files, 0)
+}
+
+// migrationLockKey — фиксированный ключ Postgres advisory lock для
+// GOOSAR_MIGRATION_LOCK_TIMEOUT/_RETRIES ниже: несколько реплик server2,
+// стартующих одновременно с MIGRATE=true против одной базы, сериализуются на
+// этой блокировке вместо гонки за одни и те же миграции. Значение —
+// произвольная константа этого репозитория (см. LedgerTable за тот же приём
+// "не совпадать по имени со старым server", server/** не читался).
+const migrationLockKey = 891173445
+
+// ApplyLocked — как Apply, но сперва берёт сессионный Postgres advisory lock
+// (contract, группа "БД и запуск": GOOSAR_MIGRATION_LOCK_TIMEOUT — сколько
+// мигратор ждёт захвата блокировки перед повтором, GOOSAR_MIGRATION_LOCK_RETRIES
+// — сколько раз повторить). statementTimeout>0 — GOOSAR_MIGRATION_STATEMENT_TIMEOUT,
+// применяется как `SET LOCAL statement_timeout` в транзакции каждого файла.
+func ApplyLocked(ctx context.Context, pool *pgxpool.Pool, dir string, lockTimeout time.Duration, lockRetries int, statementTimeout time.Duration) ([]int, error) {
+	files, err := Load(dir)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("migrate: получение соединения для блокировки: %w", err)
+	}
+	defer conn.Release()
+
+	if lockRetries < 1 {
+		lockRetries = 1
+	}
+	acquired := false
+	for attempt := 0; attempt < lockRetries; attempt++ {
+		var ok bool
+		if err := conn.QueryRow(ctx, `SELECT pg_try_advisory_lock($1)`, int64(migrationLockKey)).Scan(&ok); err != nil {
+			return nil, fmt.Errorf("migrate: pg_try_advisory_lock: %w", err)
+		}
+		if ok {
+			acquired = true
+			break
+		}
+		if attempt == lockRetries-1 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(lockTimeout):
+		}
+	}
+	if !acquired {
+		return nil, fmt.Errorf("migrate: не удалось захватить блокировку миграции за %d попыток (GOOSAR_MIGRATION_LOCK_RETRIES)", lockRetries)
+	}
+	defer func() {
+		_, _ = conn.Exec(context.Background(), `SELECT pg_advisory_unlock($1)`, int64(migrationLockKey))
+	}()
+
+	return applyFiles(ctx, pool, files, statementTimeout)
 }
 
 // ApplyIdempotent исполняет по порядку номеров все NNN_*.up.sql в dir,
@@ -187,7 +246,7 @@ func ApplyIdempotent(ctx context.Context, pool *pgxpool.Pool, dir string) ([]str
 	return names, nil
 }
 
-func applyFiles(ctx context.Context, pool *pgxpool.Pool, files []File) ([]int, error) {
+func applyFiles(ctx context.Context, pool *pgxpool.Pool, files []File, statementTimeout time.Duration) ([]int, error) {
 	if err := EnsureLedger(ctx, pool); err != nil {
 		return nil, err
 	}
@@ -203,6 +262,12 @@ func applyFiles(ctx context.Context, pool *pgxpool.Pool, files []File) ([]int, e
 		tx, err := pool.Begin(ctx)
 		if err != nil {
 			return appliedNow, fmt.Errorf("migrate: начало транзакции для %s: %w", f.Name, err)
+		}
+		if statementTimeout > 0 {
+			if _, err := tx.Exec(ctx, fmt.Sprintf(`SET LOCAL statement_timeout = %d`, statementTimeout.Milliseconds())); err != nil {
+				_ = tx.Rollback(ctx)
+				return appliedNow, fmt.Errorf("migrate: SET LOCAL statement_timeout для %s: %w", f.Name, err)
+			}
 		}
 		if _, err := tx.Exec(ctx, f.SQL); err != nil {
 			_ = tx.Rollback(ctx)

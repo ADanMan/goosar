@@ -65,7 +65,7 @@ type Deps struct {
 func New(db *store.Store, cfg config.Config, mailer mail.Sender, logger *slog.Logger) *Deps {
 	return &Deps{
 		Store:  NewStore(db),
-		Signer: NewSigner(cfg.JWTSecret),
+		Signer: NewSignerWithPrevious(cfg.JWTSecret, cfg.JWTSecretPrevious),
 		Config: cfg,
 		Mailer: mailer,
 		Logger: logger,

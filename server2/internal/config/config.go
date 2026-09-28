@@ -355,11 +355,19 @@ func Load() Config {
 		BindDN:       os.Getenv("GOOSAR_LDAP_BIND_DN"),
 		BindPassword: os.Getenv("GOOSAR_LDAP_BIND_PASSWORD"),
 		BaseDN:       os.Getenv("GOOSAR_LDAP_BASE_DN"),
-		UserFilter:   getenv("GOOSAR_LDAP_USER_FILTER", "(|(uid=%s)(sAMAccountName=%s))"),
-		EmailAttr:    getenv("GOOSAR_LDAP_EMAIL_ATTR", "mail"),
-		NameAttr:     getenv("GOOSAR_LDAP_NAME_ATTR", "displayName"),
-		AdminGroup:   os.Getenv("GOOSAR_LDAP_ADMIN_GROUP"),
-		DisplayName:  getenv("GOOSAR_LDAP_DISPLAY_NAME", "Corporate directory"),
+		// Дефолт — простой equality-фильтр, не составной OR: BER-клиент этого
+		// server2 (internal/authn/ldap.go, parseEqualityFilterTemplate)
+		// намеренно поддерживает только "(attr=%s)", без OR/AND — решение
+		// зафиксировано раньше в server2/docs/decisions.md (T-029). Контракт
+		// описывает "встроенный фильтр, покрывающий оба варианта написания
+		// логина в AD" прозой, без буквального значения по умолчанию — этот
+		// server2 предпочитает честный более узкий дефолт совместимому с
+		// реализацией, а не строку, которая ломала бы вход тут же при старте.
+		UserFilter:  getenv("GOOSAR_LDAP_USER_FILTER", "(uid=%s)"),
+		EmailAttr:   getenv("GOOSAR_LDAP_EMAIL_ATTR", "mail"),
+		NameAttr:    getenv("GOOSAR_LDAP_NAME_ATTR", "displayName"),
+		AdminGroup:  os.Getenv("GOOSAR_LDAP_ADMIN_GROUP"),
+		DisplayName: getenv("GOOSAR_LDAP_DISPLAY_NAME", "Corporate directory"),
 	}
 
 	// --- Хранилище ---
@@ -533,6 +541,12 @@ func (c Config) DevCodeEnabled() bool { return !c.IsProduction() && c.DevVerifyC
 // только email). Метод, не перечисленный здесь, закрыт на самом эндпойнте,
 // даже если ниже для него всё настроено (contract, группа OIDC/LDAP/MFA).
 func (c Config) AuthMethodEnabled(method string) bool {
+	if len(c.AuthMethods) == 0 {
+		// Config{} собранный напрямую (не через Load(), как в некоторых
+		// тестах) не проходит нормализацию parseAuthMethods — тот же дефолт
+		// "пусто = только email" применяется и здесь.
+		return method == "email"
+	}
 	for _, m := range c.AuthMethods {
 		if m == method {
 			return true
@@ -576,6 +590,78 @@ func (c Config) EmailAllowed(email string) bool {
 		}
 	}
 	return false
+}
+
+// EffectiveAllowedOrigins — источник CORS/WebSocket allow-list (contract:
+// ALLOWED_ORIGINS приоритетнее CORS_ALLOWED_ORIGINS, которая при пустом
+// значении откатывается на три локальных origin для разработки; ниже —
+// FrontendOrigin). Список из трёх локальных origin не документирован
+// контрактом дословно — решение этой сессии зафиксировано в
+// server2/docs/decisions.md, раздел «Пробелы спецификации». FrontendOrigin
+// включается в набор всегда (contract: "запасной вариант для списка
+// разрешённых источников CORS/WebSocket"), чтобы настроенный фронтенд не
+// потерял доступ, даже когда явно заданы ALLOWED_ORIGINS/CORS_ALLOWED_ORIGINS.
+func (c Config) EffectiveAllowedOrigins() []string {
+	var origins []string
+	switch {
+	case len(c.AllowedOrigins) > 0:
+		origins = append(origins, c.AllowedOrigins...)
+	case len(c.CORSAllowedOrigins) > 0:
+		origins = append(origins, c.CORSAllowedOrigins...)
+	default:
+		origins = append(origins, "http://localhost:3199", "http://localhost:3000", "http://localhost:3001")
+	}
+	if c.FrontendOrigin != "" {
+		for _, o := range origins {
+			if o == c.FrontendOrigin {
+				return origins
+			}
+		}
+		origins = append(origins, c.FrontendOrigin)
+	}
+	return origins
+}
+
+// ContentSecurityPolicyImgSrc — директива img-src заголовка
+// Content-Security-Policy для ответов API (contract, GOOSAR_EXTERNAL_IMAGES):
+// allow — как раньше ('self' https: data:); block/allowlist — 'self' data:
+// плюс собственные хосты хранилища этого деплоя (CLOUDFRONT_DOMAIN,
+// LOCAL_UPLOAD_BASE_URL), allowlist добавляет ещё и GOOSAR_IMAGE_HOSTS.
+func (c Config) ContentSecurityPolicyImgSrc() string {
+	if c.ExternalImages == "allow" {
+		return "'self' https: data:"
+	}
+	sources := []string{"'self'", "data:"}
+	if c.CloudfrontDomain != "" {
+		sources = append(sources, "https://"+c.CloudfrontDomain)
+	}
+	if host := hostFromURL(c.LocalUploadBaseURL); host != "" {
+		sources = append(sources, host)
+	}
+	if c.ExternalImages == "allowlist" {
+		for _, h := range c.ImageHosts {
+			if !strings.Contains(h, "://") {
+				h = "https://" + h
+			}
+			sources = append(sources, h)
+		}
+	}
+	return strings.Join(sources, " ")
+}
+
+func hostFromURL(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	if !strings.Contains(raw, "://") {
+		return ""
+	}
+	rest := raw[strings.Index(raw, "://")+3:]
+	if i := strings.IndexAny(rest, "/?#"); i >= 0 {
+		rest = rest[:i]
+	}
+	scheme := raw[:strings.Index(raw, "://")]
+	return scheme + "://" + rest
 }
 
 // MailProvider — вычисляемый (не читаемый напрямую из окружения) выбор

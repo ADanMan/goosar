@@ -132,7 +132,7 @@ func New(cfg config.Config, db *store.Store, logger *slog.Logger) *Deps {
 
 	authnDeps := authn.New(db, cfg, mailer, logger)
 	identityDeps := identity.New(authnDeps, db, logger)
-	workspaceDeps := workspace.New(db, authnDeps, hub, mailer, logger)
+	workspaceDeps := workspace.New(db, authnDeps, hub, mailer, cfg.DisableWorkspaceCreation, logger)
 	dispatchDeps := dispatch.New(hub, logger)
 	taskDeps := task.New(db, workspaceDeps.Store, dispatchDeps, hub, logger)
 	projectDeps := project.New(db, workspaceDeps.Store, hub, logger)
@@ -147,7 +147,7 @@ func New(cfg config.Config, db *store.Store, logger *slog.Logger) *Deps {
 
 	autopilotDeps := autopilot.New(db, workspaceDeps.Store, taskDeps.Store, dispatchDeps, hub,
 		cfg.McpSecretKey, cfg.McpSecretKeyPrevious, cfg.PublicURL, logger)
-	cloudRuntimeDeps := cloudruntime.New(db, cfg.CloudRuntimeBaseURL, cfg.CloudRuntimeAPIKey, logger)
+	cloudRuntimeDeps := cloudruntime.New(db, cfg.CloudFleetURL, cfg.CloudRuntimeAPIKey, logger)
 
 	runtimeDeps := runtime.New(db, dispatchDeps, hub, logger)
 	daemonDeps := daemon.New(db, runtimeDeps, dispatchDeps, workspaceDeps.Store, hub, cfg, logger)
@@ -167,9 +167,9 @@ func New(cfg config.Config, db *store.Store, logger *slog.Logger) *Deps {
 	deploymentDeps := deployment.New(db, workspaceDeps.Store, authnDeps, hub, cfg, logger)
 
 	integrationDeps := integration.New(db, cfg, hub, logger)
-	billingDeps := billing.New(cfg.CloudRuntimeBaseURL, cfg.CloudRuntimeAPIKey, logger)
-	exportDeps := export.New(db, assetDeps.Storage, logger)
-	miscDeps := misc.New(db, cfg.RateLimits.ContactSales, logger)
+	billingDeps := billing.New(cfg.CloudFleetURL, cfg.CloudRuntimeAPIKey, logger)
+	exportDeps := export.New(db, assetDeps.Storage, cfg.ExportTimeout, cfg.ExportRetention, logger)
+	miscDeps := misc.New(db, cfg.RateLimits.ContactSales, cfg.DeliveryProfile, cfg.DeploymentProfile, logger)
 
 	return &Deps{
 		Config:     cfg,

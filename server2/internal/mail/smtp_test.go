@@ -189,7 +189,7 @@ func TestSMTPSenderPlainNoSecurity(t *testing.T) {
 	srv := newFakeSMTPServer(t, nil, "")
 	host, port := srv.addr()
 
-	sender := NewSMTPSender(host, port, "", "", "none", "Goosar <noreply@goosar.test>")
+	sender := NewSMTPSender(host, port, "", "", "starttls", "Goosar <noreply@goosar.test>", false, "")
 	err := sender.Send(context.Background(), Message{To: "user@example.test", Subject: "Тест", Body: "Привет"})
 	if err != nil {
 		t.Fatalf("Send: unexpected error: %v", err)
@@ -211,7 +211,7 @@ func TestSMTPSenderStartTLSAndAuth(t *testing.T) {
 	srv := newFakeSMTPServer(t, tlsConf, "\x00bob\x00s3cret")
 	host, port := srv.addr()
 
-	sender := NewSMTPSender(host, port, "bob", "s3cret", "starttls", "noreply@goosar.test")
+	sender := NewSMTPSender(host, port, "bob", "s3cret", "starttls", "noreply@goosar.test", false, "")
 	sender.RootCAs = clientRoots
 	err := sender.Send(context.Background(), Message{To: "user@example.test", Subject: "s", Body: "b"})
 	if err != nil {
@@ -227,7 +227,7 @@ func TestSMTPSenderStartTLSAndAuth(t *testing.T) {
 }
 
 func TestSMTPSenderRequiresHost(t *testing.T) {
-	sender := NewSMTPSender("", 587, "", "", "starttls", "noreply@goosar.test")
+	sender := NewSMTPSender("", 587, "", "", "starttls", "noreply@goosar.test", false, "")
 	if err := sender.Send(context.Background(), Message{To: "a@b.test", Subject: "s", Body: "b"}); err == nil {
 		t.Fatal("Send: expected error when SMTP_HOST is empty")
 	}

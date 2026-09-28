@@ -349,7 +349,7 @@ func (d *Deps) respondLDAPError(w http.ResponseWriter, dn string, err error) {
 // handleLoginLdap — POST /api/auth/ldap/login: аутентификация в LDAP/AD,
 // дальше как verify-code (contract §3.3).
 func (d *Deps) handleLoginLdap(w http.ResponseWriter, r *http.Request) {
-	if d.Config.LDAP.URL == "" {
+	if !d.Config.AuthMethodEnabled("ldap") || !d.Config.LDAPMethodAvailable() {
 		httpapi.WriteError(w, http.StatusNotFound, "LDAP not enabled on this server", "ldap_not_enabled")
 		return
 	}
@@ -381,6 +381,10 @@ func (d *Deps) handleLoginLdap(w http.ResponseWriter, r *http.Request) {
 	}
 
 	acct, err := d.loginOrLinkExternal(r, "ldap", dn, email, name)
+	if errors.Is(err, errEmailNotAllowed) {
+		httpapi.WriteError(w, http.StatusForbidden, "this email is not allowed to sign in on this server", "email_not_allowed")
+		return
+	}
 	if err != nil {
 		httpapi.WriteError(w, http.StatusInternalServerError, "internal error", "internal_error")
 		return

@@ -60,6 +60,10 @@ func (d *Deps) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) {
 		httpapi.WriteError(w, http.StatusForbidden, "workspace creation requires a human actor", "human_only")
 		return
 	}
+	if d.DisableWorkspaceCreation {
+		httpapi.WriteError(w, http.StatusForbidden, "workspace creation is disabled on this server", "workspace_creation_disabled")
+		return
+	}
 	var req createWorkspaceRequest
 	if err := httpapi.DecodeJSON(r, &req); err != nil {
 		httpapi.BadRequest(w, "invalid JSON body")

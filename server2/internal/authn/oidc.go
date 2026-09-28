@@ -289,7 +289,12 @@ func rsaPublicKeyFromJWK(k jwk) (*rsa.PublicKey, error) {
 }
 
 // extractIdentity сводит claims id_token к (subject, email, displayName).
-func extractIdentity(claims map[string]any) (sub, email, name string, err error) {
+// trustUnverified — GOOSAR_OIDC_TRUST_UNVERIFIED_EMAIL: по умолчанию false,
+// но эта версия server2 отклоняет только id_token, где email_verified
+// ЯВНО равен false — провайдеры, вовсе не присылающие этот claim (частый
+// случай), не наказываются отсутствием того, чего контракт от них не
+// требует явно передавать (см. server2/docs/decisions.md, раздел T-026).
+func extractIdentity(claims map[string]any, trustUnverified bool) (sub, email, name string, err error) {
 	sub, _ = claims["sub"].(string)
 	if sub == "" {
 		return "", "", "", errors.New("authn: oidc: id_token без sub")
@@ -298,6 +303,11 @@ func extractIdentity(claims map[string]any) (sub, email, name string, err error)
 	email = normalizeEmail(email)
 	if !looksLikeEmail(email) {
 		return "", "", "", errors.New("authn: oidc: id_token без email")
+	}
+	if !trustUnverified {
+		if v, ok := claims["email_verified"].(bool); ok && !v {
+			return "", "", "", errors.New("authn: oidc: email_verified=false, а GOOSAR_OIDC_TRUST_UNVERIFIED_EMAIL не включён")
+		}
 	}
 	name, _ = claims["name"].(string)
 	if name == "" {
@@ -405,7 +415,7 @@ func (d *Deps) resolveOIDCIdentity(ctx context.Context, code, wantNonce string) 
 	if gotNonce, _ := claims["nonce"].(string); gotNonce != wantNonce {
 		return "", "", "", "invalid_nonce", fmt.Errorf("authn: oidc: nonce не совпадает со state-cookie")
 	}
-	sub, email, name, err = extractIdentity(claims)
+	sub, email, name, err = extractIdentity(claims, d.Config.OIDC.TrustUnverifiedEmail)
 	if err != nil {
 		return "", "", "", "missing_email", err
 	}
@@ -494,7 +504,7 @@ func (d *Deps) oidcRedirectURL() string {
 // неисполняемым здесь было бы дырой в защите, которую §1.5 явно требует (см.
 // server2/docs/decisions.md, раздел T-029).
 func (d *Deps) handleOidcStart(w http.ResponseWriter, r *http.Request) {
-	if d.Config.OIDC.IssuerURL == "" {
+	if !d.Config.AuthMethodEnabled("oidc") || d.Config.OIDC.IssuerURL == "" {
 		httpapi.WriteError(w, http.StatusNotFound, "OIDC not enabled on this server", "oidc_not_enabled")
 		return
 	}
@@ -523,7 +533,7 @@ func (d *Deps) handleOidcStart(w http.ResponseWriter, r *http.Request) {
 		"response_type": {"code"},
 		"client_id":     {d.Config.OIDC.ClientID},
 		"redirect_uri":  {d.oidcRedirectURL()},
-		"scope":         {"openid email profile"},
+		"scope":         {strings.Join(d.Config.OIDC.Scopes, " ")}, // GOOSAR_OIDC_SCOPES
 		"state":         {state},
 		"nonce":         {nonce},
 	}
@@ -538,7 +548,7 @@ func (d *Deps) handleOidcStart(w http.ResponseWriter, r *http.Request) {
 // список ответов не содержит прозы "always a redirect").
 func (d *Deps) handleOidcCallback(w http.ResponseWriter, r *http.Request) {
 	client, nonce, stateErr := d.checkOIDCCallbackState(w, r)
-	if d.Config.OIDC.IssuerURL == "" {
+	if !d.Config.AuthMethodEnabled("oidc") || d.Config.OIDC.IssuerURL == "" {
 		httpapi.WriteError(w, http.StatusNotFound, "OIDC not enabled on this server", "oidc_not_enabled")
 		return
 	}
@@ -562,6 +572,10 @@ func (d *Deps) handleOidcCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	acct, err := d.loginOrLinkExternal(r, "oidc", sub, email, name)
+	if errors.Is(err, errEmailNotAllowed) {
+		d.oidcFailRedirect(w, r, client, "email_not_allowed")
+		return
+	}
 	if err != nil {
 		d.oidcAbort(w, r, client, "вход/создание аккаунта", "internal_error", err)
 		return

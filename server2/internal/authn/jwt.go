@@ -16,10 +16,22 @@ import (
 // (не тянуть golang-jwt ради одного алгоритма с фиксированным набором
 // клеймов, который контракт описывает явно: sub, email, name, tv, sid, iat, exp).
 type Signer struct {
-	secret []byte
+	secret   []byte
+	previous [][]byte // JWT_SECRET_PREVIOUS — отозванные секреты, ещё годные для ПРОВЕРКИ подписи
 }
 
 func NewSigner(secret string) *Signer { return &Signer{secret: []byte(secret)} }
+
+// NewSignerWithPrevious — как NewSigner, но Verify также принимает подписи,
+// сделанные любым из previous (JWT_SECRET_PREVIOUS, contract: "окно ротации
+// без разлогина всех сразу"); Sign всегда использует только current secret.
+func NewSignerWithPrevious(secret string, previous []string) *Signer {
+	s := &Signer{secret: []byte(secret)}
+	for _, p := range previous {
+		s.previous = append(s.previous, []byte(p))
+	}
+	return s
+}
 
 // Claims — набор полей сессионного JWT, ровно как их описывает
 // components/securitySchemes/cookieAuth в контракте.
@@ -49,15 +61,26 @@ func (s *Signer) Sign(c Claims, ttl time.Duration) (string, error) {
 	return signingInput + "." + sig, nil
 }
 
-// Verify проверяет подпись и срок действия и возвращает claims.
+// Verify проверяет подпись и срок действия и возвращает claims. Подпись
+// принимается, если она совпадает с current secret ИЛИ с любым из previous
+// (JWT_SECRET_PREVIOUS) — окно ротации ключа без разлогина всех сразу.
 func (s *Signer) Verify(token string) (Claims, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		return Claims{}, fmt.Errorf("authn: неверный формат токена")
 	}
 	signingInput := parts[0] + "." + parts[1]
-	expected := s.sign(signingInput)
-	if subtle.ConstantTimeCompare([]byte(expected), []byte(parts[2])) != 1 {
+	sig := []byte(parts[2])
+	valid := subtle.ConstantTimeCompare([]byte(s.signWith(s.secret, signingInput)), sig) == 1
+	if !valid {
+		for _, prev := range s.previous {
+			if subtle.ConstantTimeCompare([]byte(s.signWith(prev, signingInput)), sig) == 1 {
+				valid = true
+				break
+			}
+		}
+	}
+	if !valid {
 		return Claims{}, fmt.Errorf("authn: неверная подпись токена")
 	}
 	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
@@ -74,8 +97,10 @@ func (s *Signer) Verify(token string) (Claims, error) {
 	return c, nil
 }
 
-func (s *Signer) sign(signingInput string) string {
-	mac := hmac.New(sha256.New, s.secret)
+func (s *Signer) sign(signingInput string) string { return s.signWith(s.secret, signingInput) }
+
+func (s *Signer) signWith(secret []byte, signingInput string) string {
+	mac := hmac.New(sha256.New, secret)
 	mac.Write([]byte(signingInput))
 	return base64URL(mac.Sum(nil))
 }

@@ -45,40 +45,71 @@ PORT=8080 \
 
 ### Переменные окружения
 
-Имена совпадают с тем, что документирует `docs/50-api-contract.yaml` и
-`e2e/contract/README.md` — это тот же контракт, поэтому те же имена:
+Имена, форматы и умолчания совпадают с «Приложение. Переменные окружения
+сервера» в `docs/50-api-contract.md` (161 переменная) и с
+`e2e/contract/README.md` — это тот же контракт, поэтому те же имена.
+Построчная сверка «поддержана / частично / прочитана без эффекта» для всех
+161 — `server2/docs/env-parity.md`; таблица ниже — только сводка с акцентом
+на то, что реально нужно оператору для запуска и что изменилось в этой
+сессии (T-026 доводка).
 
 | Переменная | Обязательна | Смысл |
 |---|---|---|
 | `DATABASE_URL` | да | DSN Postgres |
+| `DATABASE_MAX_CONNS`/`DATABASE_MIN_CONNS` | нет (`25`/`5`, либо `pool_max_conns`/`pool_min_conns` из URL) | верхняя/нижняя граница пула `pgxpool` |
 | `PORT` | нет (`8080`) | порт HTTP-сервера |
-| `JWT_SECRET` | нет (небезопасный dev-дефолт) | ключ HMAC для сессионных JWT |
-| `APP_ENV` | нет (`development`) | `production` отключает `GOOSAR_DEV_VERIFICATION_CODE` |
+| `APP_ENV` | нет (`development`) | `production` отключает `GOOSAR_DEV_VERIFICATION_CODE`, требует небезопасный `JWT_SECRET` заменить (иначе отказ старта) |
+| `GOOSAR_REPLICAS` | нет (`1`) | `>1` без `REDIS_URL` — отказ старта (Redis-бэкенд лимитера/realtime не реализован в этой версии) |
+| `GOOSAR_SHUTDOWN_HOLD_DURATION` | нет | пауза перед graceful shutdown |
+| `GOOSAR_MIGRATION_LOCK_TIMEOUT`/`_RETRIES`/`_STATEMENT_TIMEOUT` | нет (`5s`/`5`/без таймаута) | Postgres advisory lock вокруг применения миграций (`-migrate`/`MIGRATE=true`), несколько реплик не гоняются за одни и те же файлы |
+| `JWT_SECRET` | фактически да на `production` (иначе небезопасный dev-дефолт) | ключ HMAC для сессионных JWT; пустое/плейсхолдер на `production` — отказ старта |
+| `JWT_SECRET_PREVIOUS` | нет | секреты, ещё принимаемые для проверки подписи (окно ротации) |
+| `COOKIE_DOMAIN` | нет | атрибут `Domain` сессионной куки; IP молча игнорируется |
+| `AUTH_TOKEN_TTL` | нет (`2592000` = 30д) | срок жизни токена сессии/куки |
+| `FRONTEND_ORIGIN` | нет (`http://localhost:3199`) | origin фронтенда для разработки; часть цепочки CORS |
+| `ALLOWED_ORIGINS`/`CORS_ALLOWED_ORIGINS` | нет | allow-list CORS/WebSocket (приоритет: `ALLOWED_ORIGINS` → `CORS_ALLOWED_ORIGINS` → три локальных дефолта); `FRONTEND_ORIGIN` добавляется в набор всегда |
+| `GOOSAR_APP_URL` | нет (= `FRONTEND_ORIGIN`) | публичный адрес приложения — используется в magic-link писем входа |
+| `GOOSAR_PUBLIC_URL` | нет | базовый публичный адрес сервера (T-028: `webhook_url` автопилотов, OIDC redirect); без него строится из заголовков запроса |
+| `GOOSAR_TRUSTED_PROXIES`/`RATE_LIMIT_TRUSTED_PROXIES` | нет | CIDR обратных прокси, которым доверяют X-Forwarded-For/X-Real-IP (общий резолвер `httpapi.ClientIP`; `RATE_LIMIT_TRUSTED_PROXIES`, если задан, имеет приоритет) |
 | `ALLOW_SIGNUP` | нет (`true`) | создавать ли аккаунт при первом входе по коду |
+| `ALLOWED_EMAILS`/`ALLOWED_EMAIL_DOMAINS` | нет | allow-list для входа/регистрации (email-код, OIDC, LDAP) |
+| `DISABLE_WORKSPACE_CREATION` | нет | запрещает создание новых рабочих пространств |
 | `GOOSAR_DEV_VERIFICATION_CODE` | нет | фиксированный 6-значный код входа вне production |
-| `FRONTEND_ORIGIN` | нет (`http://localhost:3199`) | origin для CORS |
-| `GOOSAR_MCP_SECRET_KEY` | нет | наличие включает `MFAStatusResponse.available` |
+| `GOOSAR_ROLE_WORKSPACES` | нет (`auto`) | `auto`/`off`, иное — отказ старта; `auto` провижинит ролевые воркспейсы при каждом старте сервера (нужен хотя бы один deployment-admin) |
+| `GOOSAR_DEPLOYMENT_ADMIN_EMAILS` | нет | сидирует роль администратора деплоя существующим пользователям, пока таблица администраторов пуста |
+| `GOOSAR_MCP_SECRET_KEY`(`_PREVIOUS`) | нет | шифрует чувствительную часть `mcp_config`; наличие также включает `MFAStatusResponse.available` |
 | `REALTIME_METRICS_TOKEN` | нет | Bearer-токен для `/health/realtime` не с loopback |
 | `MIGRATE` | нет (`false`) | применить миграции при старте (то же, что флаг `-migrate`) |
 | `MIGRATIONS_DIR` | нет (`server2/migrations`) | откуда брать `NNN_*.up.sql` |
 | `E2E_COMPAT_SQL_DIR` | нет | см. «e2e фронтенда» ниже — не для обычного запуска |
-| `GOOSAR_PUBLIC_URL` | нет | базовый публичный адрес сервера (T-028: `webhook_url` автопилотов); без него строится из заголовков запроса |
-| `GOOSAR_CLOUDRUNTIME_BASE_URL` | нет | адрес облачного fleet-сервиса (T-028, `internal/cloudruntime`); пусто — вся группа `/api/cloud-runtime/**` отвечает `503` |
-| `GOOSAR_CLOUDRUNTIME_API_KEY` | нет | `Authorization: Bearer` к fleet-сервису, если он его требует |
+| `LOG_FORMAT`/`GOOSAR_LOG_FORMAT` | нет (`text`) | `json`/`text`; `GOOSAR_`-версия побеждает при обеих заданных |
+| `LOG_LEVEL`/`GOOSAR_LOG_LEVEL` | нет | `debug`/`info`/`warn`/`error`; дефолт `info` на production, иначе `debug` |
+| `GOOSAR_CLOUD_FLEET_URL`(алиас `GOOSAR_FLEET_URL`)/`_TIMEOUT` | нет | адрес облачного fleet-сервиса (T-028, `internal/cloudruntime`); пусто — вся группа `/api/cloud-runtime/**` отвечает `503` |
+| `GOOSAR_CLOUDRUNTIME_API_KEY` | нет | `Authorization: Bearer` к fleet-сервису — переменная без аналога в приложении (см. `server2/docs/env-parity.md`) |
 | `GITHUB_WEBHOOK_SECRET`/`GITHUB_APP_SLUG`/`GITHUB_APP_ID`/`GITHUB_APP_PRIVATE_KEY` | нет | GitHub App (T-029, `internal/integration`); без `GITHUB_WEBHOOK_SECRET` — `503` на `/api/webhooks/github`, без `GITHUB_APP_SLUG` — `configured:false` на `github/connect` |
 | `GOOSAR_VCS_INTEGRATION_ENABLED`(`true`)/`GOOSAR_VCS_SECRET_KEY`(`_PREVIOUS`) | нет | self-hosted VCS (T-029); без ключа шифрования — `503` на `vcs/connections` |
 | `COMPOSIO_API_KEY`/`COMPOSIO_STATE_SECRET`/`COMPOSIO_CALLBACK_BASE_URL` | нет | Composio (T-029); без ключа — `503` на всю группу |
 | `GOOSAR_SLACK_SECRET_KEY`(`_PREVIOUS`) | нет | Slack BYO-установка (T-029); без ключа — `configured:false` |
-| `GOOSAR_GITHUB_API_BASE_URL`/`GOOSAR_SLACK_API_BASE_URL`/`GOOSAR_COMPOSIO_API_BASE_URL` | нет | базовые URL внешних API интеграций — переопределяются в юнит-тестах (`httptest.Server`), в проде пусто = реальный хост |
-| `RATE_LIMIT_CONTACT_SALES`/`RATE_LIMIT_EXPORT` | нет | см. таблицу T-029 в `server2/docs/decisions.md` |
-| `MAIL_PROVIDER` | нет (`""`) | `resend`/`smtp`; пусто — только dev-логгер (T-029, `internal/mail`) |
-| `MAIL_FROM_EMAIL`/`MAIL_FROM_NAME` | нет | адрес/имя отправителя для Resend/SMTP |
-| `RESEND_API_KEY` | нет | ключ Resend (`MAIL_PROVIDER=resend`) |
-| `SMTP_HOST`/`SMTP_PORT`(`587`)/`SMTP_USERNAME`/`SMTP_PASSWORD`/`SMTP_SECURITY`(`starttls`) | нет | SMTP-транспорт (`MAIL_PROVIDER=smtp`); `SMTP_SECURITY`: `starttls`/`tls`/`none` |
-| `GOOSAR_TOTP_ISSUER` | нет (`Goosar`) | издатель в `otpauth://` URI и приложениях-аутентификаторах (T-029, MFA) |
-| `OIDC_ISSUER_URL`/`OIDC_CLIENT_ID`/`OIDC_CLIENT_SECRET`/`OIDC_REDIRECT_URL`/`OIDC_DISPLAY_NAME` | нет | корпоративный OIDC (T-029); без `OIDC_ISSUER_URL` — `404` на `/api/auth/oidc/**`, "oidc" не входит в `AuthMethodsResponse.methods` |
-| `LDAP_URL`/`LDAP_BIND_DN`/`LDAP_BIND_PASSWORD`/`LDAP_BASE_DN`/`LDAP_USER_FILTER`(`(uid=%s)`)/`LDAP_EMAIL_ATTRIBUTE`(`mail`)/`LDAP_NAME_ATTRIBUTE`(`cn`)/`LDAP_DISPLAY_NAME` | нет | корпоративный LDAP/AD (T-029); без `LDAP_URL` — `404` на `/api/auth/ldap/login` |
-| `RATE_LIMIT_AUTH`/`RATE_LIMIT_AUTH_VERIFY`/`RATE_LIMIT_AUTH_EMAIL`/`RATE_LIMIT_TOKEN`/`RATE_LIMIT_MFA_VERIFY`/`RATE_LIMIT_API`/`RATE_LIMIT_JOIN` | нет | остальные лимиты contract §1.5 (T-029, `internal/{authn,httpapi,app}`); умолчания и группировка по ручкам — таблица T-029 в `server2/docs/decisions.md` |
+| `GOOSAR_GITHUB_API_BASE_URL`/`GOOSAR_SLACK_API_BASE_URL`/`GOOSAR_COMPOSIO_API_BASE_URL` | нет | базовые URL внешних API интеграций — переопределяются в юнит-тестах (`httptest.Server`), в проде пусто = реальный хост; без аналога в приложении |
+| `RATE_LIMIT_*` (`AUTH`/`AUTH_VERIFY`/`AUTH_EMAIL`/`MFA_VERIFY`/`TOKEN`/`API`/`CONTACT_SALES`/`EXPORT`/`JOIN`) | нет | лимиты contract §1.5, умолчания и группировка по ручкам — таблица T-029 в `server2/docs/decisions.md` |
+| `RESEND_API_KEY`/`RESEND_FROM_EMAIL`(`noreply@goosar.ru`) | нет | транспорт Resend |
+| `SMTP_HOST`(приоритетнее Resend)/`SMTP_PORT`(`25`)/`SMTP_USERNAME`/`SMTP_PASSWORD`/`SMTP_FROM_EMAIL`/`SMTP_TLS`(`starttls`\|`implicit`, алиасы `smtps`/`ssl`)/`SMTP_TLS_INSECURE`/`SMTP_EHLO_NAME` | нет | транспорт SMTP; без обоих (Resend и SMTP) — код входа только в лог, кроме `production`, где вход отказывает `503` |
+| `GOOSAR_TOTP_ISSUER` | нет (`Goosar`) | издатель в `otpauth://` URI и приложениях-аутентификаторах (MFA) |
+| `GOOSAR_AUTH_METHODS` | нет (`email`) | какие методы входа доступны на уровне сервера (не только в интерфейсе) |
+| `GOOSAR_OIDC_ISSUER`/`_CLIENT_ID`/`_CLIENT_SECRET`/`_REDIRECT_URL`/`_SCOPES`/`_DISPLAY_NAME`/`_ADMIN_CLAIM`/`_ADMIN_VALUE`/`_TRUST_UNVERIFIED_EMAIL` | нет | корпоративный OIDC; без `GOOSAR_OIDC_ISSUER` — `404` на `/api/auth/oidc/**`, "oidc" не входит в `AuthMethodsResponse.methods`; `_ADMIN_CLAIM`/`_ADMIN_VALUE` читаются, но заявка на роль администратора по совпадению claim не подаётся автоматически (см. env-parity.md) |
+| `GOOSAR_LDAP_URL`/`_START_TLS`/`_BIND_DN`/`_BIND_PASSWORD`/`_BASE_DN`/`_USER_FILTER`(`(uid=%s)`)/`_EMAIL_ATTR`(`mail`)/`_NAME_ATTR`(`displayName`)/`_ADMIN_GROUP`/`_DISPLAY_NAME` | нет | корпоративный LDAP/AD; без `GOOSAR_LDAP_URL` или без TLS (`ldaps://` либо `ldap://` + `_START_TLS=true`) — метод не предлагается; `_ADMIN_GROUP` читается без автоматической заявки, как и OIDC-аналог; `_USER_FILTER` поддерживает только одиночный equality-фильтр `(attr=%s)` |
+| `GOOSAR_EXTERNAL_IMAGES`(`allow`)/`GOOSAR_IMAGE_HOSTS` | нет | политика внешних изображений — стамплится в заголовок `Content-Security-Policy` каждого ответа API |
+| `GOOSAR_DELIVERY_PROFILE`(`cloud`)/`GOOSAR_DEPLOYMENT_PROFILE`(`perimeter`) | нет | валидируются при старте, отражаются в `GET /api/status`/`/api/config` |
+| `GOOSAR_SKILL_SOURCES`/`GOOSAR_MCP_ALLOWED_HOSTS`/`GOOSAR_MCP_ALLOWED_COMMANDS`/`GOOSAR_ALLOWED_PROVIDERS` | нет | политики перимитра — только частично реализованы (валидация/отражение в `/api/config`, без enforcement на fetch/mcp_config/dispatch — см. env-parity.md) |
+| `GOOSAR_AUDIT_RETENTION_DAYS` | нет (`365`) | суточный фоновый цикл очистки `platform_audit_log` (0 = хранить вечно) |
+| `GOOSAR_DEPLOYMENT_JIRA_URL`/`_CONFLUENCE_URL`/`_EWS_URL`/`_MAIL_DOMAIN`/`_BITRIX24_URL`/`_MCP_GATEWAY_URL` | нет | подсказки клиентам через `/api/config`; `_BITRIX24_URL`/`_MCP_GATEWAY_URL` также участвуют в `mcp-library seed` |
+| `GOOSAR_LLM_API_KEY`/`_BASE_URL`/`_DEFAULT_MODEL` | нет | реальные креды для `GET /api/llm/health` и `GET /api/deployment/client-secrets`; общий внутренний LLM-хелпер (например для заголовков чата) не реализован |
+| `GOOSAR_DEPLOYMENT_LLM_API_BASE`/`_MODEL` | нет | только подсказки клиентам, не креды (креды — `GOOSAR_LLM_*` выше) |
+| `S3_BUCKET`/`S3_REGION`/`AWS_*`/`CLOUDFRONT_*` | нет | читаются, backend вложений — только локальный диск (`LOCAL_UPLOAD_DIR`), S3/CloudFront не реализованы |
+| `GOOSAR_PROVISIONING_STORE`(`local`\|`oci`)/`_LOCAL_PREFIX`/`_OCI_*` | нет | каталог пакетов деплоя; только `local` работает (`LOCAL_UPLOAD_DIR/GOOSAR_PROVISIONING_LOCAL_PREFIX`) |
+| `GOOSAR_RETENTION_CHAT`/`_TASKS`/`_CLOSED_ISSUES`/`_ACTIVITY`/`GOOSAR_ATTACHMENT_PURGE_GRACE`/`GOOSAR_UPLOAD_GC_GRACE` | нет | дефолты флагов `goosar_admin purge`/`gc-uploads`; без периодического автозапуска в `cmd/server` |
+| `GOOSAR_EXPORT_TIMEOUT`(`2h`)/`GOOSAR_EXPORT_RETENTION`(`168h`) | нет | таймаут/срок хранения задания экспорта воркспейса |
+| `METRICS_ADDR`/`POSTHOG_*`/`ANALYTICS_*`/`GOOSAR_SCHEDULER_AUDIT_RETENTION`/`GOOSAR_HYGIENE_SWEEP_INTERVAL`/`GOOSAR_EXPORT_DIR`/`GOOSAR_EXPORT_MAX_BYTES`/`REDIS_*`/`REALTIME_RELAY_*` | нет | читаются, поведение не реализовано в этой версии — см. `server2/docs/env-parity.md` |
 
 ### Раскладка (`internal/`)
 

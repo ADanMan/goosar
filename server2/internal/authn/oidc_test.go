@@ -116,7 +116,7 @@ func TestOIDCDiscoverAndVerifyIDToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("verifyIDToken: %v", err)
 	}
-	sub, email, name, err := extractIdentity(claims)
+	sub, email, name, err := extractIdentity(claims, false)
 	if err != nil {
 		t.Fatalf("extractIdentity: %v", err)
 	}

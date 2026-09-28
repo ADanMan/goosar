@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 
 	"github.com/adanman/goosar/server2/internal/authn"
 	"github.com/adanman/goosar/server2/internal/config"
@@ -157,5 +156,3 @@ func dispatch(ctx context.Context, out io.Writer, db *store.Store, cfg config.Co
 		return fmt.Errorf("неизвестная команда: %s", cmd)
 	}
 }
-
-func durationHours(h int) time.Duration { return time.Duration(h) * time.Hour }

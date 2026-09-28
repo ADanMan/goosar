@@ -42,7 +42,7 @@ func TestWorkspaceExportEndToEnd(t *testing.T) {
 	accountID, workspaceID := seedAccountAndWorkspace(t, storeInstance)
 
 	storage := asset.NewLocalStorage(t.TempDir())
-	d := New(db, storage, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	d := New(db, storage, 0, 0, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	// A pending job already occupies the partial unique index (seeded
 	// directly at the Store layer, not through the handler, so this
@@ -125,7 +125,7 @@ func TestStartWorkspaceExportWithoutStorageIs503(t *testing.T) {
 	storeInstance := NewStore(db)
 	accountID, workspaceID := seedAccountAndWorkspace(t, storeInstance)
 
-	d := New(db, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	d := New(db, nil, 0, 0, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	req := withHumanActor(httptest.NewRequest(http.MethodPost, "/api/workspaces/"+workspaceID+"/export", nil), accountID)
 	req.SetPathValue("id", workspaceID)
 	rec := httptest.NewRecorder()
@@ -140,7 +140,7 @@ func TestMeExportStreamsArchive(t *testing.T) {
 	storeInstance := NewStore(db)
 	accountID, _ := seedAccountAndWorkspace(t, storeInstance)
 
-	d := New(db, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	d := New(db, nil, 0, 0, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	req := withHumanActor(httptest.NewRequest(http.MethodGet, "/api/me/export", nil), accountID)
 	rec := httptest.NewRecorder()
 	d.handleMeExport(rec, req)

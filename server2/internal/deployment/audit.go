@@ -33,6 +33,24 @@ type AuditWrite struct {
 	ClientAgent    *string
 }
 
+// PurgeAuditLog удаляет строки platform_audit_log старше olderThanDays дней
+// (contract, GOOSAR_AUDIT_RETENTION_DAYS: "Срок хранения ОБОИХ журналов
+// аудита" — admin_audit и auth_audit объединены в одну таблицу этой схемой,
+// paud_source их различает, поэтому один DELETE покрывает обе). 0 — хранить
+// вечно, удаление не выполняется.
+func PurgeAuditLog(ctx context.Context, db *store.Store, olderThanDays int) (int64, error) {
+	if olderThanDays <= 0 {
+		return 0, nil
+	}
+	tag, err := db.Pool.Exec(ctx,
+		`DELETE FROM platform_audit_log WHERE created_at < now() - make_interval(days => $1)`,
+		olderThanDays)
+	if err != nil {
+		return 0, fmt.Errorf("deployment: очистка platform_audit_log: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
 // WriteAudit пишет одну строку platform_audit_log. Не транзакционна сама по
 // себе — вызывающий передаёт db.Pool напрямую (обычный случай) либо
 // использует WriteAuditTx внутри своей транзакции, когда запись аудита

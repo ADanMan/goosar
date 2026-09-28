@@ -21,7 +21,7 @@ func newTestDeps(t *testing.T) (*Deps, string, string) {
 	db := newTestDB(t)
 	s := NewStore(db)
 	accountID, workspaceID := seedAccountAndWorkspace(t, s)
-	d := New(db, 5, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	d := New(db, 5, "cloud", "perimeter", slog.New(slog.NewTextHandler(io.Discard, nil)))
 	return d, accountID, workspaceID
 }
 

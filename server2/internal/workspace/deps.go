@@ -19,10 +19,16 @@ type Deps struct {
 	Publisher realtime.Publisher
 	Mailer    mail.Sender
 	Logger    *slog.Logger
+
+	// DisableWorkspaceCreation — DISABLE_WORKSPACE_CREATION (contract, группа
+	// "Аутентификация и сессии"): запрещает создание новых рабочих
+	// пространств любым участником — перевод развёртывания на приём только
+	// по приглашениям после начальной раскатки.
+	DisableWorkspaceCreation bool
 }
 
-func New(db *store.Store, authnDeps *authn.Deps, pub realtime.Publisher, mailer mail.Sender, logger *slog.Logger) *Deps {
-	return &Deps{Store: NewStore(db), Authn: authnDeps, Publisher: pub, Mailer: mailer, Logger: logger}
+func New(db *store.Store, authnDeps *authn.Deps, pub realtime.Publisher, mailer mail.Sender, disableWorkspaceCreation bool, logger *slog.Logger) *Deps {
+	return &Deps{Store: NewStore(db), Authn: authnDeps, Publisher: pub, Mailer: mailer, DisableWorkspaceCreation: disableWorkspaceCreation, Logger: logger}
 }
 
 // DB0 — короткий доступ к домен-стору (используется обработчиками).

@@ -2759,3 +2759,231 @@ server2 (без чтения server/**):
   документированного) — более богатая версия (например, реальный запуск
   агента, а не просто создание тикета) не была реализована умышленно, т.к.
   контракт её не описывает.
+
+## T-026 доводка: конфигурация из тех же переменных окружения (env-parity)
+
+Задача: `docs/50-api-contract.md`, «Приложение. Переменные окружения
+сервера» (161 переменная) — привести `server2` к чтению ИМЕННО этих имён.
+Полная сверка (что поддержано / прочитано без эффекта / не поддержано) —
+`server2/docs/env-parity.md`; здесь — только решения по пробелам, которые
+сама сверка не покрывает построчно.
+
+### Переименования (старое server2-имя → имя контракта)
+
+Все переименования — только имя переменной окружения; семантика полей
+`config.Config`, где она уже была реализована этой веткой раньше, сохранена.
+
+- Почта: `MAIL_PROVIDER`/`MAIL_FROM_EMAIL`/`MAIL_FROM_NAME`/`SMTP_SECURITY`
+  → выбор транспорта теперь вычисляется (`Config.MailProvider()`: SMTP
+  приоритетнее Resend, если задан `SMTP_HOST`, иначе Resend, если задан
+  `RESEND_API_KEY`), `RESEND_FROM_EMAIL`/`SMTP_FROM_EMAIL`/`SMTP_TLS`
+  (`starttls`/`implicit`, алиасы `smtps`/`ssl`) — отдельной "display name"
+  для письма контракт не заводит, `MAIL_FROM_NAME` убран без замены.
+  Добавлены `SMTP_TLS_INSECURE`, `SMTP_EHLO_NAME` (новое поведение —
+  `client.Hello()` перед STARTTLS/AUTH).
+- OIDC/LDAP: `OIDC_*`/`LDAP_*` → `GOOSAR_OIDC_*`/`GOOSAR_LDAP_*` (префикс).
+  Добавлены и реально подключены: `GOOSAR_OIDC_SCOPES` (в scope
+  `/api/auth/oidc/start`), `GOOSAR_OIDC_TRUST_UNVERIFIED_EMAIL` (см. ниже),
+  `GOOSAR_LDAP_START_TLS` (гейтит доступность метода — `Config.LDAPMethodAvailable()`).
+  `GOOSAR_OIDC_ADMIN_CLAIM`/`_ADMIN_VALUE`/`GOOSAR_LDAP_ADMIN_GROUP` —
+  читаются, но заявка на роль администратора деплоя при совпадении claim/
+  группы НЕ подаётся автоматически (см. «Известные пробелы» ниже).
+- Облачный fleet: `GOOSAR_CLOUDRUNTIME_BASE_URL` → `GOOSAR_CLOUD_FLEET_URL`
+  (приоритетнее алиаса `GOOSAR_FLEET_URL`); `GOOSAR_CLOUDRUNTIME_API_KEY`
+  остаётся (нет аналога в приложении — `server2/docs/env-parity.md`).
+  Добавлен `GOOSAR_CLOUD_FLEET_TIMEOUT` (таймаут HTTP-клиента прокси, был
+  не настраиваемым).
+- LLM: `GOOSAR_DEPLOYMENT_LLM_BASE_URL`/`_API_KEY` разделены на
+  `GOOSAR_DEPLOYMENT_LLM_API_BASE`/`_MODEL` (только подсказки клиентам,
+  как называет контракт) и `GOOSAR_LLM_API_KEY`/`_BASE_URL`/`_DEFAULT_MODEL`
+  (реальные креды для `GET /api/llm/health` и `GET /api/deployment/client-secrets`
+  — дословно то, что требует контракт: "реальные учётные данные... берутся
+  из GOOSAR_LLM_* выше, без них выдача секрета не работает, даже если это
+  поле [GOOSAR_DEPLOYMENT_LLM_API_BASE] заполнено"). `ClientSecretsLLM.APIBase`
+  = `GOOSAR_DEPLOYMENT_LLM_API_BASE`, если задан, иначе `GOOSAR_LLM_BASE_URL`;
+  `.Model` аналогично с `GOOSAR_LLM_DEFAULT_MODEL` как фоллбеком.
+- Retention: `GOOSAR_RETENTION_{CHAT,TASKS,CLOSED_ISSUES,ACTIVITY,ATTACHMENT_GRACE}_HOURS`
+  (int, дефолты 720/720/8760/720/168) → `GOOSAR_RETENTION_{CHAT,TASKS,CLOSED_ISSUES,ACTIVITY}`
+  + `GOOSAR_ATTACHMENT_PURGE_GRACE` (Go-длительность; первые четыре теперь
+  по умолчанию пусто = хранить вечно, только grace остаётся 168h) — контракт
+  меняет умолчание намеренно ("удаление истории команды или чата — решение
+  оператора"), `cmd/admin purge` берёт новые дефолты из `config.Config`
+  без изменения своего собственного интерфейса флагов.
+- Provisioning: `GOOSAR_PROVISIONING_CATALOG_DIR` (отдельная переменная)
+  заменена вычисляемым путём `LOCAL_UPLOAD_DIR/GOOSAR_PROVISIONING_LOCAL_PREFIX`,
+  включённым только при `GOOSAR_PROVISIONING_STORE=local` — контракт: "local
+  переиспользует хранилище вложений... как склад пакетов". `=oci` читается,
+  но зергалирование из реестра не реализовано (см. env-parity.md).
+- Провайдеры/деплой: `GOOSAR_VCS_ALLOWED_PROVIDERS` — поле было объявлено в
+  `config.Config`, но нигде не читалось ни одним доменом (мёртвый код);
+  удалено без замены при переписи `config.go`.
+
+### Новое поведение, добавленное этой сессией (не было в server2 раньше)
+
+- `JWT_SECRET`/`JWT_SECRET_PREVIOUS`: на `APP_ENV=production` пустой или
+  известный плейсхолдер (`config.knownInsecureSecrets`) — отказ старта
+  (`Config.Validate`); `Signer.Verify` теперь принимает подпись current ИЛИ
+  любого secret из `JWT_SECRET_PREVIOUS` (окно ротации).
+- `COOKIE_DOMAIN` (атрибут `Domain`, IP молча игнорируется — `net.ParseIP`),
+  `AUTH_TOKEN_TTL` (заменил захардкоженный `sessionTTL = 30d`).
+- `ALLOWED_ORIGINS`/`CORS_ALLOWED_ORIGINS`/`FRONTEND_ORIGIN` собраны в
+  `Config.EffectiveAllowedOrigins()` (приоритет: ALLOWED_ORIGINS →
+  CORS_ALLOWED_ORIGINS → три локальных дефолта; FRONTEND_ORIGIN добавляется
+  всегда) — `httpapi.WithCORS` принимает список вместо одной строки.
+  **Пробел спецификации**: контракт не называет буквальные три локальных
+  origin для разработки. Решение — `http://localhost:3199` (сам дефолт
+  FRONTEND_ORIGIN этой ветки), `http://localhost:3000`, `http://localhost:3001`
+  (типичные dev-порты Next.js/фронтенда этого репозитория).
+- `GOOSAR_TRUSTED_PROXIES`/`RATE_LIMIT_TRUSTED_PROXIES`: `httpapi.ClientIP`
+  теперь доверяет `X-Forwarded-For`/`X-Real-IP` только когда `RemoteAddr`
+  входит в один из настроенных CIDR (`httpapi.SetTrustedProxies`, вызывается
+  один раз в `cmd/server`). **Решение**: не заведён отдельный резолвер под
+  `RATE_LIMIT_TRUSTED_PROXIES` — `cmd/server` использует его вместо
+  `GOOSAR_TRUSTED_PROXIES`, если он задан, иначе общий список; `ClientIP()`
+  используется и лимитерами, и остальным сервером одним и тем же списком.
+  Раздельные списки для лимитера и, скажем, вебхуков — не реализованы (везде
+  один и тот же пакетный `httpapi.trustedProxies`).
+- `ALLOWED_EMAILS`/`ALLOWED_EMAIL_DOMAINS`: `Config.EmailAllowed` проверяется
+  в `handleSendCode` (email-код) И в `loginOrLinkExternal` (OIDC/LDAP) —
+  контракт говорит "для входа/регистрации", решение читает это как
+  применимое ко ВСЕМ методам входа, не только email, и на каждый вход, а не
+  только на создание аккаунта (иначе уже привязанный внешний аккаунт нельзя
+  было бы отозвать простым удалением из списка).
+- `DISABLE_WORKSPACE_CREATION`: `workspace.Deps.DisableWorkspaceCreation`,
+  проверяется в `handleCreateWorkspace` после проверки human-актора.
+- `GOOSAR_ROLE_WORKSPACES=auto`/`GOOSAR_DEPLOYMENT_ADMIN_EMAILS`: обе
+  переменные читались раньше (`config.go`), но НИ ОДНА не была подключена к
+  фактическому старту `cmd/server` (только к CLI `goosar_admin
+  provision-roles`/`grant`) — комментарий в старом `config.go` уже обещал
+  "и (когда GOOSAR_ROLE_WORKSPACES=auto) стартом cmd/server", но это не было
+  реализовано. Эта сессия подключает обе в `main()`, до старта listener'а:
+  сперва сидирование администраторов (только пока `platform_admins` пуста),
+  потом провижининг ролей (нужен хотя бы один администратор — тот же
+  порядок, что описывает контракт).
+- `GOOSAR_SHUTDOWN_HOLD_DURATION`: пауза `time.Sleep` перед вызовом
+  `srv.Shutdown` в уже существующей goroutine на `<-ctx.Done()`.
+- `DATABASE_MAX_CONNS`/`DATABASE_MIN_CONNS`: `store.OpenPool` (новая функция,
+  `store.Open` — её обёртка с 0/0 = не переопределять) переопределяет
+  `pgxpool.Config.MaxConns`/`MinConns` после разбора DSN — приоритетнее
+  `pool_max_conns`/`pool_min_conns` из самого URL, как и требует контракт.
+- `GOOSAR_MIGRATION_LOCK_TIMEOUT`/`_RETRIES`/`_STATEMENT_TIMEOUT`:
+  `migrate.ApplyLocked` — новая функция (используется только `cmd/server`;
+  `cmd/import`/`cmd/admin` продолжают звать безblokировочный `Apply`, т.к.
+  это одноразовые операторские вызовы без конкуренции реплик) — сессионный
+  Postgres advisory lock (`pg_try_advisory_lock` с фиксированным ключом,
+  retry-цикл с паузой `LockTimeout` между попытками) плюс `SET LOCAL
+  statement_timeout` в транзакции каждого файла миграции.
+- `GOOSAR_REPLICAS`: `Config.Validate()` отказывает старту при `>1` без
+  `REDIS_URL` — Redis-бэкенд лимитера/realtime-хаба не реализован в этой
+  версии (см. env-parity.md), так что `>1` реплика без Redis реально ломает
+  многоузловое развёртывание ровно так, как предупреждает контракт.
+- `GOOSAR_AUTH_METHODS`: `Config.AuthMethodEnabled` — метод, не перечисленный
+  здесь, закрыт на эндпойнте (`handleSendCode`/`handleOidcStart`/
+  `handleOidcCallback`/`handleLoginLdap`) даже при полной настройке ниже;
+  `GET /api/auth/methods` отдаёт пересечение "включён" ∩ "настроен".
+- `GOOSAR_OIDC_TRUST_UNVERIFIED_EMAIL`: реализован **частично** и
+  консервативно. Контракт по умолчанию требует `email_verified=true`, но
+  `extractIdentity` отклоняет id_token только когда claim `email_verified`
+  ЯВНО равен `false` — провайдер, вовсе не присылающий этот claim (частый
+  случай на практике), не отклоняется. Полная буквальная трактовка ("нет
+  claim = не подтверждён, отказ") несёт риск регрессии для реальных
+  IdP-интеграций без тестового покрытия каждого конкретного провайдера в
+  этой песочнице; переменная отмечена "в установке: Нет" — не приоритетная.
+- `GOOSAR_AUDIT_RETENTION_DAYS`: `deployment.PurgeAuditLog` + суточный цикл
+  в `cmd/server` (`runAuditRetentionLoop`, запуск сразу при старте и каждые
+  24 часа) — этого не было вовсе (ни разового вызова, ни периодического).
+- `GOOSAR_EXTERNAL_IMAGES`/`GOOSAR_IMAGE_HOSTS`: заголовок
+  `Content-Security-Policy` теперь реально стамплится на каждый ответ API
+  (`httpapi.WithContentSecurityPolicy`, `Config.ContentSecurityPolicyImgSrc`)
+  — раньше в server2 не было вообще никакого CSP-заголовка.
+- `GOOSAR_APP_URL`: раньше не существовал; magic-link в письме входа
+  (`authn.magicLinkURL`) переключён с `FRONTEND_ORIGIN` на `GOOSAR_APP_URL`
+  (по умолчанию = `FRONTEND_ORIGIN`, так что поведение без явного значения
+  не меняется). Редиректы OIDC/desktop и ссылки интеграций (`internal/integration`)
+  оставлены на `FRONTEND_ORIGIN` — это адрес, КУДА ведёт браузер прямо
+  сейчас, а не "публичный адрес приложения" для писем/сравнений.
+- `LOG_FORMAT`/`GOOSAR_LOG_FORMAT`, `LOG_LEVEL`/`GOOSAR_LOG_LEVEL`:
+  `cmd/server` строил `slog.NewJSONHandler` без вариантов; теперь
+  `newLogger` выбирает `text`/`json` и уровень по этим переменным (дефолт
+  формата — text при прямом запуске, уровня — info на production/debug иначе).
+
+### Известные пробелы, оставленные как "читается, не поддержано"
+
+Полный список с обоснованием — `server2/docs/env-parity.md`. Сюда вынесены
+только решения, которые стоит явно проговорить:
+
+1. **Заявка на роль администратора по OIDC claim / LDAP группе**
+   (`GOOSAR_OIDC_ADMIN_CLAIM`/`_VALUE`, `GOOSAR_LDAP_ADMIN_GROUP`) —
+   переменные читаются и провалидированы (обе `OIDC_ADMIN_*` заданы или ни
+   одной — не проверялось отдельно, т.к. это не ломает старт при частичном
+   заполнении, только не сработает), но фактическая подача заявки при
+   совпадении claim/группы на логине не реализована. Инфраструктура заявок
+   (`deployment.CreatePendingRequest`) существует и рассчитана на HTTP-актор
+   администратора деплоя (`httpapi.Actor` + audit "кто попросил"), а не на
+   анонимный вызов изнутри `internal/authn` (у `authn` по архитектуре сессии
+   нет и не может быть импорта `internal/deployment` — цикл: `deployment`
+   уже импортирует `authn`). Правильное решение — внедрить callback
+   (`Deps.SetAdminRequestFiler`, тем же приёмом, что `SetDispatcher`/
+   `SetTaskActorLookup` в этой кодовой базе), подключаемый в `app/deps.go`
+   после сборки `deploymentDeps` — оставлено за скобками этой сессии по
+   объёму. Оператор продолжает пользоваться `goosar_admin grant <email>`.
+2. **Redis/realtime-relay** (`REDIS_URL` и вся группа `REALTIME_RELAY_*`,
+   `REDIS_DISABLE_CLIENT_NAME`) — server2 remains single-process/in-memory
+   для лимитера и realtime-хаба; переменные читаются, `GOOSAR_REPLICAS>1`
+   без `REDIS_URL` отказывает старту (см. выше), но сам Redis-бэкенд не
+   реализован. Пример из самого задания.
+3. **S3/CloudFront** (`S3_REGION`, `AWS_*`, `CLOUDFRONT_*`) — backend
+   вложений в server2 остаётся только локальным диском (решение более
+   ранних сессий T-027); переменные читаются и логируются как
+   неподдерживаемые.
+4. **OCI provisioning** (`GOOSAR_PROVISIONING_STORE=oci` и
+   `GOOSAR_PROVISIONING_OCI_*`) — только `local`-режим работает.
+5. **`GOOSAR_MCP_ALLOWED_HOSTS`/`_COMMANDS`, `GOOSAR_ALLOWED_PROVIDERS`,
+   `GOOSAR_SKILL_SOURCES`** — читаются и отражаются в `GET /api/config`
+   (`skill_sources`/`allowed_providers`/`image_hosts`), но не приводят к
+   принудительному отказу на сохранении `mcp_config` агента, назначении
+   рантайма задаче или запросе к внешнему каталогу навыков — этого
+   enforcement в server2 нет вовсе (не только не переименован, а не
+   существовал раньше). `Config.Validate()` всё же отказывает старту при
+   неизвестном имени источника в `GOOSAR_SKILL_SOURCES` (contract: "неизвестное
+   имя — отказ старта" — единственная часть поведения, которую можно
+   честно реализовать без остального enforcement).
+6. **`GOOSAR_SCHEDULER_AUDIT_RETENTION`/`GOOSAR_HYGIENE_SWEEP_INTERVAL`/
+   `GOOSAR_UPLOAD_GC_GRACE`** — `GOOSAR_UPLOAD_GC_GRACE` теперь запитывает
+   дефолт флага `--grace` у `goosar_admin gc-uploads`; периодического
+   фонового запуска (что подразумевает `GOOSAR_HYGIENE_SWEEP_INTERVAL`) в
+   процессе сервера нет — обе задачи (аудит планировщика, осиротевшие
+   вложения) остаются only-CLI, как и раньше этой сессии. Не путать с
+   `GOOSAR_AUDIT_RETENTION_DAYS` выше — тот теперь работает автоматически;
+   планировщик-специфичный аудит (`sys_cron_executions`) — нет.
+7. **LLM внутренний слой** (`GOOSAR_LLM_API_KEY`/`_BASE_URL` как включатель
+   "generic" помощников вроде заголовка чата) — переменные читаются, но
+   сам вызов LLM для таких хелперов (`generateTitle` в `internal/chat`)
+   остаётся эвристикой без сети, не подключён к этому ключу. Единственное
+   реальное использование `GOOSAR_LLM_*` в этой версии — health-check и
+   выдача клиентского секрета в `internal/deployment` (см. выше).
+8. **Наблюдаемость** (`METRICS_ADDR`, `POSTHOG_*`, `ANALYTICS_*`) — ни
+   Prometheus-эндпойнт, ни клиент PostHog не существуют в server2; читаются
+   и логируются как неподдерживаемые при непустом значении.
+9. **`GITHUB_TOKEN`** (для импорта навыков из GitHub) — читается, но
+   `internal/skill/github.go` не подставляет его в запросы к GitHub API
+   автоматически (текущая реализация не различает "нет источника
+   GitHub-навыков" от "нет токена").
+10. **`GOOSAR_RUNTIME_CONFIG_PATH`, `GOOSAR_OFFICIAL_CLOUD_HOST`,
+    `GOOSAR_EXPORT_DIR`, `GOOSAR_EXPORT_MAX_BYTES`** — читаются, без эффекта
+    (встроенный каталог рантаймов не переопределяем; отличение "официального
+    облака" нигде не используется; экспорт пишется через тот же
+    `internal/asset.Storage`, что вложения, отдельного каталога/лимита
+    размера нет).
+
+### Прочитанные файлы (T-026 доводка, env-parity, дополнительно к спискам выше)
+
+- `docs/50-api-contract.md`, раздел «Приложение. Переменные окружения
+  сервера» и «Спорные места (переменные окружения)» (строки ~2020–2323).
+- `.env.example` (корень репозитория) и `docker-compose.selfhost.yml` —
+  конфигурация установки, разрешена правилами clean-room этой сессии.
+- Весь `server2/internal/config/config.go` (переписан), плюс каждый файл,
+  куда пришлось внести правку по переименованию/подключению (перечислены
+  построчно в `git diff` этой сессии — не дублируются здесь).
+
+`server/**` и `packages/core/**` не открывались.

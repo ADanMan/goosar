@@ -29,9 +29,23 @@ type Store struct {
 // временно недоступна; фактическую готовность проверяет отдельно Ping (его
 // вызывает /readyz).
 func Open(ctx context.Context, dsn string) (*Store, error) {
+	return OpenPool(ctx, dsn, 0, 0)
+}
+
+// OpenPool — как Open, но с явным переопределением DATABASE_MAX_CONNS/
+// DATABASE_MIN_CONNS (contract, группа "БД и запуск"): 0 — не трогать
+// (дефолт pgxpool — 25/5, либо pool_max_conns/pool_min_conns из самого DSN,
+// если они там заданы — переменные окружения приоритетнее параметров URL).
+func OpenPool(ctx context.Context, dsn string, maxConns, minConns int32) (*Store, error) {
 	cfg, parseErr := pgxpool.ParseConfig(dsn)
 	if parseErr != nil {
 		return nil, fmt.Errorf("store: %s: %w", "разбор DSN", parseErr)
+	}
+	if maxConns > 0 {
+		cfg.MaxConns = maxConns
+	}
+	if minConns > 0 {
+		cfg.MinConns = minConns
 	}
 	pool, poolErr := pgxpool.NewWithConfig(ctx, cfg)
 	if poolErr != nil {

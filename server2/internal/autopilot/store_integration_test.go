@@ -339,7 +339,7 @@ func TestAutopilot_Dispatcher_CreateIssueAndRunOnly(t *testing.T) {
 	s := NewStore(db)
 	ctx := context.Background()
 
-	wsDeps := workspace.New(db, nil, nil, nil, nil)
+	wsDeps := workspace.New(db, nil, nil, nil, false, nil)
 	taskStore := task.NewStore(db)
 	dispatchDeps := dispatch.New(nil, nil)
 	disp := &Dispatcher{Store: s, Dispatch: dispatchDeps, Tasks: taskStore, Workspace: wsDeps.Store, DB: db}
@@ -393,7 +393,7 @@ func TestAutopilot_Dispatcher_SkipsInactiveAndMissingAssignee(t *testing.T) {
 	s := NewStore(db)
 	ctx := context.Background()
 
-	wsDeps := workspace.New(db, nil, nil, nil, nil)
+	wsDeps := workspace.New(db, nil, nil, nil, false, nil)
 	taskStore := task.NewStore(db)
 	dispatchDeps := dispatch.New(nil, nil)
 	disp := &Dispatcher{Store: s, Dispatch: dispatchDeps, Tasks: taskStore, Workspace: wsDeps.Store, DB: db}

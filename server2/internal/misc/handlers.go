@@ -2,7 +2,6 @@ package misc
 
 import (
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -269,7 +268,7 @@ func (d *Deps) handleWorkspaceStatus(w http.ResponseWriter, r *http.Request) {
 		"mcp": map[string]any{
 			"state": "ok", "workspace_servers": len(mcpServers), "tools_verified": "unknown", "assigned": mcpAssigned,
 		},
-		"perimeter": perimeterStatus(),
+		"perimeter": d.perimeterStatus(),
 		"llm":       llmStatus(llm),
 	})
 }
@@ -281,24 +280,29 @@ func runtimeState(total int) string {
 	return "ok"
 }
 
-// perimeterStatus — contract §1.9 называет GOOSAR_DELIVERY_PROFILE как
-// переменную, влияющую на /api/config (см. app/configapi.go, где она пока
-// зашита константой "self-hosted" — не домен этой сессии, не трогается);
-// deployment_profile/member_access/kerberos контракт нигде не расшифровывает
-// (WorkspaceStatus.perimeter — спорное место без ссылки на конкретный
-// источник) — решение T-029 в server2/docs/decisions.md: deployment_profile
-// зеркалит delivery_profile, member_access — нет отдельного источника кроме
-// открытого самостоятельного вступления пространства (не путать с открытием
-// периметра — оставлено как "unknown" с пояснением), kerberos — заведомо
-// "not_configured" (LDAP/Kerberos — домен соседа C, не читался).
-func perimeterStatus() map[string]any {
-	profile := os.Getenv("GOOSAR_DELIVERY_PROFILE")
-	if profile == "" {
-		profile = "self-hosted"
+// perimeterStatus — GOOSAR_DELIVERY_PROFILE/GOOSAR_DEPLOYMENT_PROFILE
+// (contract, группа "Деплой/политика") — раньше T-026 читал только первую и
+// зеркалил её во второе поле; обе переменные теперь читаются по отдельности
+// (см. server2/docs/env-parity.md). member_access/kerberos контракт нигде не
+// расшифровывает (WorkspaceStatus.perimeter — спорное место без ссылки на
+// конкретный источник) — решение T-029 в server2/docs/decisions.md:
+// member_access — нет отдельного источника кроме открытого самостоятельного
+// вступления пространства (не путать с открытием периметра — оставлено как
+// "unknown" с пояснением), kerberos — заведомо "not_configured" (LDAP/
+// Kerberos — если и настроен через GOOSAR_LDAP_*, это не то же самое, что
+// Kerberos SSO, отдельной переменной под который контракт не заводит).
+func (d *Deps) perimeterStatus() map[string]any {
+	delivery := d.DeliveryProfile
+	if delivery == "" {
+		delivery = "cloud"
+	}
+	deployment := d.DeploymentProfile
+	if deployment == "" {
+		deployment = "perimeter"
 	}
 	return map[string]any{
-		"delivery_profile":   profile,
-		"deployment_profile": profile,
+		"delivery_profile":   delivery,
+		"deployment_profile": deployment,
 		"member_access":      "unknown",
 		"kerberos":           "not_configured",
 		"note":               "member_access/kerberos — пробел спецификации, см. server2/docs/decisions.md, T-029",

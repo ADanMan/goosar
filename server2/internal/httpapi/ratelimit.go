@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -104,17 +105,74 @@ func (l *Limiter) bucketLocked(key string, now time.Time) *bucket {
 	return b
 }
 
-// ClientIP извлекает IP вызывающего для ключей rate limit (без доверия
-// X-Forwarded-For от произвольных клиентов — берём RemoteAddr; прокси-режим
-// не входит в объём T-026/T-029).
+// trustedProxies — GOOSAR_TRUSTED_PROXIES, установленный один раз при
+// старте процесса через SetTrustedProxies (contract: "Каким обратным прокси
+// разрешено доверять заголовкам реального IP клиента"). Пусто по умолчанию —
+// ClientIP тогда всегда берёт RemoteAddr, что безопасно, когда backend
+// выставлен клиентам напрямую.
+var trustedProxies []*net.IPNet
+
+// SetTrustedProxies задаёт список CIDR обратных прокси, которым ClientIP
+// разрешено доверять X-Forwarded-For/X-Real-IP. Вызывается один раз в
+// cmd/server до старта listener'а — пакетный var, а не поле на каждом
+// вызывающем, потому что ClientIP используется десятками мест (лимитеры,
+// audit-лог, webhook-подписи) без доступа к config.Config.
+func SetTrustedProxies(cidrs []string) {
+	trustedProxies = nil
+	for _, c := range cidrs {
+		if _, n, err := net.ParseCIDR(c); err == nil {
+			trustedProxies = append(trustedProxies, n)
+		}
+	}
+}
+
+// ClientIP извлекает IP вызывающего для ключей rate limit и audit-лога.
+// Без GOOSAR_TRUSTED_PROXIES (или когда RemoteAddr не входит ни в один
+// заданный CIDR) X-Forwarded-For/X-Real-IP полностью игнорируются — доверие
+// заголовкам от подключения, которое сам оператор не объявил обратным
+// прокси, превращает лимитер в "один бакет на прокси" любому, кто пришлёт
+// произвольный X-Forwarded-For.
 func ClientIP(r *http.Request) string {
-	host := r.RemoteAddr
+	remote := remoteAddrIP(r.RemoteAddr)
+	if !isTrustedProxy(remote) {
+		return remote
+	}
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		if first := strings.TrimSpace(parts[0]); first != "" {
+			return first
+		}
+	}
+	if xrip := strings.TrimSpace(r.Header.Get("X-Real-IP")); xrip != "" {
+		return xrip
+	}
+	return remote
+}
+
+func remoteAddrIP(remoteAddr string) string {
+	host := remoteAddr
 	for i := len(host) - 1; i >= 0; i-- {
 		if host[i] == ':' {
-			return host[:i]
+			return strings.Trim(host[:i], "[]")
 		}
 	}
 	return host
+}
+
+func isTrustedProxy(ip string) bool {
+	if len(trustedProxies) == 0 {
+		return false
+	}
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return false
+	}
+	for _, n := range trustedProxies {
+		if n.Contains(parsed) {
+			return true
+		}
+	}
+	return false
 }
 
 // KeyForRequest — ключ "по пользователю, иначе по IP", которым контракт

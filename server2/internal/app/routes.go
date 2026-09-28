@@ -90,7 +90,10 @@ type middlewareStage func(http.Handler) http.Handler
 // аутентификацию, кладущую actor в контекст, и только потом попадает в router.
 func (d *Deps) BuildHandler(router *httpapi.Router) http.Handler {
 	stages := []middlewareStage{
-		func(h http.Handler) http.Handler { return httpapi.WithCORS(h, d.Config.FrontendOrigin) },
+		func(h http.Handler) http.Handler { return httpapi.WithCORS(h, d.Config.EffectiveAllowedOrigins()) },
+		func(h http.Handler) http.Handler {
+			return httpapi.WithContentSecurityPolicy(h, d.Config.ContentSecurityPolicyImgSrc())
+		},
 		func(h http.Handler) http.Handler { return httpapi.WithCommonMiddleware(h, d.Logger) },
 		d.Authn.Middleware,
 		// WithAPIRateLimit — T-029, RATE_LIMIT_API (contract §1.5). Стоит

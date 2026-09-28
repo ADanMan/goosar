@@ -76,13 +76,22 @@ func newRequestID() string {
 	return hex.EncodeToString(b)
 }
 
-// WithCORS отражает разрешённый Origin (FRONTEND_ORIGIN) и обрабатывает
-// preflight-запросы. Cookie-аутентификация требует credentials, поэтому
-// Access-Control-Allow-Origin не может быть "*".
-func WithCORS(next http.Handler, allowedOrigin string) http.Handler {
+// WithCORS отражает Origin, если он входит в allowedOrigins (ALLOWED_ORIGINS/
+// CORS_ALLOWED_ORIGINS/FRONTEND_ORIGIN — см. config.Config.EffectiveAllowedOrigins),
+// и обрабатывает preflight-запросы. Cookie-аутентификация требует
+// credentials, поэтому Access-Control-Allow-Origin не может быть "*".
+func WithCORS(next http.Handler, allowedOrigins []string) http.Handler {
+	allowed := make(map[string]bool, len(allowedOrigins))
+	wildcard := false
+	for _, o := range allowedOrigins {
+		if o == "*" {
+			wildcard = true
+		}
+		allowed[o] = true
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		if origin != "" && (allowedOrigin == "*" || origin == allowedOrigin) {
+		if origin != "" && (wildcard || allowed[origin]) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token, X-Workspace-ID, X-Workspace-Slug, X-Client-Version")
@@ -93,6 +102,19 @@ func WithCORS(next http.Handler, allowedOrigin string) http.Handler {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// WithContentSecurityPolicy стамплит Content-Security-Policy на каждый ответ
+// API (contract, GOOSAR_EXTERNAL_IMAGES — «Флаг возможности»): директива
+// img-src приходит уже готовой строкой (config.Config.ContentSecurityPolicyImgSrc),
+// остальные директивы — базовая политика "всё своё" (default-src 'self'),
+// достаточная для JSON API (не документов с инлайн-скриптами).
+func WithContentSecurityPolicy(next http.Handler, imgSrc string) http.Handler {
+	policy := "default-src 'self'; img-src " + imgSrc + "; frame-ancestors 'none'"
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", policy)
 		next.ServeHTTP(w, r)
 	})
 }

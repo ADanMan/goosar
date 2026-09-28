@@ -33,15 +33,23 @@ type Deps struct {
 	// ContactSalesEmailLimiter — contract: "3/hour per business_email
 	// server-side cap"; тоже без названной переменной — решение T-029.
 	ContactSalesEmailLimiter *httpapi.Limiter
+
+	// DeliveryProfile/DeploymentProfile — GOOSAR_DELIVERY_PROFILE/
+	// GOOSAR_DEPLOYMENT_PROFILE (contract, группа "Деплой/политика"),
+	// отдаются в GET /api/status (perimeterStatus).
+	DeliveryProfile   string
+	DeploymentProfile string
 }
 
 const feedbackPerHour = 10
 const contactSalesEmailPerHour = 3
 
-func New(db *store.Store, contactSalesIPPerHour int, logger *slog.Logger) *Deps {
+func New(db *store.Store, contactSalesIPPerHour int, deliveryProfile, deploymentProfile string, logger *slog.Logger) *Deps {
 	return &Deps{
 		Store:                    NewStore(db),
 		Resolver:                 wsctx.New(db),
+		DeliveryProfile:          deliveryProfile,
+		DeploymentProfile:        deploymentProfile,
 		Logger:                   logger,
 		FeedbackLimiter:          httpapi.NewLimiter(feedbackPerHour, time.Hour),
 		ContactSalesIPLimiter:    httpapi.NewLimiter(contactSalesIPPerHour, time.Hour),
