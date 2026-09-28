@@ -6,6 +6,14 @@ import { useQuery } from '@tanstack/react-query';
 import { Skeleton } from '@goosar/ui/components/ui/skeleton';
 import { Button } from '@goosar/ui/components/ui/button';
 import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@goosar/ui/components/ui/empty';
+import {
   CompactNumberFlow,
   CurrencyNumberFlow,
   NumberFlow,
@@ -360,7 +368,7 @@ export function DashboardPage() {
           dimension switch, range switch) wraps on narrow viewports so every
           control stays reachable. Wider viewports still render the original
           single row. */}
-      <PageHeader className="h-auto min-h-12 flex-wrap justify-between gap-y-1.5 px-5 py-1.5 sm:py-0">
+      <PageHeader className="h-auto min-h-12 flex-wrap justify-between gap-y-1.5 py-1.5 sm:py-0">
         <div className="flex min-w-0 items-center gap-2">
           <BarChart3 className="h-4 w-4 shrink-0 text-muted-foreground" />
           <h1 className="truncate text-sm font-medium">{t(($) => $.title)}</h1>
@@ -1200,22 +1208,23 @@ function DashboardEmpty() {
   const { t } = useT('usage');
   const p = useWorkspacePaths();
   return (
-    <div className="flex flex-col items-center rounded-lg border border-dashed py-12 text-center">
-      <BarChart3 className="h-6 w-6 text-muted-foreground/40" />
-      <p className="mt-3 text-sm font-medium">{t(($) => $.empty.title)}</p>
-      <p className="mt-1 max-w-md text-xs text-muted-foreground">{t(($) => $.empty.body)}</p>
-      {/* Carbon empty-state pattern calls for a primary action, not just an
-          explanation (T-033 §3.2 L67) — the fastest way out of "no data yet"
-          is to go create the agent that will start generating it. */}
-      <Button
-        className="mt-4"
-        size="sm"
-        render={<AppLink href={p.newAgent()} />}
-        nativeButton={false}
-      >
-        <Plus aria-hidden="true" className="size-3" />
-        {t(($) => $.empty.cta)}
-      </Button>
-    </div>
+    <Empty>
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <BarChart3 />
+        </EmptyMedia>
+        <EmptyTitle>{t(($) => $.empty.title)}</EmptyTitle>
+        <EmptyDescription>{t(($) => $.empty.body)}</EmptyDescription>
+      </EmptyHeader>
+      {/* Atlassian empty-state pattern calls for a primary action, not just
+          an explanation — the fastest way out of "no data yet" is to go
+          create the agent that will start generating it. */}
+      <EmptyContent>
+        <Button size="sm" render={<AppLink href={p.newAgent()} />} nativeButton={false}>
+          <Plus aria-hidden="true" className="size-3" />
+          {t(($) => $.empty.cta)}
+        </Button>
+      </EmptyContent>
+    </Empty>
   );
 }

@@ -8,19 +8,9 @@ import { Input } from '@goosar/ui/components/ui/input';
 import { cn } from '@goosar/ui/lib/utils';
 import { useT } from '../i18n';
 import { type Hsv, hexToHsv, hsvToHex, normalizeHex, randomOptionColor } from './color-utils';
+import { LABEL_COLORS } from './label-colors';
 
-export const COLOR_PICKER_PRESETS = [
-  '#6b7280',
-  '#ef4444',
-  '#f97316',
-  '#eab308',
-  '#22c55e',
-  '#14b8a6',
-  '#3b82f6',
-  '#6366f1',
-  '#a855f7',
-  '#ec4899',
-] as const;
+export const COLOR_PICKER_PRESETS = LABEL_COLORS;
 
 const HUE_GRADIENT =
   'linear-gradient(to right, #f00, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00)';

@@ -7,6 +7,13 @@ import {
   myIssuesRelationFromScope,
   myIssuesViewStore,
 } from '@goosar/core/issues/stores/my-issues-view-store';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@goosar/ui/components/ui/empty';
 import { PageHeader } from '../../layout/page-header';
 import { IssueSurface } from '../../issues/surface/issue-surface';
 import { useT } from '../../i18n';
@@ -46,11 +53,15 @@ export function MyIssuesPage() {
             />
           )}
           renderEmpty={() => (
-            <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-2 text-muted-foreground">
-              <ListTodo className="h-10 w-10 text-muted-foreground/40" />
-              <p className="text-sm">{t(($) => $.page.empty_title)}</p>
-              <p className="text-xs">{t(($) => $.page.empty_description)}</p>
-            </div>
+            <Empty className="flex-1 border-0">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <ListTodo />
+                </EmptyMedia>
+                <EmptyTitle>{t(($) => $.page.empty_title)}</EmptyTitle>
+                <EmptyDescription>{t(($) => $.page.empty_description)}</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           )}
         />
       ) : null}

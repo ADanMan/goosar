@@ -4,6 +4,14 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { ListTodo, Plus } from 'lucide-react';
 import { Button } from '@goosar/ui/components/ui/button';
 import { Skeleton } from '@goosar/ui/components/ui/skeleton';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@goosar/ui/components/ui/empty';
 import { cn } from '@goosar/ui/lib/utils';
 import { useWorkspaceId } from '@goosar/core/hooks';
 import { ViewStoreProvider } from '@goosar/core/issues/stores/view-store-context';
@@ -219,20 +227,21 @@ function IssueSurfaceContent({
             renderEmpty ? (
               renderEmpty(renderContext)
             ) : (
-              <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-3 text-muted-foreground">
-                <ListTodo className="h-10 w-10 text-muted-foreground/40" />
-                <p className="text-sm">{t(($) => $.detail.empty_issues_title)}</p>
-                <p className="text-xs">{t(($) => $.detail.empty_issues_hint)}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-1"
-                  onClick={() => controller.openCreateIssue()}
-                >
-                  <Plus className="size-3.5 mr-1.5" />
-                  {t(($) => $.detail.empty_issues_new_button)}
-                </Button>
-              </div>
+              <Empty className="flex-1 border-0">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <ListTodo />
+                  </EmptyMedia>
+                  <EmptyTitle>{t(($) => $.detail.empty_issues_title)}</EmptyTitle>
+                  <EmptyDescription>{t(($) => $.detail.empty_issues_hint)}</EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button variant="outline" size="sm" onClick={() => controller.openCreateIssue()}>
+                    <Plus className="size-3.5 mr-1.5" />
+                    {t(($) => $.detail.empty_issues_new_button)}
+                  </Button>
+                </EmptyContent>
+              </Empty>
             )
           ) : (
             <div className={cn('flex flex-col flex-1 min-h-0', contentClassName)}>

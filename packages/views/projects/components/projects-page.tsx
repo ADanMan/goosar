@@ -42,6 +42,7 @@ import { FILTER_ITEM_CLASS, HoverCheck } from '../../common/hover-check';
 import { Skeleton } from '@goosar/ui/components/ui/skeleton';
 import { Button } from '@goosar/ui/components/ui/button';
 import { Checkbox } from '@goosar/ui/components/ui/checkbox';
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@goosar/ui/components/ui/empty';
 import { Input } from '@goosar/ui/components/ui/input';
 import {
   Dialog,
@@ -945,7 +946,7 @@ export function ProjectsPage() {
                       size="sm"
                       className={
                         hasActiveFilters
-                          ? 'h-8 w-8 gap-1 bg-brand px-0 text-white hover:bg-brand/90 md:w-auto md:px-2.5'
+                          ? 'h-8 w-8 gap-1 bg-brand px-0 text-brand-foreground hover:bg-brand/90 md:w-auto md:px-2.5'
                           : 'h-8 w-8 gap-1 px-0 text-muted-foreground md:w-auto md:px-2.5'
                       }
                     >
@@ -1215,10 +1216,14 @@ export function ProjectsPage() {
           {isLoading ? (
             <LoadingState isCompact={isCompact} />
           ) : visible.length === 0 ? (
-            <div className="flex flex-1 flex-col items-center justify-center py-24 text-muted-foreground">
-              <Search className="mb-3 h-10 w-10 opacity-30" />
-              <p className="text-sm">{t(($) => $.page.no_matches)}</p>
-            </div>
+            <Empty className="flex-1 border-0">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <Search />
+                </EmptyMedia>
+                <EmptyTitle>{t(($) => $.page.no_matches)}</EmptyTitle>
+              </EmptyHeader>
+            </Empty>
           ) : isCompact ? (
             <div className="min-h-0 flex-1 overflow-auto @container">
               <ListGrid

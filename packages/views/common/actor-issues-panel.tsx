@@ -10,6 +10,13 @@ import {
 } from '@goosar/core/issues/stores/actor-issues-view-store';
 import { Button } from '@goosar/ui/components/ui/button';
 import { Input } from '@goosar/ui/components/ui/input';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@goosar/ui/components/ui/empty';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@goosar/ui/components/ui/tooltip';
 import { IssueDisplayControls, ViewRefreshIndicator } from '../issues/components/issues-header';
 import { IssueSurface } from '../issues/surface/issue-surface';
@@ -137,16 +144,24 @@ export function ActorIssuesPanel({
       )}
       renderEmpty={() =>
         search.trim() === '' ? (
-          <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-2 text-muted-foreground">
-            <ListTodo className="h-10 w-10 text-muted-foreground/40" />
-            <p className="text-sm">{t(($) => $.actor_issues.empty[scope].title)}</p>
-            <p className="text-xs">{t(($) => $.actor_issues.empty[scope].description)}</p>
-          </div>
+          <Empty className="flex-1 border-0">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <ListTodo />
+              </EmptyMedia>
+              <EmptyTitle>{t(($) => $.actor_issues.empty[scope].title)}</EmptyTitle>
+              <EmptyDescription>{t(($) => $.actor_issues.empty[scope].description)}</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         ) : (
-          <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-2 text-muted-foreground">
-            <Search className="h-10 w-10 text-muted-foreground/40" />
-            <p className="text-sm">{t(($) => $.actor_issues.search_empty)}</p>
-          </div>
+          <Empty className="flex-1 border-0">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Search />
+              </EmptyMedia>
+              <EmptyTitle>{t(($) => $.actor_issues.search_empty)}</EmptyTitle>
+            </EmptyHeader>
+          </Empty>
         )
       }
     />

@@ -24,7 +24,7 @@ export const PROJECT_STATUS_CONFIG: Record<
     color: 'text-warning',
     dotColor: 'bg-warning',
     badgeBg: 'bg-warning',
-    badgeText: 'text-white',
+    badgeText: 'text-warning-foreground',
   },
   paused: {
     label: 'Paused',
@@ -38,7 +38,7 @@ export const PROJECT_STATUS_CONFIG: Record<
     color: 'text-info',
     dotColor: 'bg-info',
     badgeBg: 'bg-info',
-    badgeText: 'text-white',
+    badgeText: 'text-background',
   },
   cancelled: {
     label: 'Cancelled',

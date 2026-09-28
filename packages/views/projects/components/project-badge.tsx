@@ -8,6 +8,7 @@ import {
   PROJECT_PRIORITY_ORDER,
 } from '@goosar/core/projects/config';
 import { cn } from '@goosar/ui/lib/utils';
+import { badgeVariants } from '@goosar/ui/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,7 +45,8 @@ export function ProjectStatusBadge({
           <button
             type="button"
             className={cn(
-              'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity',
+              badgeVariants({ variant: 'outline' }),
+              'cursor-pointer border-transparent hover:opacity-80 transition-opacity',
               statusCfg.badgeBg,
               statusCfg.badgeText,
               triggerClassName,
@@ -88,7 +90,8 @@ export function ProjectPriorityBadge({
           <button
             type="button"
             className={cn(
-              'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium hover:bg-accent/60 transition-colors cursor-pointer',
+              badgeVariants({ variant: 'outline' }),
+              'cursor-pointer border-transparent hover:bg-accent/60 transition-colors',
               triggerClassName,
             )}
           >

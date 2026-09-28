@@ -15,6 +15,7 @@ import {
   useCreateLabel,
 } from '@goosar/core/labels';
 import { LabelChip } from '../../../labels/label-chip';
+import { LABEL_COLORS } from '../../../common/label-colors';
 import { useNavigation } from '../../../navigation';
 import { PropertyPicker, PickerItem, PickerEmpty } from './property-picker';
 import { useT } from '../../../i18n';
@@ -30,25 +31,12 @@ interface LabelPickerProps {
   triggerRender?: React.ReactElement;
 }
 
-const INLINE_COLORS = [
-  '#ef4444',
-  '#f97316',
-  '#eab308',
-  '#22c55e',
-  '#14b8a6',
-  '#3b82f6',
-  '#6366f1',
-  '#a855f7',
-  '#ec4899',
-  '#64748b',
-] as const;
-
 function pickInlineColor(name: string): string {
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
     hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
   }
-  return INLINE_COLORS[hash % INLINE_COLORS.length] ?? INLINE_COLORS[0]!;
+  return LABEL_COLORS[hash % LABEL_COLORS.length] ?? LABEL_COLORS[0]!;
 }
 
 export function LabelPicker({

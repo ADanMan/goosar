@@ -48,6 +48,7 @@ import {
   ResizableHandle,
 } from '@goosar/ui/components/ui/resizable';
 import { Skeleton } from '@goosar/ui/components/ui/skeleton';
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@goosar/ui/components/ui/empty';
 import { NumberFlow } from '@goosar/ui/components/ui/number-flow';
 import {
   DropdownMenu,
@@ -276,7 +277,7 @@ export function InboxPage() {
   const listHeader = (
     <PageHeader className="justify-between">
       <div className="flex items-center gap-2">
-        <h1 className="text-sm font-semibold">{t(($) => $.page.title)}</h1>
+        <h1 className="text-sm font-medium">{t(($) => $.page.title)}</h1>
         {unreadCount > 0 && (
           <NumberFlow
             value={unreadCount}
@@ -338,10 +339,14 @@ export function InboxPage() {
   const list =
     archivedError && isArchivedView ? (
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-          <Archive className="mb-3 h-8 w-8 text-muted-foreground/50" />
-          <p className="text-sm">{t(($) => $.errors.archived_load_failed)}</p>
-        </div>
+        <Empty role="alert" className="border-0">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Archive />
+            </EmptyMedia>
+            <EmptyTitle>{t(($) => $.errors.archived_load_failed)}</EmptyTitle>
+          </EmptyHeader>
+        </Empty>
       </div>
     ) : (
       <InboxList
@@ -546,10 +551,14 @@ export function InboxPage() {
             // read as two independent empty states side by side. This pane
             // only prompts a choice when there is something to choose from.
             (visibleItems.length > 0 && (
-              <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
-                <Inbox className="mb-3 h-10 w-10 text-muted-foreground/30" />
-                <p className="text-sm">{t(($) => $.detail.select_prompt)}</p>
-              </div>
+              <Empty className="h-full flex-1 border-0">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <Inbox />
+                  </EmptyMedia>
+                  <EmptyTitle>{t(($) => $.detail.select_prompt)}</EmptyTitle>
+                </EmptyHeader>
+              </Empty>
             ))}
         </div>
       </ResizablePanel>

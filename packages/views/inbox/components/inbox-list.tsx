@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import { Archive, ChevronRight, Inbox } from 'lucide-react';
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@goosar/ui/components/ui/empty';
 import type { InboxItem } from '@goosar/core/types';
 import type { InboxView } from './inbox-view';
 import { InboxListItem } from './inbox-list-item';
@@ -56,12 +57,16 @@ export function InboxList({
   if (items.length === 0) {
     return (
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-          <Inbox className="mb-3 h-8 w-8 text-muted-foreground/50" />
-          <p className="text-sm">
-            {isArchivedView ? t(($) => $.list.archived_empty) : t(($) => $.list.empty)}
-          </p>
-        </div>
+        <Empty className="border-0">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Inbox />
+            </EmptyMedia>
+            <EmptyTitle>
+              {isArchivedView ? t(($) => $.list.archived_empty) : t(($) => $.list.empty)}
+            </EmptyTitle>
+          </EmptyHeader>
+        </Empty>
         {/* Still offer the archive when the main list is empty — that is
             exactly when a user goes looking for what they filed away. */}
         {archivedEntry && <div className="px-2">{archivedEntry}</div>}

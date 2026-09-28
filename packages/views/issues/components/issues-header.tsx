@@ -1049,7 +1049,7 @@ export function IssueDisplayControls({
                     size="sm"
                     className={
                       hasActiveFilters
-                        ? 'h-8 w-8 gap-1 bg-brand px-0 text-white hover:bg-brand/90 md:h-7 md:w-auto md:px-2.5'
+                        ? 'h-8 w-8 gap-1 bg-brand px-0 text-brand-foreground hover:bg-brand/90 md:h-7 md:w-auto md:px-2.5'
                         : controlButtonClass
                     }
                   >
