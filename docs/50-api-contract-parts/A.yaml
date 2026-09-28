@@ -1,0 +1,2917 @@
+openapi: 3.1.0
+info:
+  title: Goosar API — Part A (platform, auth, daemon)
+  version: "1.0.0"
+  description: >
+    Часть A контракта: публичные маршруты, health/метрики, /ws, /api/auth/**,
+    /api/config, вебхуки, /api/daemon/**, /api/attachments/{id}/download,
+    /api/me/**, /api/cli-token, /api/upload-file, /api/feedback,
+    /api/client-usage, /api/workspace-templates.
+
+servers:
+  - url: /
+
+tags:
+  - name: Health
+  - name: Realtime
+  - name: Auth
+  - name: Config
+  - name: ContactSales
+  - name: Webhooks
+  - name: Daemon
+  - name: Attachments
+  - name: Me
+
+paths:
+  # ---------------------------------------------------------------------
+  # Health / metrics
+  # ---------------------------------------------------------------------
+  /health:
+    get:
+      operationId: healthCheckLiveness
+      tags: [Health]
+      summary: Liveness probe
+      x-roles: public
+      responses:
+        "200":
+          description: process is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, const: ok }
+
+  /readyz:
+    get:
+      operationId: healthCheckReadiness
+      tags: [Health]
+      summary: Readiness probe (DB reachable, migrations up to date)
+      x-roles: public
+      responses:
+        "200":
+          description: ready
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReadinessResponse" }
+        "503":
+          description: not ready (DB unreachable or migrations behind)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReadinessResponse" }
+
+  /healthz:
+    get:
+      operationId: healthCheckReadinessAlias
+      tags: [Health]
+      summary: Alias of /readyz (kept for orchestrators that expect this exact path)
+      x-roles: public
+      responses:
+        "200":
+          description: ready
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReadinessResponse" }
+        "503":
+          description: not ready
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReadinessResponse" }
+
+  /health/realtime:
+    get:
+      operationId: healthRealtimeMetrics
+      tags: [Health]
+      summary: Realtime hub metrics snapshot
+      description: >
+        Without `REALTIME_METRICS_TOKEN` set, only requests arriving directly
+        from loopback (no X-Forwarded-* / Forwarded header) are served; every
+        other request gets a plain 404 (the route is hidden, not just
+        unauthorized). With the token set, a `Bearer <token>` header is
+        required from anywhere.
+      security:
+        - {}
+        - bearerAuth: []
+      x-roles: operator (loopback or bearer token)
+      responses:
+        "200":
+          description: hub + daemon-hub connection/room counters
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          description: bearer token required and missing/wrong (only when REALTIME_METRICS_TOKEN is set)
+        "404":
+          description: not reachable from this address and no token configured
+
+  # ---------------------------------------------------------------------
+  # Realtime websocket (client-facing)
+  # ---------------------------------------------------------------------
+  /ws:
+    get:
+      operationId: realtimeConnect
+      tags: [Realtime]
+      summary: Upgrade to the client realtime WebSocket
+      description: >
+        Upgrades to WebSocket. Full handshake, subscription and event-type
+        protocol is documented in A.md (§ "Протокол /ws") rather than as a
+        request/response body, since this is not a plain HTTP exchange.
+        Query parameters: `workspace_id` or `workspace_slug` (one required),
+        optional `client_platform`, `client_version`, `client_os`.
+      parameters:
+        - in: query
+          name: workspace_id
+          schema: { type: string, format: uuid }
+        - in: query
+          name: workspace_slug
+          schema: { type: string }
+        - in: query
+          name: client_platform
+          schema: { type: string }
+        - in: query
+          name: client_version
+          schema: { type: string }
+        - in: query
+          name: client_os
+          schema: { type: string }
+      security:
+        - cookieAuth: []
+        - {}
+      x-roles: any-authenticated (cookie auth optional at handshake; unauthenticated upgrade must send a PAT/session token as the first WS frame within 10s, see A.md)
+      responses:
+        "101":
+          description: switching protocols to WebSocket
+        "400":
+          description: workspace_id or workspace_slug missing
+        "401":
+          description: invalid/expired token (cookie, or first-frame token)
+        "403":
+          description: authenticated user is not a member of the target workspace
+        "404":
+          description: workspace_slug does not resolve to a workspace
+
+  # ---------------------------------------------------------------------
+  # Auth — public
+  # ---------------------------------------------------------------------
+  /auth/send-code:
+    post:
+      operationId: authSendCode
+      tags: [Auth]
+      summary: Send a one-time email login/signup code
+      x-roles: public
+      x-rate-limit: "5/min per IP (RATE_LIMIT_AUTH); 10/min per email (RATE_LIMIT_AUTH_EMAIL); also throttled to 1 code per 60s per email server-side"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "200":
+          description: code sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { message: { type: string } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403":
+          description: signup not allowed for this email/domain, or signup disabled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429":
+          description: code requested too recently, or rate limit exceeded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: email delivery not configured on this instance
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /auth/verify-code:
+    post:
+      operationId: authVerifyCode
+      tags: [Auth]
+      summary: Verify an emailed one-time code and start a session (or continue to MFA)
+      x-roles: public
+      x-rate-limit: "20/min per IP (RATE_LIMIT_AUTH_VERIFY); 10/min per email (RATE_LIMIT_AUTH_EMAIL)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, code]
+              properties:
+                email: { type: string, format: email }
+                code: { type: string, description: "6-digit code" }
+      responses:
+        "200":
+          description: >
+            Session started (sets goosar_auth + goosar_csrf cookies and
+            returns the same token in the body), or MFA required.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginResult" }
+        "400":
+          description: invalid or expired code
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: account deactivated, or signup restricted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /auth/verify-link:
+    post:
+      operationId: authVerifyLoginLink
+      tags: [Auth]
+      summary: Verify a magic login-link token (from the same email as send-code) and start a session
+      x-roles: public
+      x-rate-limit: "20/min per IP (RATE_LIMIT_AUTH_VERIFY)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [link_token]
+              properties:
+                link_token: { type: string }
+      responses:
+        "200":
+          description: session started, or MFA required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginResult" }
+        "400":
+          description: invalid or expired link
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /auth/logout:
+    post:
+      operationId: authLogout
+      tags: [Auth]
+      summary: Clear the session cookies
+      description: Always succeeds; does not require a valid session. Does not revoke the underlying server-side session row.
+      x-roles: public
+      responses:
+        "200":
+          description: logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { message: { type: string } }
+
+  /api/auth/mfa/verify:
+    post:
+      operationId: authVerifyMfaChallenge
+      tags: [Auth]
+      summary: Complete sign-in with a second factor (TOTP code or recovery code)
+      description: Exchanges the short-lived `mfa_token` issued by send-code/verify-code/verify-link/OIDC/LDAP for a real session.
+      x-roles: public (holder of a valid mfa_token)
+      x-rate-limit: "20/min per IP (RATE_LIMIT_AUTH_VERIFY); 10/5min per mfa_token, hashed (RATE_LIMIT_MFA_VERIFY)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MFAVerifyRequest"
+      responses:
+        "200":
+          description: session started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginResult" }
+        "401":
+          description: mfa_token expired/invalid, or code/recovery code invalid
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/auth/methods:
+    get:
+      operationId: authListMethods
+      tags: [Auth]
+      summary: List sign-in methods enabled on this server
+      x-roles: public
+      x-rate-limit: "20/min per IP (RATE_LIMIT_AUTH_VERIFY)"
+      responses:
+        "200":
+          description: methods usable right now (email is always included as a fallback if nothing else is configured)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthMethodsResponse" }
+
+  /api/auth/oidc/start:
+    get:
+      operationId: authStartOidc
+      tags: [Auth]
+      summary: Start the corporate OIDC sign-in redirect
+      x-roles: public
+      x-rate-limit: "20/min per IP (RATE_LIMIT_AUTH_VERIFY)"
+      parameters:
+        - in: query
+          name: client
+          schema: { type: string, enum: [web, desktop] }
+          description: desktop clients get a goosar:// callback instead of a browser redirect
+      responses:
+        "302":
+          description: redirect to the identity provider's authorization endpoint
+        "404":
+          description: OIDC not enabled on this server
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500":
+          description: failed to prepare state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/auth/oidc/callback:
+    get:
+      operationId: authOidcCallback
+      tags: [Auth]
+      summary: OIDC identity provider callback
+      description: >
+        Always responds with an HTTP redirect: on success, to the app (or
+        `goosar://auth/callback?token=...` for the desktop client, or with
+        `mfa_token=...` if a second factor is still required); on failure,
+        to `/login#auth_error=<code>` (or the desktop equivalent).
+      x-roles: public
+      x-rate-limit: "20/min per IP (RATE_LIMIT_AUTH_VERIFY)"
+      parameters:
+        - in: query
+          name: state
+          schema: { type: string }
+        - in: query
+          name: code
+          schema: { type: string }
+        - in: query
+          name: error
+          schema: { type: string }
+      responses:
+        "302":
+          description: redirect back to the app, success or failure
+        "404":
+          description: OIDC not enabled on this server
+
+  /api/auth/ldap/login:
+    post:
+      operationId: authLoginLdap
+      tags: [Auth]
+      summary: Sign in with LDAP/Active Directory credentials
+      x-roles: public
+      x-rate-limit: "5/min per IP (RATE_LIMIT_AUTH); 10/min per username (RATE_LIMIT_AUTH_EMAIL)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string, format: password }
+      responses:
+        "200":
+          description: session started, or MFA required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginResult" }
+        "401":
+          description: invalid username or password
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: LDAP not enabled on this server
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: LDAP server unreachable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  # ---------------------------------------------------------------------
+  # Auth — authenticated (cookie/PAT session, human only)
+  # ---------------------------------------------------------------------
+  /api/auth/mfa:
+    get:
+      operationId: authGetMfaStatus
+      tags: [Auth]
+      summary: Get the caller's second-factor status
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      x-roles: any-authenticated-human
+      x-rate-limit: "600/min per user (RATE_LIMIT_API)"
+      responses:
+        "200":
+          description: MFA status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MFAStatusResponse" }
+        "403": { $ref: "#/components/responses/HumanOnly" }
+
+  /api/auth/mfa/totp/enroll:
+    post:
+      operationId: authEnrollTotp
+      tags: [Auth]
+      summary: Begin TOTP enrollment (generates and stores a pending secret)
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      x-roles: any-authenticated-human
+      x-rate-limit: "600/min per user (RATE_LIMIT_API); 20/hour per user (RATE_LIMIT_TOKEN)"
+      responses:
+        "200":
+          description: secret + otpauth:// URI to scan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MFAEnrollResponse" }
+        "403": { $ref: "#/components/responses/HumanOnly" }
+        "409":
+          description: a second factor is already active
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: GOOSAR_MCP_SECRET_KEY not configured — MFA storage unavailable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/auth/mfa/totp/confirm:
+    post:
+      operationId: authConfirmTotp
+      tags: [Auth]
+      summary: Confirm TOTP enrollment with a live code and receive one-time recovery codes
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      x-roles: any-authenticated-human
+      x-rate-limit: "600/min per user (RATE_LIMIT_API); 20/hour per user (RATE_LIMIT_TOKEN)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MFACodeRequest" }
+      responses:
+        "200":
+          description: MFA enabled; 10 recovery codes returned (shown once)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MFAConfirmResponse" }
+        "400":
+          description: not enrolled yet, code invalid, or code already used
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403": { $ref: "#/components/responses/HumanOnly" }
+        "409":
+          description: already enrolled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/auth/mfa/totp/disable:
+    post:
+      operationId: authDisableTotp
+      tags: [Auth]
+      summary: Disable TOTP (requires a current code)
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      x-roles: any-authenticated-human
+      x-rate-limit: "600/min per user (RATE_LIMIT_API); 20/hour per user (RATE_LIMIT_TOKEN)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MFACodeRequest" }
+      responses:
+        "200":
+          description: disabled; recovery codes are deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { enabled: { type: boolean, const: false } }
+        "400":
+          description: not enrolled, or code invalid
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403": { $ref: "#/components/responses/HumanOnly" }
+
+  /api/auth/mfa/recovery-codes:
+    post:
+      operationId: authRegenerateMfaRecoveryCodes
+      tags: [Auth]
+      summary: Regenerate the 10 recovery codes (requires a current TOTP/recovery code)
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      x-roles: any-authenticated-human
+      x-rate-limit: "600/min per user (RATE_LIMIT_API); 20/hour per user (RATE_LIMIT_TOKEN)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MFACodeRequest" }
+      responses:
+        "200":
+          description: new codes issued; old ones are invalidated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MFAConfirmResponse" }
+        "400":
+          description: not enrolled, or code invalid
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403": { $ref: "#/components/responses/HumanOnly" }
+
+  /api/auth/sessions:
+    get:
+      operationId: authListSessions
+      tags: [Auth]
+      summary: List the caller's active sessions
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      x-roles: any-authenticated-human
+      x-rate-limit: "600/min per user (RATE_LIMIT_API)"
+      responses:
+        "200":
+          description: sessions, most recent first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SessionResponse" }
+        "403": { $ref: "#/components/responses/HumanOnly" }
+
+  /api/auth/sessions/{sessionId}:
+    delete:
+      operationId: authRevokeSession
+      tags: [Auth]
+      summary: Revoke one of the caller's sessions
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      x-roles: any-authenticated-human (own sessions only)
+      x-rate-limit: "600/min per user (RATE_LIMIT_API)"
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { revoked: { type: integer } }
+        "403": { $ref: "#/components/responses/HumanOnly" }
+        "404":
+          description: session not found (or belongs to another user)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/auth/sessions/revoke-all:
+    post:
+      operationId: authRevokeAllSessions
+      tags: [Auth]
+      summary: Revoke every session for the caller and bump their token version
+      description: Also clears the caller's own auth cookies. Every JWT issued before this call becomes invalid immediately (token version check).
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      x-roles: any-authenticated-human
+      x-rate-limit: "600/min per user (RATE_LIMIT_API)"
+      responses:
+        "200":
+          description: revocation summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  revoked: { type: integer }
+                  token_version: { type: integer }
+        "403": { $ref: "#/components/responses/HumanOnly" }
+
+  # ---------------------------------------------------------------------
+  # Config
+  # ---------------------------------------------------------------------
+  /api/config:
+    get:
+      operationId: configGetPublic
+      tags: [Config]
+      summary: Public runtime configuration for the frontend/CLI
+      x-roles: public
+      responses:
+        "200":
+          description: config
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppConfig" }
+
+  # ---------------------------------------------------------------------
+  # Contact sales
+  # ---------------------------------------------------------------------
+  /api/contact-sales:
+    post:
+      operationId: contactSalesCreateInquiry
+      tags: [ContactSales]
+      summary: Submit a "contact sales" lead form
+      x-roles: public
+      x-rate-limit: "5/hour per IP (RATE_LIMIT_CONTACT_SALES); 3/hour per business_email server-side cap"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContactSalesRequest" }
+      responses:
+        "201":
+          description: inquiry recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContactSalesResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429":
+          description: too many recent inquiries from this email, or IP rate limit
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  # ---------------------------------------------------------------------
+  # Webhooks (all public / signature-authenticated, no user session)
+  # ---------------------------------------------------------------------
+  /api/webhooks/autopilots/{token}:
+    post:
+      operationId: webhooksReceiveAutopilotTrigger
+      tags: [Webhooks]
+      summary: Inbound webhook that can start an Autopilot run
+      description: >
+        `token` is the opaque per-trigger secret (`awt_...`) minted when the
+        trigger was created; it is the only credential. The body is
+        normalized into `{event, eventPayload, request}` before being
+        matched against the trigger's event filters and, on a decision to
+        run, handed to Autopilot admission. Deliveries are deduplicated by
+        `X-GitHub-Delivery` / `Idempotency-Key`, and a duplicate delivery
+        replays the first response instead of re-processing.
+      security: [{ webhookToken: [] }]
+      x-roles: public (bearer is the trigger's own opaque token)
+      x-rate-limit: >
+        60/min per trigger token (WebhookRateLimiter, if attached);
+        30/min per IP after a bad delivery (RATE_LIMIT backend, "bad_credential_ip");
+        600/min per IP absolute ceiling regardless of outcome
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200":
+          description: >
+            accepted / skipped / ignored / duplicate — see `status` field.
+            A run is only ever created for `status: accepted` or (already
+            existing) `duplicate`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [accepted, skipped, ignored, duplicate] }
+                  delivery_id: { type: string, format: uuid }
+                  run_id: { type: string, format: uuid }
+                  autopilot_id: { type: string, format: uuid }
+                  trigger_id: { type: string, format: uuid }
+                  reason: { type: string }
+                  event: { type: string }
+        "401":
+          description: invalid or missing webhook signature (rejected, terminal)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, const: rejected }
+                  delivery_id: { type: string, format: uuid }
+                  reason: { type: string, enum: [invalid_signature, missing_signature] }
+        "404":
+          description: unknown token, or trigger/autopilot workspace mismatch
+        "413":
+          description: payload larger than 256 KiB
+        "429":
+          description: rate limit exceeded (IP-based)
+
+  /api/webhooks/github:
+    post:
+      operationId: webhooksReceiveGithub
+      tags: [Webhooks]
+      summary: GitHub App webhook (installation lifecycle, pull_request, CI status)
+      description: >
+        HMAC-SHA256 signed with the App's webhook secret. Handles `ping`
+        (replies `{"ok":"pong"}`), `installation` (created/deleted/suspended
+        → upserts/deletes `github_installation` rows and publishes
+        `github_installation:created`/`github_installation:deleted`),
+        `pull_request` (mirrors PR state, tries to link it to matching
+        issues, publishes `pull_request:updated`), and
+        `check_suite`/`check_run`/`status` (triggers a PR snapshot refresh).
+        Every event beyond `ping` returns 202 unconditionally once the
+        signature checks out.
+      security: [{ githubWebhookSignature: [] }]
+      x-roles: public (HMAC signature is the credential)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "202":
+          description: accepted for async processing
+        "200":
+          description: "ping event: {\"ok\":\"pong\"}"
+        "401":
+          description: invalid X-Hub-Signature-256
+        "503":
+          description: GitHub webhooks not configured (no secret set)
+
+  /api/github/setup:
+    get:
+      operationId: webhooksGithubSetupCallback
+      tags: [Webhooks]
+      summary: GitHub App installation callback (redirected here by GitHub after "Install App")
+      description: >
+        Verifies the signed `state` (workspace id + return path), persists
+        the new installation, publishes `github_installation:created`, then
+        redirects to the workspace's integration settings page with
+        `?github_connected=1` or `&github_error=<code>`.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }, {}]
+      x-roles: public (state token carries the workspace binding; a session, if present, only tags who connected it)
+      parameters:
+        - in: query
+          name: installation_id
+          schema: { type: string }
+        - in: query
+          name: state
+          required: true
+          schema: { type: string }
+      responses:
+        "302":
+          description: redirect to the frontend settings page, success or error
+
+  /api/webhooks/vcs/{connectionId}:
+    post:
+      operationId: webhooksReceiveVcs
+      tags: [Webhooks]
+      summary: Generic VCS connection webhook (GitLab/other providers wired through the vcs integration)
+      description: >
+        Signature is verified per-provider using the connection's own
+        (encrypted-at-rest) webhook secret. Handles pull/merge-request events
+        (mirrors into `vcs_pull_request`, links matching issues, publishes
+        `pull_request:updated`) and CI status events (mirrors commit status,
+        republishes `pull_request:updated` for issues on that head SHA).
+      security: [{ vcsWebhookSignature: [] }]
+      x-roles: public (per-connection HMAC signature is the credential)
+      parameters:
+        - in: path
+          name: connectionId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "202": { description: accepted }
+        "401": { description: invalid signature }
+        "404": { description: unknown connection, or VCS integration disabled }
+        "503": { description: VCS webhooks not configured }
+
+  /api/webhooks/stripe:
+    post:
+      operationId: webhooksReceiveStripe
+      tags: [Webhooks]
+      summary: Stripe billing webhook, proxied through to the cloud-runtime billing service
+      description: >
+        Body is forwarded verbatim (with the `Stripe-Signature` header) to
+        the configured cloud-runtime backend at
+        `/api/v1/webhooks/stripe`, which owns signature verification; this
+        endpoint only enforces size/rate limits and that a signature header
+        is present at all.
+      security: [{ stripeWebhookSignature: [] }]
+      x-roles: public (Stripe-Signature header + upstream verification)
+      x-rate-limit: "30/min per IP (WebhookIPRateLimiter); 600/min per IP absolute ceiling"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: forwarded and accepted by the billing service }
+        "401": { description: missing Stripe-Signature header }
+        "413": { description: body larger than 1 MiB }
+        "429": { description: rate limit exceeded }
+        "503": { description: cloud runtime billing not configured }
+
+  /api/integrations/composio/callback:
+    get:
+      operationId: webhooksComposioOauthCallback
+      tags: [Webhooks]
+      summary: OAuth callback for a Composio toolkit connection
+      description: Redirects to the frontend's connection-result page for the toolkit, success or failure, based on `status`/`connected_account_id` and the signed `state`.
+      security: [{}]
+      x-roles: public (signed state is the credential)
+      parameters:
+        - in: query
+          name: state
+          required: true
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: connected_account_id
+          schema: { type: string }
+      responses:
+        "302": { description: redirect to the frontend, success or failure }
+        "503": { description: Composio integration not configured or feature-flagged off }
+
+  # ---------------------------------------------------------------------
+  # Daemon API (Bearer: PAT / cloud PAT / daemon token / session JWT)
+  # ---------------------------------------------------------------------
+  /api/daemon/register:
+    post:
+      operationId: daemonRegisterRuntimes
+      tags: [Daemon]
+      summary: Register (upsert) one or more runtimes for a workspace, on daemon start
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DaemonRegisterRequest" }
+      responses:
+        "200":
+          description: registered runtimes + the workspace's current repo list, published as `daemon:register`
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  runtimes:
+                    type: array
+                    items: { $ref: "#/components/schemas/AgentRuntime" }
+                  repos:
+                    type: array
+                    items: { $ref: "#/components/schemas/WorkspaceRepo" }
+                  repos_version: { type: string }
+                  settings: { type: object }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404":
+          description: workspace not found (or daemon token bound to a different workspace)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/daemon/deregister:
+    post:
+      operationId: daemonDeregisterRuntimes
+      tags: [Daemon]
+      summary: Mark runtimes offline
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [runtime_ids]
+              properties:
+                runtime_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+      responses:
+        "200":
+          description: >
+            always `{"status":"ok"}`; runtimes that don't resolve or don't
+            belong to the caller's workspace are silently skipped. Publishes
+            `daemon:register` (action=deregister) per affected workspace.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { status: { type: string, const: ok } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /api/daemon/heartbeat:
+    post:
+      operationId: daemonSendHeartbeat
+      tags: [Daemon]
+      summary: HTTP heartbeat for a single runtime (poll fallback for daemons not using /api/daemon/ws)
+      description: >
+        Refreshes liveness/last-seen and returns any pending out-of-band
+        work for the runtime: a CLI self-update, a model-list probe request,
+        a local-skills probe request, or a local-skill import request.
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [runtime_id]
+              properties:
+                runtime_id: { type: string, format: uuid }
+                supports_batch_import: { type: boolean }
+      responses:
+        "200":
+          description: ack with any pending work
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DaemonHeartbeatAck" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404":
+          description: runtime not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/daemon/ws:
+    get:
+      operationId: daemonConnect
+      tags: [Daemon]
+      summary: Upgrade to the daemon WebSocket (heartbeat push + bidirectional RPC)
+      description: >
+        Full handshake and message protocol documented in A.md (§ "Протокол
+        /api/daemon/ws"). Query parameters: one or more `runtime_id`
+        (repeatable) or a comma-separated `runtime_ids`; at least one
+        runtime id or an authenticated human user identity is required.
+      parameters:
+        - in: query
+          name: runtime_id
+          schema: { type: array, items: { type: string, format: uuid } }
+          style: form
+          explode: true
+        - in: query
+          name: runtime_ids
+          schema: { type: string, description: "comma-separated runtime ids" }
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      responses:
+        "101": { description: switching protocols }
+        "400": { description: no runtime_ids and no authenticated user }
+        "404": { description: a given runtime does not exist, or belongs to a different daemon }
+
+  /api/daemon/workspaces:
+    get:
+      operationId: daemonListWorkspaces
+      tags: [Daemon]
+      summary: List workspaces visible to the caller (human) or the single bound workspace (daemon token)
+      description: Supports conditional GET via `ETag` / `If-None-Match` (weak etag over the response body).
+      security: [{ daemonAuth: [] }]
+      x-roles: any-authenticated (human sees all their workspaces; a daemon-token caller sees only its own)
+      parameters:
+        - in: header
+          name: If-None-Match
+          schema: { type: string }
+      responses:
+        "200":
+          description: workspaces
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DaemonWorkspace" }
+        "304": { description: not modified }
+        "401": { description: daemon workspace identity required (no user id, no daemon token workspace) }
+        "404": { description: bound workspace not found }
+
+  /api/daemon/workspaces/{workspaceId}/repos:
+    get:
+      operationId: daemonGetWorkspaceRepos
+      tags: [Daemon]
+      summary: Get a workspace's configured repos and settings
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: repos + settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DaemonWorkspaceRepos" }
+        "404": { description: workspace not found, or not accessible }
+
+  /api/daemon/workspaces/{workspaceId}/runtime-profiles:
+    get:
+      operationId: daemonListRuntimeProfiles
+      tags: [Daemon]
+      summary: List enabled custom runtime profiles for a workspace
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: profiles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspace_id: { type: string, format: uuid }
+                  runtime_profiles:
+                    type: array
+                    items: { $ref: "#/components/schemas/RuntimeProfile" }
+        "404": { description: workspace not found, or not accessible }
+
+  /api/daemon/runtimes/{runtimeId}/tasks/claim:
+    post:
+      operationId: daemonClaimTaskForRuntime
+      tags: [Daemon]
+      summary: Claim a single queued task for one runtime
+      description: >
+        Requires a client that advertises at least the minimum daemon
+        version (`X-Client-Version` header; gate via `RequireMinDaemonVersion`,
+        default minimum from `GOOSAR_MIN_DAEMON_VERSION` or the built-in
+        default) — an outdated client gets `426 Upgrade Required`. On
+        success, mints a short-lived agent task token (`mat_...`, 24h TTL)
+        returned as `auth_token` inside the task object.
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: runtimeId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: "the claimed task, or `{\"task\":null}` if nothing is queued"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task:
+                    oneOf:
+                      - { $ref: "#/components/schemas/AgentTask" }
+                      - { type: "null" }
+        "404": { description: runtime not found }
+        "426": { $ref: "#/components/responses/DaemonTooOld" }
+        "500": { description: runtime owner missing, or claim/token/finalize failure — task is cancelled or requeued server-side }
+
+  /api/daemon/tasks/claim:
+    post:
+      operationId: daemonClaimTasksBatch
+      tags: [Daemon]
+      summary: Claim up to max_tasks queued tasks across several runtimes of one daemon
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [daemon_id, runtime_ids, max_tasks]
+              properties:
+                daemon_id: { type: string }
+                runtime_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+                max_tasks: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: claimed tasks (possibly empty); runtimes that fail authorization, belong to another daemon_id, or use a disallowed provider are silently excluded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tasks:
+                    type: array
+                    items: { $ref: "#/components/schemas/AgentTask" }
+        "400": { description: daemon_id missing, or max_tasks negative }
+        "403": { description: daemon_id does not match the authenticated daemon token }
+        "426": { $ref: "#/components/responses/DaemonTooOld" }
+
+  /api/daemon/claim:
+    post:
+      operationId: daemonClaimTasksBatchAlias
+      tags: [Daemon]
+      summary: Alias of POST /api/daemon/tasks/claim (same handler, kept for older daemon builds)
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [daemon_id, runtime_ids, max_tasks]
+              properties:
+                daemon_id: { type: string }
+                runtime_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+                max_tasks: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: same as /api/daemon/tasks/claim
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tasks:
+                    type: array
+                    items: { $ref: "#/components/schemas/AgentTask" }
+        "400": { description: daemon_id missing, or max_tasks negative }
+        "403": { description: daemon_id mismatch }
+        "426": { $ref: "#/components/responses/DaemonTooOld" }
+
+  /api/daemon/runtimes/{runtimeId}/tasks/{taskId}/prepare-lease:
+    post:
+      operationId: daemonExtendTaskPrepareLease
+      tags: [Daemon]
+      summary: Extend the "preparing" lease on a just-claimed task (still resolving skills/local directory)
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: runtimeId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: taskId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: task with the extended lease
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentTask" }
+        "400": { description: lease cannot be extended (wrong status, expired, etc.) }
+        "404": { description: task not found, or does not belong to this runtime/workspace }
+
+  /api/daemon/runtimes/{runtimeId}/tasks/{taskId}/skill-bundles/resolve:
+    post:
+      operationId: daemonResolveTaskSkillBundles
+      tags: [Daemon]
+      summary: Resolve skill bundle contents by (id, source, hash) references for a task being prepared
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: runtimeId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: taskId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                skills:
+                  type: array
+                  items:
+                    type: object
+                    required: [id, source, hash]
+                    properties:
+                      id: { type: string }
+                      source: { type: string }
+                      hash: { type: string }
+                content_encoding: { type: string, enum: [base64] }
+      responses:
+        "200":
+          description: resolved bundles (raw text, or base64 when content_encoding=base64 was requested)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bundles:
+                    type: array
+                    items: { $ref: "#/components/schemas/AgentSkillBundle" }
+                  content_encoding: { type: string }
+        "400": { description: task not preparing, or a skill ref is malformed }
+        "404": { description: task not found for this runtime, or a referenced skill bundle is not allowed for this agent }
+        "409": { description: task is not in a state that allows resolving skills }
+
+  /api/daemon/runtimes/{runtimeId}/tasks/pending:
+    get:
+      operationId: daemonListPendingTasksByRuntime
+      tags: [Daemon]
+      summary: List tasks already dispatched/running on a runtime (for daemon restart recovery)
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: runtimeId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: pending tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AgentTask" }
+        "404": { description: runtime not found }
+
+  /api/daemon/runtimes/{runtimeId}/update/{updateId}/result:
+    post:
+      operationId: daemonReportUpdateResult
+      tags: [Daemon]
+      summary: Report the outcome of a CLI self-update the server asked the daemon to run
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: runtimeId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: updateId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [running, completed, failed] }
+                output: { type: string }
+                error: { type: string }
+      responses:
+        "200":
+          description: "always `{\"status\":\"ok\"}`; a report for an already-terminal or unknown update id is accepted and ignored"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { status: { type: string, const: ok } }
+        "400": { description: invalid status value }
+        "404": { description: update request not found for this runtime }
+
+  /api/daemon/runtimes/{runtimeId}/models/{requestId}/result:
+    post:
+      operationId: daemonReportModelListResult
+      tags: [Daemon]
+      summary: Report the result of a "list available models" probe the server asked the daemon to run
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: runtimeId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: requestId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [completed, failed] }
+                models:
+                  type: array
+                  items: { $ref: "#/components/schemas/ModelEntry" }
+                supported: { type: boolean, description: "defaults to true when omitted" }
+                error: { type: string }
+      responses:
+        "200":
+          description: "always `{\"status\":\"ok\"}`"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { status: { type: string, const: ok } }
+        "400": { description: invalid body }
+        "404": { description: request not found for this runtime }
+
+  /api/daemon/runtimes/{runtimeId}/local-skills/{requestId}/result:
+    post:
+      operationId: daemonReportLocalSkillsResult
+      tags: [Daemon]
+      summary: Report the result of a "list local skills/MCP servers" probe
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: runtimeId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: requestId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [completed, failed] }
+                skills:
+                  type: array
+                  items: { $ref: "#/components/schemas/RuntimeLocalSkillSummary" }
+                supported: { type: boolean }
+                mcp_servers:
+                  type: array
+                  items: { type: object, additionalProperties: true }
+                mcp_supported: { type: boolean }
+                error: { type: string }
+      responses:
+        "200":
+          description: "always `{\"status\":\"ok\"}`"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { status: { type: string, const: ok } }
+        "400": { description: invalid body }
+        "404": { description: request not found for this runtime }
+
+  /api/daemon/runtimes/{runtimeId}/local-skills/import/{requestId}/result:
+    post:
+      operationId: daemonReportLocalSkillImportResult
+      tags: [Daemon]
+      summary: Report the result of importing one local skill into the workspace's skill library
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: runtimeId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: requestId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [completed, failed] }
+                skill: { type: object, additionalProperties: true }
+                error: { type: string }
+      responses:
+        "200":
+          description: "always `{\"status\":\"ok\"}`; publishes `skill:created` or `skill:updated` on success"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { status: { type: string, const: ok } }
+        "400": { description: invalid body, or completed without a skill payload }
+        "404": { description: request not found for this runtime }
+
+  /api/daemon/tasks/{taskId}/status:
+    get:
+      operationId: daemonGetTaskStatus
+      tags: [Daemon]
+      summary: Get a task's current status string
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { status: { type: string } }
+        "404": { description: task not found }
+
+  /api/daemon/tasks/{taskId}/start:
+    post:
+      operationId: daemonStartTask
+      tags: [Daemon]
+      summary: Mark a claimed task as running
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: task
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentTask" }
+        "400": { description: task cannot transition to running from its current status }
+        "404": { description: task not found }
+
+  /api/daemon/tasks/{taskId}/wait-local-directory:
+    post:
+      operationId: daemonMarkTaskWaitingLocalDirectory
+      tags: [Daemon]
+      summary: Mark a task as waiting on a local working directory to become available
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties: { reason: { type: string } }
+      responses:
+        "200":
+          description: task
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentTask" }
+        "400": { description: invalid transition }
+        "404": { description: task not found }
+
+  /api/daemon/tasks/{taskId}/progress:
+    post:
+      operationId: daemonReportTaskProgress
+      tags: [Daemon]
+      summary: Report a coarse progress update for a running task
+      description: Publishes `task:progress` to the task's workspace (best-effort; no error if the workspace can't be resolved).
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                summary: { type: string }
+                step: { type: integer }
+                total: { type: integer }
+      responses:
+        "200":
+          description: "always `{\"status\":\"ok\"}`"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { status: { type: string, const: ok } }
+        "404": { description: task not found }
+
+  /api/daemon/tasks/{taskId}/complete:
+    post:
+      operationId: daemonCompleteTask
+      tags: [Daemon]
+      summary: Mark a task completed
+      description: Publishes `task:completed`; revokes the task's agent task token; on the issue's first completion may also emit issue-execution side effects.
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pr_url: { type: string }
+                output: { type: string }
+                session_id: { type: string }
+                work_dir: { type: string }
+                session_rollout_missing: { type: boolean }
+      responses:
+        "200":
+          description: task
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentTask" }
+        "400": { description: invalid transition }
+        "404": { description: task not found }
+
+  /api/daemon/tasks/{taskId}/fail:
+    post:
+      operationId: daemonFailTask
+      tags: [Daemon]
+      summary: Mark a task failed
+      description: Publishes `task:failed`; revokes the task's agent task token.
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error: { type: string }
+                session_id: { type: string }
+                work_dir: { type: string }
+                failure_reason: { type: string }
+                session_rollout_missing: { type: boolean }
+      responses:
+        "200":
+          description: task
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentTask" }
+        "404": { description: task not found }
+        "500": { description: failure persistence error }
+
+  /api/daemon/tasks/{taskId}/usage:
+    post:
+      operationId: daemonReportTaskUsage
+      tags: [Daemon]
+      summary: Report token/cost usage for a task, one or more provider/model line items
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                usage:
+                  type: array
+                  items: { $ref: "#/components/schemas/TaskUsageEntry" }
+      responses:
+        "200":
+          description: "always `{\"status\":\"ok\"}`; individual line items that fail to persist are skipped and logged, not surfaced as an error"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { status: { type: string, const: ok } }
+        "404": { description: task not found }
+
+  /api/daemon/tasks/{taskId}/messages:
+    post:
+      operationId: daemonReportTaskMessages
+      tags: [Daemon]
+      summary: Append one or more transcript messages (text/thinking/tool_use/tool_result/error) to a task
+      description: >
+        Content, tool output and tool input are redacted for known secret
+        patterns before being sanitized and persisted. Each stored message
+        is published as `task:message` to the task's workspace.
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                messages:
+                  type: array
+                  items: { $ref: "#/components/schemas/TaskMessageInput" }
+      responses:
+        "200":
+          description: "always `{\"status\":\"ok\"}` (a no-op 200 if messages is empty)"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { status: { type: string, const: ok } }
+        "404": { description: task not found }
+        "500": { description: failed to persist a message }
+    get:
+      operationId: daemonListTaskMessages
+      tags: [Daemon]
+      summary: List a task's transcript messages
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: since
+          schema: { type: integer }
+          description: return only messages with seq greater than this value
+      responses:
+        "200":
+          description: messages, in seq order
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TaskMessage" }
+        "400": { description: invalid since parameter }
+        "404": { description: task not found }
+
+  /api/daemon/tasks/{taskId}/cancel-ack:
+    post:
+      operationId: daemonAckTaskCancelled
+      tags: [Daemon]
+      summary: Acknowledge that the daemon has finished cancelling a task (finalizes a deferred chat cancellation)
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: "always `{\"status\":\"ok\"}`"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { status: { type: string, const: ok } }
+        "404": { description: task not found }
+
+  /api/daemon/workspaces/{workspaceId}/issues/gc-check:
+    post:
+      operationId: daemonBatchIssueGcCheck
+      tags: [Daemon]
+      summary: Batch-check which issues (by id) still exist and their current status, for local cache garbage collection
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: workspaceId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [issue_ids]
+              properties:
+                issue_ids:
+                  type: array
+                  items: { type: string, format: uuid }
+                  maxItems: 500
+      responses:
+        "200":
+          description: per-id result, found or not, with status/updated_at when found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  issues:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        found: { type: boolean }
+                        status: { type: string }
+                        updated_at: { type: string, format: date-time }
+        "400": { description: invalid issue_id, or too many issue_ids in one batch }
+        "404": { description: workspace not accessible }
+
+  /api/daemon/issues/{issueId}/gc-check:
+    get:
+      operationId: daemonGetIssueGcCheck
+      tags: [Daemon]
+      summary: Single-issue existence/status check for local cache garbage collection
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the issue's workspace)
+      parameters:
+        - in: path
+          name: issueId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  updated_at: { type: string, format: date-time }
+        "404": { description: issue not found, or not accessible }
+
+  /api/daemon/chat-sessions/{sessionId}/gc-check:
+    get:
+      operationId: daemonGetChatSessionGcCheck
+      tags: [Daemon]
+      summary: Single chat-session existence/status check for local cache garbage collection
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the session's workspace)
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  updated_at: { type: string, format: date-time }
+        "404": { description: session not found, or not accessible }
+
+  /api/daemon/autopilot-runs/{runId}/gc-check:
+    get:
+      operationId: daemonGetAutopilotRunGcCheck
+      tags: [Daemon]
+      summary: Single autopilot-run existence/status check for local cache garbage collection
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the run's workspace)
+      parameters:
+        - in: path
+          name: runId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  completed_at: { type: string, format: date-time }
+        "404": { description: run not found, or not accessible }
+
+  /api/daemon/tasks/{taskId}/gc-check:
+    get:
+      operationId: daemonGetTaskGcCheck
+      tags: [Daemon]
+      summary: Single task existence/status check for local cache garbage collection
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the task's workspace)
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  completed_at: { type: string, format: date-time }
+        "404": { description: task not found }
+
+  /api/daemon/runtimes/{runtimeId}/recover-orphans:
+    post:
+      operationId: daemonRecoverOrphanedTasks
+      tags: [Daemon]
+      summary: Recover tasks left stuck (dispatched/running) on a runtime that just reconnected, requeuing or failing them
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: runtimeId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: counts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orphaned: { type: integer }
+                  retried: { type: integer }
+        "404": { description: runtime not found }
+
+  /api/daemon/tasks/{taskId}/session:
+    post:
+      operationId: daemonPinTaskSession
+      tags: [Daemon]
+      summary: Record the underlying agent-runtime session id and/or work directory for a task (for later resume)
+      security: [{ daemonAuth: [] }]
+      x-roles: workspace-member (or daemon-token bound to the workspace)
+      parameters:
+        - in: path
+          name: taskId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                session_id: { type: string }
+                work_dir: { type: string }
+      responses:
+        "204": { description: recorded }
+        "400": { description: neither session_id nor work_dir given }
+        "404": { description: task not found }
+
+  # ---------------------------------------------------------------------
+  # Attachments
+  # ---------------------------------------------------------------------
+  /api/attachments/{id}/download:
+    get:
+      operationId: attachmentsDownloadById
+      tags: [Attachments]
+      summary: Download (or redirect to) an attachment's file
+      description: >
+        Auth is either a normal session (cookie/PAT/JWT — workspace
+        membership on the attachment's workspace is checked and cached), or
+        a short-lived signed `?token=` download ticket minted by the API
+        (e.g. embedded in a markdown link) that is scoped to this exact
+        attachment id and a specific user. Depending on server config and
+        storage backend, responds with a CloudFront-signed redirect, a
+        presigned object-store URL redirect, or streams the file itself
+        (with HTTP Range support).
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+        - attachmentDownloadTicket: []
+      x-roles: workspace-member (the attachment's workspace), or a valid download ticket for this attachment
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: query
+          name: token
+          schema: { type: string }
+          description: signed attachment-download ticket (alternative to a session)
+        - in: header
+          name: Range
+          schema: { type: string }
+      responses:
+        "200":
+          description: file bytes (proxy mode)
+          content:
+            "*/*": { schema: { type: string, format: binary } }
+        "206":
+          description: partial content (Range request, proxy mode)
+        "302":
+          description: redirect to a signed CloudFront/object-store URL
+        "401":
+          description: not authenticated, or download ticket invalid/expired/for a different attachment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: attachment not found, not a member of its workspace, or storage object missing
+        "416":
+          description: requested Range not satisfiable
+        "503":
+          description: storage backend not configured
+
+  /uploads/{key}:
+    get:
+      operationId: attachmentsServeLocalUpload
+      tags: [Attachments]
+      summary: Serve a file directly from local disk storage
+      description: >
+        Only mounted when the server is configured with the local (non-S3)
+        storage backend; otherwise this path does not exist (404). Intended
+        for self-hosted/dev setups without an object store.
+      x-roles: public (any URL holder — local storage keys are not access-controlled beyond obscurity)
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema: { type: string }
+          description: "storage key, e.g. workspaces/{workspaceId}/{file}"
+      responses:
+        "200":
+          description: file bytes
+          content:
+            "*/*": { schema: { type: string, format: binary } }
+        "404":
+          description: not found (or local storage backend not active)
+
+  # ---------------------------------------------------------------------
+  # Me / account
+  # ---------------------------------------------------------------------
+  /api/me:
+    get:
+      operationId: meGetProfile
+      tags: [Me]
+      summary: Get the caller's own user profile
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      x-roles: any-authenticated
+      x-rate-limit: "600/min per user (RATE_LIMIT_API)"
+      responses:
+        "200":
+          description: profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+    patch:
+      operationId: meUpdateProfile
+      tags: [Me]
+      summary: Update the caller's own profile fields
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      x-roles: any-authenticated
+      x-rate-limit: "600/min per user (RATE_LIMIT_API)"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                avatar_url: { type: string }
+                language: { type: string, enum: [en, "zh-Hans", ko, ja, ru] }
+                profile_description: { type: string, maxLength: 2000 }
+                timezone: { type: string, description: "IANA timezone name, validated server-side" }
+      responses:
+        "200":
+          description: updated profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /api/me/onboarding:
+    patch:
+      operationId: meUpdateOnboardingQuestionnaire
+      tags: [Me]
+      summary: Patch the caller's onboarding questionnaire answers
+      description: >
+        First non-empty questionnaire write of a session emits an
+        onboarding-started analytics event; a write that completes the
+        (versioned) questionnaire emits a submitted event.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      x-roles: any-authenticated
+      x-rate-limit: "600/min per user (RATE_LIMIT_API)"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                questionnaire: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: updated profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+
+  /api/me/onboarding/complete:
+    post:
+      operationId: meCompleteOnboarding
+      tags: [Me]
+      summary: Mark onboarding complete for the caller
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      x-roles: any-authenticated
+      x-rate-limit: "600/min per user (RATE_LIMIT_API)"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                completion_path: { type: string, description: "e.g. full, runtime_skipped, cloud_waitlist, skip_existing, invite_accept" }
+                workspace_id: { type: string, format: uuid }
+      responses:
+        "200":
+          description: updated profile (onboarded_at set)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /api/me/onboarding/cloud-waitlist:
+    post:
+      operationId: meJoinCloudWaitlist
+      tags: [Me]
+      summary: Join the managed-cloud waitlist
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      x-roles: any-authenticated
+      x-rate-limit: "600/min per user (RATE_LIMIT_API)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+                reason: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: updated profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /api/me/export:
+    get:
+      operationId: meExportMyData
+      tags: [Me]
+      summary: Download a GDPR-style export of the caller's own data as a .tar.gz
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      x-roles: any-authenticated-human
+      x-rate-limit: "3/hour per user (RATE_LIMIT_EXPORT)"
+      responses:
+        "200":
+          description: gzip tarball, streamed
+          content:
+            application/gzip: { schema: { type: string, format: binary } }
+        "401": { description: not authenticated }
+        "403": { $ref: "#/components/responses/HumanOnly" }
+
+  /api/me/onboarding/runtime-bootstrap:
+    post:
+      operationId: meBootstrapOnboardingWithRuntime
+      tags: [Me]
+      summary: "Legacy: create the built-in onboarding assistant + starter issue on a chosen runtime"
+      description: >
+        Kept only for older desktop-client builds; current clients create
+        the helper agent and starter issue through the normal
+        create-agent/create-issue endpoints instead. Behavior is frozen.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      x-roles: workspace-member
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workspace_id, runtime_id]
+              properties:
+                workspace_id: { type: string, format: uuid }
+                runtime_id: { type: string, format: uuid }
+                starter_prompt: { type: string, maxLength: 2048 }
+      responses:
+        "200":
+          description: created/found assistant agent and starter issue
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspace_id: { type: string, format: uuid }
+                  agent_id: { type: string, format: uuid }
+                  issue_id: { type: string, format: uuid }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403":
+          description: not a workspace member, or runtime is private to another owner
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/me/onboarding/no-runtime-bootstrap:
+    post:
+      operationId: meBootstrapOnboardingWithoutRuntime
+      tags: [Me]
+      summary: "Legacy: create a starter issue guiding the user to connect a runtime"
+      description: Same legacy status as runtime-bootstrap above.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      x-roles: workspace-member
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workspace_id]
+              properties:
+                workspace_id: { type: string, format: uuid }
+      responses:
+        "200":
+          description: created/found starter issue
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspace_id: { type: string, format: uuid }
+                  issue_id: { type: string, format: uuid }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403":
+          description: not a workspace member
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/cli-token:
+    post:
+      operationId: meIssueCliToken
+      tags: [Me]
+      summary: Issue a fresh session JWT for CLI use (creates a new session row)
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      x-roles: any-authenticated-human
+      x-rate-limit: "600/min per user (RATE_LIMIT_API); 20/hour per user (RATE_LIMIT_TOKEN)"
+      responses:
+        "200":
+          description: token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { token: { type: string } }
+        "403": { $ref: "#/components/responses/HumanOnly" }
+
+  /api/upload-file:
+    post:
+      operationId: meUploadFile
+      tags: [Me]
+      summary: Upload a file (issue/comment/chat attachment, or a bare user upload)
+      description: >
+        Stored under `workspaces/{workspace_id}/...` when a workspace can be
+        resolved from `X-Workspace-Slug`/`X-Workspace-ID`/query params (and
+        the caller is a member), otherwise under `users/{user_id}/...`.
+        Content type is sniffed and normalized by extension.
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      x-roles: any-authenticated (workspace-member if a workspace context is supplied)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                issue_id: { type: string, format: uuid }
+                comment_id: { type: string, format: uuid }
+                chat_session_id: { type: string, format: uuid }
+                chat_message_id: { type: string, format: uuid }
+      responses:
+        "200":
+          description: stored attachment metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Attachment" }
+        "400":
+          description: missing file field, or file too large/invalid multipart form (100 MiB cap)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: workspace context given but caller is not a member
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: no storage backend configured
+
+  /api/feedback:
+    post:
+      operationId: meCreateFeedback
+      tags: [Me]
+      summary: Submit free-text in-app feedback
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      x-roles: any-authenticated
+      x-rate-limit: "600/min per user (RATE_LIMIT_API); 10/hour per user, server-side count check"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message: { type: string, maxLength: 10000 }
+                url: { type: string }
+                kind: { type: string, description: "defaults to general" }
+                workspace_id: { type: string, format: uuid }
+      responses:
+        "201":
+          description: recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  created_at: { type: string, format: date-time }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "429":
+          description: too many feedback submissions this hour
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/client-usage:
+    post:
+      operationId: meUpsertClientUsage
+      tags: [Me]
+      summary: Record a daily client-usage heartbeat (web/desktop) and, for desktop, an optional local-runtime probe result
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      x-roles: any-authenticated-human
+      x-rate-limit: "600/min per user (RATE_LIMIT_API)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [install_id]
+              properties:
+                install_id: { type: string, format: uuid }
+                runtime:
+                  type: object
+                  description: desktop-only; rejected for web clients
+                  required: [probe_result]
+                  properties:
+                    probe_result: { type: string, enum: [success, error] }
+                    runtime_count: { type: integer, minimum: 0, maximum: 1000 }
+                    provider_summary:
+                      type: object
+                      additionalProperties: { type: integer }
+                      maxProperties: 32
+                    online_count: { type: integer, minimum: 0 }
+                    offline_count: { type: integer, minimum: 0 }
+      responses:
+        "204": { description: recorded }
+        "400":
+          description: >
+            invalid body (unknown fields rejected), invalid client
+            platform/version, runtime data sent by a non-desktop client, or
+            inconsistent runtime counts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: workspace context given but caller is not a member
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /api/workspace-templates:
+    get:
+      operationId: workspaceTemplatesList
+      tags: [Me]
+      summary: List the workspace templates enabled on this server (used at workspace-creation time)
+      description: Names/descriptions are localized to the caller's language (Accept-Language, falling back to the user's stored language, then en/ru).
+      security: [{ cookieAuth: [] }, { bearerAuth: [] }]
+      x-roles: any-authenticated
+      responses:
+        "200":
+          description: templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WorkspaceTemplateSummary" }
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: goosar_auth
+      description: >
+        HttpOnly session cookie holding an HS256 session JWT (claims: sub,
+        email, name, tv, sid, iat, exp). Any state-changing request
+        authenticated by this cookie must also send `X-CSRF-Token` (see
+        `goosar_csrf`, a matching non-HttpOnly cookie) — this is enforced in
+        the generic `Auth` middleware, not per endpoint.
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: >
+        `Authorization: Bearer <token>`. Token shape decides how it's
+        verified: `gsl_...` = personal access token (PAT, hash-looked-up,
+        cached); `gsln_...` = cloud PAT, verified against the cloud fleet;
+        `mat_...` = short-lived agent task token bound to one task
+        (issued by task-claim endpoints); anything else is parsed as an
+        HS256 session JWT (same claims as the cookie).
+    daemonAuth:
+      type: http
+      scheme: bearer
+      description: >
+        `Authorization: Bearer <token>`, required on every `/api/daemon/**`
+        route. Accepts, in this order: `mdt_...` daemon token (workspace
+        + daemon id baked in, hash-looked-up/cached); `gsln_...` cloud PAT;
+        `gsl_...` PAT; otherwise an HS256 session JWT. Whichever path is
+        used, the request ends up with an `X-User-ID` (human paths) or a
+        daemon workspace/daemon-id context (daemon-token path) that
+        downstream handlers use for workspace-scoping checks.
+    webhookToken:
+      type: apiKey
+      in: path
+      name: token
+      description: opaque per-Autopilot-trigger secret (`awt_...`), the only credential for that inbound webhook URL.
+    githubWebhookSignature:
+      type: apiKey
+      in: header
+      name: X-Hub-Signature-256
+      description: "HMAC-SHA256 of the raw body, keyed with GITHUB_WEBHOOK_SECRET, as `sha256=<hex>`."
+    vcsWebhookSignature:
+      type: apiKey
+      in: header
+      name: X-Hub-Signature-256
+      description: provider-specific signature verified against the VCS connection's own encrypted-at-rest webhook secret.
+    stripeWebhookSignature:
+      type: apiKey
+      in: header
+      name: Stripe-Signature
+      description: verified by the upstream cloud-runtime billing service, not by this server directly.
+    attachmentDownloadTicket:
+      type: apiKey
+      in: query
+      name: token
+      description: short-lived HMAC-signed ticket scoped to one attachment id and one user id (see AttachmentDownloadAuth).
+
+  parameters:
+    WorkspaceSlugHeader:
+      name: X-Workspace-Slug
+      in: header
+      required: false
+      schema: { type: string }
+      description: >
+        Preferred way to select the active workspace on endpoints that need
+        one but don't take it in the path. Resolution order (first present
+        wins): `X-Actor-Source: task_token` → the token's bound
+        `X-Workspace-ID` (client-supplied slug/id headers are ignored in
+        that case); else `X-Workspace-Slug` header; else `workspace_slug`
+        query param; else `X-Workspace-ID` header; else `workspace_id`
+        query param.
+    WorkspaceIdHeader:
+      name: X-Workspace-ID
+      in: header
+      required: false
+      schema: { type: string, format: uuid }
+      description: Fallback workspace selector, used when no slug is given (see WorkspaceSlugHeader for the full resolution order).
+
+  responses:
+    BadRequest:
+      description: malformed or invalid request body/parameters
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    HumanOnly:
+      description: this endpoint is only available to human actors (rejected for task-token and cloud-PAT-derived agent/service callers)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    DaemonTooOld:
+      description: >
+        the daemon's reported CLI version (X-Client-Version) is older than
+        the server's configured minimum; body includes `min_daemon_version`
+        and `daemon_version`. Header `X-Min-Daemon-Version` is also set.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error: { type: string }
+              code: { type: string, const: daemon_too_old }
+              min_daemon_version: { type: string }
+              daemon_version: { type: string }
+
+  schemas:
+    # ---- common, shared across all parts of the contract ----
+    Error:
+      type: object
+      description: uniform error body written by writeError/writeErrorCode/writeRateLimited across the whole API.
+      required: [error]
+      properties:
+        error: { type: string, description: human-readable message }
+        code: { type: string, description: "stable machine-readable code, present on most 4xx (e.g. invalid_or_expired_code, rate_limited, daemon_too_old); absent on some generic 4xx/5xx" }
+        request_id: { type: string, description: echoes X-Request-ID when the server had already set one }
+
+    User:
+      type: object
+      description: the caller's own account (packages/core/types User, server UserResponse).
+      required: [id, name, email, avatar_url, onboarded_at, onboarding_questionnaire, starter_content_state, language, profile_description, timezone, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        avatar_url: { type: ["string", "null"] }
+        language: { type: ["string", "null"], enum: [en, "zh-Hans", ko, ja, ru, null] }
+        timezone: { type: ["string", "null"] }
+        onboarded_at: { type: ["string", "null"], format: date-time }
+        onboarding_questionnaire: { type: object, additionalProperties: true }
+        starter_content_state: { type: ["string", "null"] }
+        profile_description: { type: string, maxLength: 2000 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    Workspace:
+      type: object
+      description: packages/core/types Workspace. Full CRUD lives outside part A; included here only as the shared shape.
+      required: [id, name, slug, description, context, settings, repos, issue_prefix, avatar_url, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: ["string", "null"] }
+        context: { type: ["string", "null"] }
+        settings: { type: object, additionalProperties: true }
+        repos:
+          type: array
+          items: { $ref: "#/components/schemas/WorkspaceRepo" }
+        issue_prefix: { type: string }
+        avatar_url: { type: ["string", "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    Member:
+      type: object
+      description: packages/core/types Member — a bare workspace membership row (see MemberWithUser in other parts for the joined form).
+      required: [id, workspace_id, user_id, role, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        role: { type: string, enum: [owner, admin, member] }
+        created_at: { type: string, format: date-time }
+        perimeter_access: { type: boolean }
+
+    WorkspaceRepo:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string }
+        description: { type: string }
+
+    ReadinessResponse:
+      type: object
+      required: [status, checks]
+      properties:
+        status: { type: string, enum: [ok, not_ready] }
+        checks:
+          type: object
+          properties:
+            db: { type: string, enum: [ok, error] }
+            migrations: { type: string, enum: [ok, out_of_date, error, unknown] }
+
+    LoginResult:
+      type: object
+      description: >
+        Returned by every login-completing endpoint. Either `token` + `user`
+        are set (session started; cookies are also set on this response),
+        or `mfa_required` is true and `mfa_token` must be exchanged at
+        POST /api/auth/mfa/verify.
+      properties:
+        token: { type: string }
+        user: { $ref: "#/components/schemas/User" }
+        mfa_required: { type: boolean }
+        mfa_token: { type: string }
+        mfa_enrollment_required:
+          type: boolean
+          description: the org's MFA policy requires this user to enroll a second factor soon (informational; does not block the session).
+
+    MFAVerifyRequest:
+      type: object
+      required: [mfa_token]
+      properties:
+        mfa_token: { type: string }
+        code: { type: string, description: "6-digit TOTP code (mutually exclusive with recovery_code)" }
+        recovery_code: { type: string }
+
+    AuthMethodsResponse:
+      type: object
+      required: [methods]
+      properties:
+        methods:
+          type: array
+          items: { type: string, enum: [email, oidc, ldap] }
+        oidc_display_name: { type: string }
+        ldap_display_name: { type: string }
+
+    MFAStatusResponse:
+      type: object
+      required: [enabled, pending_enrollment, enabled_at, recovery_codes_remaining, required, available]
+      properties:
+        enabled: { type: boolean }
+        pending_enrollment: { type: boolean }
+        enabled_at: { type: ["string", "null"], format: date-time }
+        recovery_codes_remaining: { type: integer }
+        required: { type: boolean, description: server MFA policy requires this user to enroll }
+        available: { type: boolean, description: GOOSAR_MCP_SECRET_KEY is configured, so MFA secrets can actually be stored }
+
+    MFAEnrollResponse:
+      type: object
+      required: [secret, otpauth_uri, issuer, account, digits, period_seconds, algorithm]
+      properties:
+        secret: { type: string, description: base32-encoded TOTP secret }
+        otpauth_uri: { type: string }
+        issuer: { type: string }
+        account: { type: string }
+        digits: { type: integer, const: 6 }
+        period_seconds: { type: integer, const: 30 }
+        algorithm: { type: string, const: SHA1 }
+
+    MFACodeRequest:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string }
+
+    MFAConfirmResponse:
+      type: object
+      required: [enabled, recovery_codes]
+      properties:
+        enabled: { type: boolean, const: true }
+        recovery_codes:
+          type: array
+          items: { type: string }
+          description: 10 one-time codes, shown only in this response.
+
+    SessionResponse:
+      type: object
+      required: [id, user_agent, created_at, last_seen_at, current]
+      properties:
+        id: { type: string, format: uuid }
+        user_agent: { type: string }
+        created_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
+        current: { type: boolean }
+
+    AppConfig:
+      type: object
+      properties:
+        cdn_domain: { type: string }
+        cdn_signed: { type: boolean }
+        allow_signup: { type: boolean }
+        workspace_creation_disabled: { type: boolean }
+        daemon_server_url: { type: string }
+        daemon_app_url: { type: string }
+        vcs_integration_available: { type: boolean }
+        posthog_key: { type: string }
+        posthog_host: { type: string }
+        analytics_environment: { type: string }
+        feature_flags: { type: object, additionalProperties: { type: boolean } }
+        server_version: { type: string }
+        delivery_profile: { type: string }
+        skill_sources: { type: array, items: { type: string } }
+        allowed_providers: { type: array, items: { type: string } }
+        external_images: { type: string, enum: [block, allowlist] }
+        email_transport: { type: string }
+        min_daemon_version: { type: string }
+        image_hosts: { type: array, items: { type: string } }
+        deployment_hosts: { type: object, additionalProperties: { type: string } }
+
+    ContactSalesRequest:
+      type: object
+      required: [first_name, last_name, business_email, company_name, company_size, country_region, use_case]
+      properties:
+        first_name: { type: string, maxLength: 80 }
+        last_name: { type: string, maxLength: 80 }
+        business_email: { type: string, format: email, maxLength: 254, description: must not be a free-mail domain (gmail.com, outlook.com, ...)" }
+        company_name: { type: string, maxLength: 200 }
+        company_size: { type: string, enum: ["1-10", "11-50", "51-200", "201-500", "501-1000", "1000+"] }
+        country_region: { type: string, maxLength: 80 }
+        use_case: { type: string, enum: [evaluate, adopt_team, self_host, integrate, partner, other] }
+        goals: { type: string, maxLength: 2000 }
+        source: { type: string }
+        consent_outreach: { type: boolean }
+        consent_updates: { type: boolean }
+
+    ContactSalesResponse:
+      type: object
+      required: [id, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+
+    DaemonRegisterRequest:
+      type: object
+      required: [daemon_id, workspace_id]
+      description: at least one of runtimes/failed_profiles must be non-empty.
+      properties:
+        workspace_id: { type: string, format: uuid }
+        daemon_id: { type: string }
+        legacy_daemon_ids: { type: array, items: { type: string } }
+        device_name: { type: string }
+        cli_version: { type: string }
+        launched_by: { type: string }
+        runtimes:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              type: { type: string, description: "provider, e.g. claude, codex, cursor" }
+              version: { type: string }
+              status: { type: string, enum: [online, offline] }
+              profile_id: { type: string, format: uuid, description: set only for a custom runtime profile }
+        failed_profiles:
+          type: array
+          items:
+            type: object
+            properties:
+              profile_id: { type: string, format: uuid }
+              command_name: { type: string }
+              reason: { type: string }
+
+    AgentRuntime:
+      type: object
+      required: [id, workspace_id, name, runtime_mode, provider, status, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        daemon_id: { type: ["string", "null"] }
+        name: { type: string }
+        custom_name: { type: ["string", "null"] }
+        runtime_mode: { type: string }
+        provider: { type: string }
+        launch_header: { type: string }
+        status: { type: string, enum: [online, offline] }
+        device_info: { type: string }
+        metadata: { type: object, additionalProperties: true }
+        owner_id: { type: ["string", "null"], format: uuid }
+        visibility: { type: string }
+        profile_id: { type: ["string", "null"], format: uuid }
+        last_seen_at: { type: ["string", "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    DaemonWorkspace:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+
+    DaemonWorkspaceRepos:
+      type: object
+      required: [workspace_id, repos, repos_version]
+      properties:
+        workspace_id: { type: string, format: uuid }
+        repos:
+          type: array
+          items: { $ref: "#/components/schemas/WorkspaceRepo" }
+        repos_version: { type: string, description: sha256 over the sorted repo URLs, used by daemons to detect changes cheaply }
+        settings: { type: object, additionalProperties: true }
+
+    RuntimeProfile:
+      type: object
+      required: [id, workspace_id, display_name, protocol_family, command_name, fixed_args, visibility, enabled, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        display_name: { type: string }
+        protocol_family: { type: string }
+        command_name: { type: string }
+        description: { type: ["string", "null"] }
+        fixed_args: { type: array, items: { type: string } }
+        visibility: { type: string }
+        created_by: { type: ["string", "null"], format: uuid }
+        enabled: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    DaemonHeartbeatAck:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [ok, runtime_gone] }
+        pending_update:
+          type: object
+          properties:
+            id: { type: string }
+            target_version: { type: string }
+        pending_model_list:
+          type: object
+          additionalProperties: true
+        pending_local_skills:
+          type: object
+          additionalProperties: true
+        pending_local_skill_import:
+          type: object
+          additionalProperties: true
+        pending_local_skill_imports:
+          type: array
+          items: { type: object, additionalProperties: true }
+
+    ModelEntry:
+      type: object
+      required: [id, label]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        default: { type: boolean }
+        thinking: { type: object, additionalProperties: true }
+        service_tiers:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string }
+
+    RuntimeLocalSkillSummary:
+      type: object
+      required: [key, name, source_path, provider, file_count]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        description: { type: string }
+        source_path: { type: string }
+        provider: { type: string }
+        root: { type: string }
+        plugin: { type: string }
+        can_disable: { type: boolean }
+        file_count: { type: integer }
+
+    AgentSkillBundle:
+      type: object
+      description: skill content resolved for a task about to run; Content/Files[].Content are base64 only when content_encoding=base64 was requested.
+      properties:
+        id: { type: string }
+        source: { type: string }
+        content: { type: string }
+        files:
+          type: array
+          items:
+            type: object
+            properties:
+              path: { type: string }
+              content: { type: string }
+
+    TaskUsageEntry:
+      type: object
+      required: [model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, cost_usd_ticks]
+      properties:
+        provider: { type: string, description: "defaults to the task's runtime provider when omitted" }
+        model: { type: string }
+        input_tokens: { type: integer }
+        output_tokens: { type: integer }
+        cache_read_tokens: { type: integer }
+        cache_write_tokens: { type: integer }
+        cost_usd_ticks: { type: integer, description: "cost in 1/10000 USD ticks; <=0 means \"not authoritative\" server-side" }
+
+    TaskMessageInput:
+      type: object
+      required: [seq, type]
+      properties:
+        seq: { type: integer }
+        type: { type: string, enum: [text, thinking, tool_use, tool_result, error] }
+        tool: { type: string }
+        content: { type: string }
+        input: { type: object, additionalProperties: true }
+        output: { type: string }
+
+    TaskMessage:
+      allOf:
+        - $ref: "#/components/schemas/TaskMessageInput"
+        - type: object
+          required: [task_id, created_at]
+          properties:
+            task_id: { type: string, format: uuid }
+            issue_id: { type: string, format: uuid }
+            chat_session_id: { type: string, format: uuid }
+            created_at: { type: string, format: date-time }
+
+    Attachment:
+      type: object
+      required: [id, workspace_id, uploader_type, uploader_id, filename, url, download_url, markdown_url, content_type, size_bytes, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        issue_id: { type: ["string", "null"], format: uuid }
+        comment_id: { type: ["string", "null"], format: uuid }
+        chat_session_id: { type: ["string", "null"], format: uuid }
+        chat_message_id: { type: ["string", "null"], format: uuid }
+        uploader_type: { type: string, enum: [member, agent, system] }
+        uploader_id: { type: string, format: uuid }
+        filename: { type: string }
+        url: { type: string, description: internal storage URL }
+        download_url: { type: string, description: "path or signed URL to fetch the file, e.g. /api/attachments/{id}/download" }
+        markdown_url: { type: string }
+        download_ticket_url: { type: string }
+        content_type: { type: string }
+        size_bytes: { type: integer }
+        created_at: { type: string, format: date-time }
+
+    WorkspaceTemplateSummary:
+      type: object
+      required: [key, name, description]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        description: { type: string }
+
+    AgentTask:
+      type: object
+      description: >
+        The full task-queue row as handed to a daemon on claim/status-report
+        round trips (server internal name AgentTaskResponse). It is a large,
+        evolving object; only the fields a clean-room reimplementation must
+        rely on for control flow are required below — treat unlisted
+        properties as present-when-relevant and forward-compatible
+        (additionalProperties: true).
+      additionalProperties: true
+      required: [id, agent_id, runtime_id, issue_id, workspace_id, status, priority, attempt, max_attempts, created_at, delivered_comment_ids, kind]
+      properties:
+        id: { type: string, format: uuid }
+        agent_id: { type: string, format: uuid }
+        runtime_id: { type: string, format: uuid }
+        issue_id: { type: string, format: uuid, description: empty string when the task is not issue-backed (e.g. a chat task) }
+        workspace_id: { type: string, format: uuid }
+        status: { type: string, enum: [queued, dispatched, waiting_local_directory, running, completed, failed, cancelled] }
+        priority: { type: integer }
+        dispatched_at: { type: ["string", "null"], format: date-time }
+        started_at: { type: ["string", "null"], format: date-time }
+        completed_at: { type: ["string", "null"], format: date-time }
+        result: {}
+        error: { type: ["string", "null"] }
+        failure_reason: { type: string }
+        attempt: { type: integer }
+        max_attempts: { type: integer }
+        parent_task_id: { type: string, format: uuid }
+        is_leader_task: { type: boolean }
+        kind: { type: string, description: "e.g. issue, chat, autopilot, quick_create" }
+        chat_session_id: { type: string, format: uuid }
+        autopilot_run_id: { type: string, format: uuid }
+        auth_token: { type: string, description: "short-lived mat_... agent task token, present only in the claim response" }
+        delivered_comment_ids: { type: array, items: { type: string, format: uuid } }
+        prior_session_id: { type: string }
+        work_dir: { type: string }
+        created_at: { type: string, format: date-time }
+
+security:
+  - cookieAuth: []
+  - bearerAuth: []
+  - {}
