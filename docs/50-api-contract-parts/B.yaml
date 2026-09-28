@@ -1,0 +1,3730 @@
+openapi: 3.1.0
+info:
+  title: Goosar API — часть B (рабочие пространства, интеграции, деплой-администрирование)
+  version: "1.0.0"
+  description: >
+    Фрагмент контракта. Покрывает /api/workspaces/**, /api/slack/binding/redeem,
+    /api/integrations/composio/**, /api/invitations/** (личные), /api/tokens/**,
+    /api/cloud-billing/**, /api/deployment/**, /api/assignee-frequency, /api/status,
+    /api/provisioning/**, /api/workspace-config/**, /api/workspace-mcp-servers/**,
+    /api/deployment-mcp-servers/**, /api/deployment-policy, /api/effective-config,
+    /api/llm/health. Общие схемы (Error, User, Workspace, Member) и security schemes
+    определяются в другом фрагменте контракта и здесь только referenced.
+
+paths:
+  # ===========================================================================
+  # /api/workspaces/**
+  # ===========================================================================
+  /api/workspaces:
+    get:
+      operationId: listWorkspaces
+      tags: [Workspaces]
+      summary: Список рабочих пространств текущего пользователя
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      responses:
+        "200":
+          description: Список пространств, где вызывающий состоит участником
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/WorkspaceItem'}
+        "401": {$ref: '#/components/responses/Unauthorized'}
+    post:
+      operationId: createWorkspace
+      tags: [Workspaces]
+      summary: Создать рабочее пространство
+      description: >
+        Требует человека-инициатора (не задача-агент и не облачный PAT), кроме случая,
+        когда создание пространств для обычных пользователей отключено настройкой
+        деплоя — тогда создать пространство в обход отключения может только
+        deployment-admin (это действие пишется в admin-аудит отдельным событием
+        обхода до валидации тела запроса).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateWorkspaceRequest'}
+      responses:
+        "201":
+          description: Пространство создано, вызывающий стал его владельцем (owner)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceItem'}
+        "400": {$ref: '#/components/responses/BadRequest'}
+        "403":
+          description: >
+            Создание пространств отключено для обычных пользователей на этом
+            деплое (code=workspace_creation_disabled), либо инициатор не человек
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "409":
+          description: slug уже занят (code=workspace_slug_taken)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/workspaces/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      operationId: getWorkspace
+      tags: [Workspaces]
+      summary: Получить рабочее пространство по id
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceItem'}
+        "403": {$ref: '#/components/responses/Forbidden'}
+        "404": {$ref: '#/components/responses/NotFound'}
+    put:
+      operationId: replaceWorkspace
+      tags: [Workspaces]
+      summary: Заменить редактируемые поля пространства (полная форма)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateWorkspaceRequest'}
+      responses:
+        "200":
+          description: >
+            Обновлено. Публикует realtime-событие workspace.updated в канал
+            пространства; если менялось имя — дополнительно уведомляет фоновые
+            десктоп-раннеры всех участников о смене списка пространств
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceItem'}
+        "400": {$ref: '#/components/responses/BadRequest'}
+        "403": {$ref: '#/components/responses/Forbidden'}
+    patch:
+      operationId: updateWorkspace
+      tags: [Workspaces]
+      summary: Частично обновить пространство (то же поведение, что PUT)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateWorkspaceRequest'}
+      responses:
+        "200":
+          description: Обновлено (см. побочные эффекты PUT)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceItem'}
+        "400": {$ref: '#/components/responses/BadRequest'}
+        "403": {$ref: '#/components/responses/Forbidden'}
+    delete:
+      operationId: deleteWorkspace
+      tags: [Workspaces]
+      summary: Удалить рабочее пространство целиком
+      description: >
+        Необратимо удаляет пространство и каскадно связанные записи (в т.ч.
+        чат-сессии и закреплённых агентов чата) в одной транзакции с построчной
+        блокировкой. Публикует workspace.deleted и уведомляет десктоп-раннеры
+        всех бывших участников.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner]
+      responses:
+        "204": {description: Удалено}
+        "403": {$ref: '#/components/responses/Forbidden'}
+
+  /api/workspaces/{id}/capabilities:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: getWorkspaceCapabilities
+      tags: [Workspaces]
+      summary: Витрина возможностей и примеров задач для шаблона роли пространства
+      description: >
+        Если у пространства нет привязанного шаблона роли (template_key) или он
+        отключён — возвращает пустой набор с кодом 200, а не ошибку. Тексты
+        локализуются по заголовку Accept-Language и языку пользователя.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceCapabilities'}
+
+  /api/workspaces/{id}/members:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: listWorkspaceMembersWithUser
+      tags: [Workspaces]
+      summary: Список участников пространства с данными пользователя
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/WorkspaceMemberWithUser'}
+    post:
+      operationId: inviteWorkspaceMember
+      tags: [Workspaces]
+      summary: Пригласить пользователя по email в пространство
+      description: >
+        Роль owner в приглашении запрещена (только member/admin). Если у email
+        уже есть неистёкшее pending-приглашение в это пространство — 409; если
+        человек уже участник — 409. При наличии почтового сервиса отправляет
+        письмо-приглашение асинхронно (ошибка отправки только логируется, ответ
+        API не меняется). Публикует invitation.created в канал пространства.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/InviteWorkspaceMemberRequest'}
+      responses:
+        "201":
+          description: Приглашение создано (статус pending)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceInvitation'}
+        "400": {$ref: '#/components/responses/BadRequest'}
+        "409":
+          description: >
+            code=already_member — приглашаемый уже участник; либо
+            code=invitation_already_pending — уже есть активное приглашение
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/workspaces/{id}/members/{memberId}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: memberId, in: path, required: true, schema: {type: string, format: uuid}}
+    patch:
+      operationId: updateWorkspaceMember
+      tags: [Workspaces]
+      summary: Изменить роль и/или доступ к периметру участника
+      description: >
+        Нужно передать хотя бы одно из полей role/perimeter_access. Понижение
+        или назначение роли owner, а также любое изменение участника с ролью
+        owner, разрешено только вызывающему с ролью owner. Нельзя понизить
+        последнего owner (в пространстве должен остаться хотя бы один).
+        Инвалидирует кэш членства и публикует member.updated.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateWorkspaceMemberRequest'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceMemberWithUser'}
+        "400":
+          description: role/perimeter_access отсутствуют, роль невалидна, либо
+            нарушено правило «минимум один owner»
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "403": {$ref: '#/components/responses/Forbidden'}
+        "404": {$ref: '#/components/responses/NotFound'}
+    delete:
+      operationId: removeWorkspaceMember
+      tags: [Workspaces]
+      summary: Удалить участника из пространства
+      description: >
+        Удаление участника с ролью owner разрешено только другому owner и
+        только если после удаления останется хотя бы один owner. Отзывает все
+        живые сессии/токены удаляемого в этом пространстве, закрывает его
+        реалтайм-подключения, публикует member.removed и уведомляет десктоп-
+        раннеры удалённого пользователя об изменении списка пространств.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      responses:
+        "204": {description: Удалено}
+        "400":
+          description: нарушено правило «минимум один owner»
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "403": {$ref: '#/components/responses/Forbidden'}
+        "404": {$ref: '#/components/responses/NotFound'}
+
+  /api/workspaces/{id}/leave:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: leaveWorkspace
+      tags: [Workspaces]
+      summary: Выйти из пространства самому
+      description: >
+        Owner не может выйти, если он последний owner. Побочные эффекты — как
+        у удаления участника (отзыв доступа, member.removed, уведомление
+        десктоп-раннеров).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      responses:
+        "204": {description: Вышел из пространства}
+        "400":
+          description: вызывающий — последний owner
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/workspaces/{id}/invitations:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: listWorkspaceInvitations
+      tags: [Workspaces]
+      summary: Список ожидающих приглашений пространства
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/WorkspaceInvitation'}
+
+  /api/workspaces/{id}/invitations/{invitationId}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: invitationId, in: path, required: true, schema: {type: string, format: uuid}}
+    delete:
+      operationId: revokeWorkspaceInvitation
+      tags: [Workspaces]
+      summary: Отозвать ожидающее приглашение
+      description: Публикует invitation.revoked. 404, если приглашение не найдено,
+        принадлежит другому пространству, или уже не в статусе pending.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      responses:
+        "204": {description: Отозвано}
+        "404":
+          description: code=invitation_not_found
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/workspaces/{id}/github/installations:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: listWorkspaceGitHubInstallations
+      tags: [Workspaces, Integrations]
+      summary: Список установок GitHub App у пространства
+      description: >
+        Поле installation_id виден только owner/admin (для остальных участников
+        маскируется в null). can_manage в ответе отражает это.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GitHubInstallationsResponse'}
+
+  /api/workspaces/{id}/github/connect:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: getGitHubConnectUrl
+      tags: [Workspaces, Integrations]
+      summary: Получить URL установки GitHub App для этого пространства
+      description: >
+        Если GitHub-интеграция не настроена на деплое (нет app slug/webhook
+        secret) — возвращает configured:false и пустой url вместо ошибки.
+        Параметр return_to (github|repositories) кодируется в подписанный
+        state-токен, который сверяется при обратном редиректе.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      parameters:
+        - name: return_to
+          in: query
+          required: false
+          schema: {type: string, enum: [github, repositories]}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GitHubConnectResponse'}
+        "400":
+          description: return_to не входит в допустимый список
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/workspaces/{id}/github/installations/{installationId}/repositories:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: installationId, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: listGitHubInstallationRepositories
+      tags: [Workspaces, Integrations]
+      summary: Список репозиториев, видимых установке GitHub App (проксирует GitHub API)
+      description: >
+        Требует отдельно настроенных учётных данных GitHub App для просмотра
+        репозиториев (иначе 503). Постранично, page/per_page.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      parameters:
+        - {name: page, in: query, schema: {type: integer, minimum: 1, maximum: 100000, default: 1}}
+        - {name: per_page, in: query, schema: {type: integer, minimum: 1, maximum: 100, default: 100}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GitHubRepositoriesResponse'}
+        "404":
+          description: установка не найдена в этом пространстве
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "502":
+          description: сбой при обращении к GitHub API
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "503":
+          description: просмотр репозиториев не настроен на деплое
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+    delete:
+      operationId: deleteGitHubInstallation
+      tags: [Workspaces, Integrations]
+      summary: Отключить установку GitHub App от пространства
+      description: Публикует github.installation.deleted.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      responses:
+        "204": {description: Удалено}
+
+  /api/workspaces/{id}/vcs/connections:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: listWorkspaceVcsConnections
+      tags: [Workspaces, Integrations]
+      summary: Список подключений self-hosted VCS (GitLab/Bitbucket и т.п.)
+      description: >
+        Если интеграция VCS выключена на деплое — возвращает available:false и
+        пустой список вместо ошибки.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VcsConnectionsResponse'}
+    post:
+      operationId: connectVcs
+      tags: [Workspaces, Integrations]
+      summary: Подключить self-hosted VCS-инстанс по персональному токену
+      description: >
+        Токен доступа проверяется у самого провайдера перед сохранением.
+        instance_url нормализуется и должен быть абсолютным http(s) URL.
+        Токен и вебхук-секрет хранятся запечатанными; вебхук-секрет
+        возвращается в ответе один раз и больше не читается. Публикует
+        vcs.connection.created.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ConnectVcsRequest'}
+      responses:
+        "200":
+          description: Подключено (или обновлено — upsert по паре provider+instance_url)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VcsConnectResponse'}
+        "400":
+          description: провайдер не поддерживается, обязательные поля пусты,
+            instance_url не абсолютный http(s), либо провайдер отверг токен
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "502":
+          description: инстанс провайдера недоступен
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "503":
+          description: VCS-интеграция не настроена на деплое (нет ключа шифрования)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/workspaces/{id}/vcs/connections/{connectionId}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: connectionId, in: path, required: true, schema: {type: string, format: uuid}}
+    delete:
+      operationId: deleteVcsConnection
+      tags: [Workspaces, Integrations]
+      summary: Удалить подключение VCS
+      description: Публикует vcs.connection.deleted.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      responses:
+        "204": {description: Удалено}
+
+  /api/workspaces/{id}/vcs/connections/{connectionId}/rotate-webhook:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: connectionId, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: rotateVcsConnectionWebhook
+      tags: [Workspaces, Integrations]
+      summary: Перевыпустить вебхук-секрет подключения
+      description: >
+        Старый секрет перестаёт приниматься сразу. Новый секрет возвращается в
+        ответе один раз. Публикует vcs.connection.created (то же событие, что
+        при первичном подключении).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/VcsConnectResponse'}
+        "404":
+          description: подключение не найдено в этом пространстве
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "503":
+          description: VCS-интеграция не настроена
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/workspaces/{id}/runtime-profiles:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: listRuntimeProfiles
+      tags: [Workspaces, RuntimeProfiles]
+      summary: Список профилей рантайма пространства
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RuntimeProfilesResponse'}
+    post:
+      operationId: createRuntimeProfile
+      tags: [Workspaces, RuntimeProfiles]
+      summary: Создать профиль рантайма
+      description: >
+        command_name — одиночный исполняемый токен без пробелов (аргументы —
+        в fixed_args). protocol_family должен быть одним из поддерживаемых
+        типов агентского протокола. display_name уникален в пределах
+        пространства. Уведомляет привязанные десктоп-раннеры об изменении
+        профилей и публикует daemon.register.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateRuntimeProfileRequest'}
+      responses:
+        "201":
+          description: Создан
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RuntimeProfile'}
+        "400": {$ref: '#/components/responses/BadRequest'}
+        "409":
+          description: display_name уже занят в пространстве
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/workspaces/{id}/runtime-profiles/{profileId}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: profileId, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: getRuntimeProfile
+      tags: [Workspaces, RuntimeProfiles]
+      summary: Получить профиль рантайма
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RuntimeProfile'}
+        "404": {$ref: '#/components/responses/NotFound'}
+    patch:
+      operationId: updateRuntimeProfile
+      tags: [Workspaces, RuntimeProfiles]
+      summary: Частично обновить профиль рантайма
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateRuntimeProfileRequest'}
+      responses:
+        "200":
+          description: Обновлено; уведомляет раннеры и публикует daemon.register
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RuntimeProfile'}
+        "400": {$ref: '#/components/responses/BadRequest'}
+        "404": {$ref: '#/components/responses/NotFound'}
+        "409":
+          description: display_name уже занят
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+    put:
+      operationId: replaceRuntimeProfile
+      tags: [Workspaces, RuntimeProfiles]
+      summary: То же самое, что PATCH (тот же обработчик, оба метода маршрутизированы на одну операцию)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateRuntimeProfileRequest'}
+      responses:
+        "200":
+          description: Обновлено
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RuntimeProfile'}
+        "400": {$ref: '#/components/responses/BadRequest'}
+        "404": {$ref: '#/components/responses/NotFound'}
+    delete:
+      operationId: deleteRuntimeProfile
+      tags: [Workspaces, RuntimeProfiles]
+      summary: Удалить профиль рантайма
+      description: >
+        Отказывает 409, если на профиле ещё есть активные (неархивные) агенты.
+        Если у профиля есть рантаймы с архивными агентами, задействованными
+        как лидеры активных отрядов — тоже 409 с указанием переназначить
+        лидера. При успехе каскадно подчищает связанные с архивными агентами
+        отряды, назначения инструментов, каналы и черновики чата в одной
+        транзакции, затем удаляет сами инстансы рантайма и профиль. Уведомляет
+        раннеры и публикует daemon.register с deleted_runtime_profile_id.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      responses:
+        "204": {description: Удалено}
+        "404": {$ref: '#/components/responses/NotFound'}
+        "409":
+          description: есть активные агенты на профиле, либо активные отряды с
+            архивным лидером на одном из его рантаймов
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/workspaces/{id}/export:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: startWorkspaceExport
+      tags: [Workspaces, Export]
+      summary: Запустить полную выгрузку данных пространства
+      description: >
+        Асинхронно; создаёт job и сразу отвечает 202, сама сборка архива идёт
+        в фоне (таймаут настраивается деплоем, по умолчанию 2 часа). Только
+        один активный экспорт на пространство одновременно (409 при попытке
+        запустить второй). Пишет запись в admin-аудит (workspace.export) сразу
+        при запуске, до завершения сборки. Требует настроенного файлового
+        хранилища для вложений — иначе 503.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner]
+      responses:
+        "202":
+          description: Job создан, статус pending/running
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceExportJob'}
+        "403": {$ref: '#/components/responses/Forbidden'}
+        "409":
+          description: экспорт этого пространства уже выполняется
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "503":
+          description: не настроено файловое хранилище
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/workspaces/{id}/export/{jobId}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: jobId, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: getWorkspaceExport
+      tags: [Workspaces, Export]
+      summary: Статус job'а экспорта
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceExportJob'}
+        "404": {$ref: '#/components/responses/NotFound'}
+
+  /api/workspaces/{id}/export/{jobId}/download:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: jobId, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: downloadWorkspaceExport
+      tags: [Workspaces, Export]
+      summary: Скачать готовый архив экспорта (tar.gz)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner]
+      responses:
+        "200":
+          description: Поток application/gzip, Content-Disposition attachment
+          content:
+            application/gzip:
+              schema: {type: string, format: binary}
+        "404": {$ref: '#/components/responses/NotFound'}
+        "409":
+          description: job ещё не завершён успешно — архива нет
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "410":
+          description: архив был на диске, но уже удалён (истекло хранение)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/workspaces/{id}/slack/installations:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: listSlackInstallations
+      tags: [Workspaces, Integrations]
+      summary: Список Slack-установок пространства
+      description: Если Slack-интеграция не настроена на деплое — configured:false, install_supported:false, пустой список (не ошибка).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SlackInstallationsResponse'}
+
+  /api/workspaces/{id}/slack/installations/{installationId}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: installationId, in: path, required: true, schema: {type: string, format: uuid}}
+    delete:
+      operationId: revokeSlackInstallation
+      tags: [Workspaces, Integrations]
+      summary: Отозвать Slack-установку
+      description: Публикует slack.installation.revoked.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      responses:
+        "204": {description: Отозвана}
+        "404": {$ref: '#/components/responses/NotFound'}
+        "503":
+          description: Slack-интеграция не настроена
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/workspaces/{id}/slack/install/byo:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: registerSlackBotYourOwnApp
+      tags: [Workspaces, Integrations]
+      summary: Подключить собственное Slack-приложение (bring-your-own) к агенту
+      description: >
+        agent_id передаётся query-параметром, должен существовать в этом
+        пространстве. Проверяет bot-токен и app-level токен у самого Slack.
+        Один и тот же Slack team не может быть привязан дважды в разных местах
+        (409 с уточнением — к другому агенту, к архивному агенту или к другому
+        пространству). Публикует slack.installation.created.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      parameters:
+        - {name: agent_id, in: query, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/RegisterSlackBotRequest'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SlackInstallation'}
+        "400":
+          description: bot_token/app_token невалидны или не совпадают друг с
+            другом
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "404":
+          description: агент не найден в этом пространстве
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "409":
+          description: эта Slack-команда уже привязана в другом месте
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "503":
+          description: Slack-интеграция не настроена
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  # ===========================================================================
+  # /api/slack/binding/redeem
+  # ===========================================================================
+  /api/slack/binding/redeem:
+    post:
+      operationId: redeemSlackBindingToken
+      tags: [Integrations]
+      summary: Привязать Slack-аккаунт вызывающего по одноразовому токену
+      description: >
+        Токен выдаётся Slack-ботом (slash-команда бота) и одноразовый.
+        Привязка отказывает, если аккаунт Slack уже привязан к другому
+        пользователю, или если вызывающий не участник соответствующего
+        пространства.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: {type: string}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workspace_id: {type: string, format: uuid}
+                  installation_id: {type: string, format: uuid}
+                  slack_user_id: {type: string}
+        "400": {$ref: '#/components/responses/BadRequest'}
+        "403":
+          description: вызывающий не участник пространства установки
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "409":
+          description: этот Slack-аккаунт уже привязан к другому пользователю
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "410":
+          description: токен недействителен или истёк
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  # ===========================================================================
+  # /api/integrations/composio/**
+  # ===========================================================================
+  /api/integrations/composio/connect/init:
+    post:
+      operationId: initComposioConnect
+      tags: [Integrations]
+      summary: Начать OAuth-подключение Composio-тулкита для вызывающего пользователя
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ComposioConnectInitRequest'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ComposioConnectInitResponse'}
+        "400":
+          description: тулкит не поддерживается
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "502":
+          description: сбой на стороне Composio
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "503":
+          description: Composio-интеграция или её MCP-приложения не включены
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/integrations/composio/toolkits:
+    get:
+      operationId: listComposioToolkits
+      tags: [Integrations]
+      summary: Каталог доступных Composio-тулкитов
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/ComposioToolkit'}
+        "502": {description: сбой Composio}
+        "503": {description: интеграция не включена}
+
+  /api/integrations/composio/connections:
+    get:
+      operationId: listComposioConnections
+      tags: [Integrations]
+      summary: Список Composio-подключений вызывающего пользователя
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/ComposioConnection'}
+        "503": {description: интеграция не включена}
+
+  /api/integrations/composio/connections/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string}}
+    delete:
+      operationId: deleteComposioConnection
+      tags: [Integrations]
+      summary: Отключить Composio-подключение
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      responses:
+        "204": {description: Отключено}
+        "404": {$ref: '#/components/responses/NotFound'}
+        "502": {description: сбой Composio}
+        "503": {description: интеграция не включена}
+
+  # ===========================================================================
+  # /api/invitations/** (личные приглашения вызывающего пользователя)
+  # ===========================================================================
+  /api/invitations:
+    get:
+      operationId: listMyInvitations
+      tags: [Invitations]
+      summary: Мои ожидающие приглашения (по user_id и по email)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/WorkspaceInvitation'}
+
+  /api/invitations/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: getMyInvitation
+      tags: [Invitations]
+      summary: Получить приглашение по id
+      description: 403, если приглашение адресовано не вызывающему (ни по user_id, ни по email).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceInvitation'}
+        "403":
+          description: code=invitation_not_yours
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "404":
+          description: code=invitation_not_found
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/invitations/{id}/accept:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: acceptInvitation
+      tags: [Invitations]
+      summary: Принять приглашение
+      description: >
+        Требует статус pending и непросроченный срок действия. Создаёт
+        членство с ролью из приглашения, отмечает пользователя онбордингнутым
+        при первом принятии (влияет на аналитику онбординга), публикует
+        member.added и invitation.accepted, уведомляет десктоп-раннеры.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      responses:
+        "200":
+          description: OK — возвращает членство приглашённого
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceMemberWithUser'}
+        "400":
+          description: code=invitation_not_pending
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "403":
+          description: code=invitation_not_yours
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "404":
+          description: code=invitation_not_found
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "409":
+          description: code=already_member_self
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "410":
+          description: code=invitation_expired
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/invitations/{id}/decline:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: declineInvitation
+      tags: [Invitations]
+      summary: Отклонить приглашение
+      description: Публикует invitation.declined.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      responses:
+        "204": {description: Отклонено}
+        "400":
+          description: code=invitation_not_pending
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "403":
+          description: code=invitation_not_yours
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "404":
+          description: code=invitation_not_found
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  # ===========================================================================
+  # /api/tokens/** (личные PAT вызывающего)
+  # ===========================================================================
+  /api/tokens:
+    get:
+      operationId: listPersonalAccessTokens
+      tags: [Tokens]
+      summary: Список личных токенов доступа (PAT) вызывающего
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      x-rate-limit: "20 запросов/час на пользователя или IP (общий бюджет группы /api/tokens/**)"
+      responses:
+        "200":
+          description: OK — значения токенов не возвращаются, только префикс
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/PersonalAccessToken'}
+    post:
+      operationId: createPersonalAccessToken
+      tags: [Tokens]
+      summary: Создать личный токен доступа
+      description: Токен в открытом виде возвращается один раз и не хранится.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      x-rate-limit: "20 запросов/час на пользователя или IP"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreatePersonalAccessTokenRequest'}
+      responses:
+        "201":
+          description: Создан
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CreatePersonalAccessTokenResponse'}
+        "400":
+          description: name пуст
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/tokens/current/renew:
+    post:
+      operationId: renewCurrentPersonalAccessToken
+      tags: [Tokens]
+      summary: Продлить срок действия PAT, которым выполнен текущий запрос
+      description: >
+        Работает только если запрос аутентифицирован PAT-токеном в заголовке
+        Authorization (не сессионной cookie). Продление происходит только если
+        до истечения осталось ≤ 7 дней (иначе renewed:false и текущая дата
+        истечения без изменений); продлевает ещё на 90 дней. Бессрочный токен
+        всегда отвечает renewed:false, expires_at:"".
+      security: [{bearerAuth: []}]
+      x-roles: [any-authenticated]
+      x-rate-limit: "20 запросов/час на пользователя или IP"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RenewPersonalAccessTokenResponse'}
+        "400":
+          description: запрос выполнен не PAT-токеном
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "401":
+          description: токен более не действителен или принадлежит другому пользователю
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/tokens/{id}:
+    parameters:
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    delete:
+      operationId: revokePersonalAccessToken
+      tags: [Tokens]
+      summary: Отозвать личный токен доступа
+      description: Идемпотентно — 204 и в случае, если токен уже не существует/не принадлежит вызывающему.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      x-rate-limit: "20 запросов/час на пользователя или IP"
+      responses:
+        "204": {description: Отозван (или уже не существовал)}
+
+  # ===========================================================================
+  # /api/cloud-billing/** — все ручки прозрачно проксируют облачный биллинг-сервис
+  # ===========================================================================
+  /api/cloud-billing/balance:
+    get:
+      operationId: getCloudBillingBalance
+      tags: [CloudBilling]
+      summary: Баланс вызывающего пользователя в облачном биллинге
+      description: >
+        Прокси к внешнему биллинговому сервису (cloud runtime); тело и код
+        ответа ретранслируются как есть. 503, если облачный рантайм не
+        подключён на этом деплое.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BillingBalance'}
+        "503": {$ref: '#/components/responses/CloudRuntimeUnavailable'}
+        "502": {$ref: '#/components/responses/CloudRuntimeBadGateway'}
+        "504": {$ref: '#/components/responses/CloudRuntimeTimeout'}
+
+  /api/cloud-billing/transactions:
+    get:
+      operationId: listCloudBillingTransactions
+      tags: [CloudBilling]
+      summary: История транзакций баланса
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      parameters:
+        - {name: page, in: query, schema: {type: integer}}
+        - {name: page_size, in: query, schema: {type: integer}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BillingTransactionsPage'}
+        "503": {$ref: '#/components/responses/CloudRuntimeUnavailable'}
+
+  /api/cloud-billing/batches:
+    get:
+      operationId: listCloudBillingBatches
+      tags: [CloudBilling]
+      summary: Список пакетов начислений (batches), из которых списывается баланс
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      parameters:
+        - {name: page, in: query, schema: {type: integer}}
+        - {name: page_size, in: query, schema: {type: integer}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BillingBatchesPage'}
+        "503": {$ref: '#/components/responses/CloudRuntimeUnavailable'}
+
+  /api/cloud-billing/topups:
+    get:
+      operationId: listCloudBillingTopups
+      tags: [CloudBilling]
+      summary: История пополнений
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      parameters:
+        - {name: page, in: query, schema: {type: integer}}
+        - {name: page_size, in: query, schema: {type: integer}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BillingTopupsPage'}
+        "503": {$ref: '#/components/responses/CloudRuntimeUnavailable'}
+
+  /api/cloud-billing/price-tiers:
+    get:
+      operationId: listCloudBillingPriceTiers
+      tags: [CloudBilling]
+      summary: Доступные тарифные пакеты пополнения
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/BillingPriceTier'}
+        "503": {$ref: '#/components/responses/CloudRuntimeUnavailable'}
+
+  /api/cloud-billing/checkout-sessions:
+    post:
+      operationId: createCloudBillingCheckoutSession
+      tags: [CloudBilling]
+      summary: Создать Stripe checkout-сессию на пополнение баланса
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateBillingCheckoutSessionRequest'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CreateBillingCheckoutSessionResponse'}
+        "503": {$ref: '#/components/responses/CloudRuntimeUnavailable'}
+
+  /api/cloud-billing/checkout-sessions/{sessionId}:
+    parameters:
+      - {name: sessionId, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: getCloudBillingCheckoutSession
+      tags: [CloudBilling]
+      summary: Статус checkout-сессии
+      description: session_id проверяется на допустимый алфавит (буквы/цифры/подчёркивание) до обращения к биллингу.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/BillingCheckoutSessionStatus'}
+        "400":
+          description: session_id не проходит валидацию формата
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "503": {$ref: '#/components/responses/CloudRuntimeUnavailable'}
+
+  /api/cloud-billing/portal-sessions:
+    post:
+      operationId: createCloudBillingPortalSession
+      tags: [CloudBilling]
+      summary: Создать ссылку на Stripe billing portal для вызывающего
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CreateBillingPortalSessionResponse'}
+        "503": {$ref: '#/components/responses/CloudRuntimeUnavailable'}
+
+  # ===========================================================================
+  # /api/deployment/**
+  # ===========================================================================
+  /api/deployment/admins:
+    get:
+      operationId: listDeploymentAdmins
+      tags: [DeploymentAdmin]
+      summary: Список держателей роли deployment-admin
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [deployment-admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/DeploymentAdmin'}
+        "403":
+          description: вызывающий не deployment-admin
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+    post:
+      operationId: requestDeploymentAdminGrant
+      tags: [DeploymentAdmin]
+      summary: Заявить о выдаче роли deployment-admin пользователю по email
+      description: >
+        Изменение состава роли — двухканальное: этот вызов лишь заявляет
+        запрос (пишет строку в admin-аудит) и отвечает 202 со ссылкой на
+        pending-заявку; применяет её оператор отдельной серверной командой вне
+        HTTP API. Если целевой пользователь уже деplоymент-admin — отвечает
+        200 с его текущей записью без создания заявки. Повторная заявка на ту
+        же пару (действие, пользователь) не дублируется — возвращается уже
+        существующая.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [deployment-admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: {type: string, format: email}
+      responses:
+        "200":
+          description: пользователь уже deployment-admin
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeploymentAdmin'}
+        "202":
+          description: заявка на выдачу роли создана (или уже существовала)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeploymentAdminPendingRequest'}
+        "400":
+          description: email пуст
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "404":
+          description: с этим email нет пользователя (роль выдаётся только существующему)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/deployment/admins/{userId}:
+    parameters:
+      - {name: userId, in: path, required: true, schema: {type: string, format: uuid}}
+    delete:
+      operationId: requestDeploymentAdminRevoke
+      tags: [DeploymentAdmin]
+      summary: Заявить об отзыве роли deployment-admin
+      description: >
+        Так же двухканально, как выдача — отвечает 202 с заявкой; применяет
+        оператор отдельно. Отказывает 409, если это последний
+        deployment-admin (нельзя остаться совсем без администраторов деплоя).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [deployment-admin]
+      responses:
+        "202":
+          description: заявка на отзыв создана (или уже существовала)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeploymentAdminPendingRequest'}
+        "404":
+          description: пользователь не является deployment-admin
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "409":
+          description: нельзя отозвать последнего deployment-admin
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/deployment/admins/pending:
+    get:
+      operationId: listDeploymentAdminPendingRequests
+      tags: [DeploymentAdmin]
+      summary: Список заявок на выдачу/отзыв роли deployment-admin, ждущих подтверждения оператором
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [deployment-admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/DeploymentAdminPendingRequest'}
+
+  /api/deployment/audit:
+    get:
+      operationId: listDeploymentAudit
+      tags: [DeploymentAdmin]
+      summary: Журнал аудита деплоя (admin-действия и auth-события), объединённый и отсортированный
+      description: >
+        Объединяет две ленты — административный журнал (изменения политики,
+        конфигурации, состава ролей) и журнал аутентификации (успехи/отказы
+        входа, отзывы сессий) — сортирует по времени и курсору. Параметр
+        cursor переключает выдачу в режим "вперёд от курсора" (для live-tail),
+        его отсутствие — режим "последние N назад от now/until".
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [deployment-admin]
+      parameters:
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
+        - {name: action, in: query, schema: {type: string}}
+        - {name: actor, in: query, schema: {type: string}, description: "UUID актора или произвольная строка (для auth-событий с нечеловеческим актором)"}
+        - {name: since, in: query, schema: {type: string, format: date-time}}
+        - {name: until, in: query, schema: {type: string, format: date-time}}
+        - {name: cursor, in: query, schema: {type: string}, description: "курсор постраничности, из поля cursor предыдущей записи"}
+        - {name: source, in: query, schema: {type: string, enum: [admin, auth, all], default: all}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/DeploymentAuditEntry'}
+        "400":
+          description: limit/since/until/cursor/source не проходят валидацию формата
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/deployment/users/{userId}/deactivate:
+    parameters:
+      - {name: userId, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: deactivateDeploymentUser
+      tags: [DeploymentAdmin]
+      summary: Деактивировать учётную запись пользователя на уровне деплоя
+      description: >
+        Отзывает все личные токены доступа, все токены даемона/раннера,
+        принудительно переводит рантаймы пользователя в offline, закрывает его
+        реалтайм-подключения. Нельзя деактивировать себя (409). Пишет
+        admin-аудит user.deactivate.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [deployment-admin]
+      responses:
+        "200":
+          description: OK — сводка с числом отозванных токенов/подключений
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeploymentUser'}
+        "404": {$ref: '#/components/responses/NotFound'}
+        "409":
+          description: нельзя деактивировать собственную учётную запись
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/deployment/users/{userId}/reactivate:
+    parameters:
+      - {name: userId, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: reactivateDeploymentUser
+      tags: [DeploymentAdmin]
+      summary: Восстановить деактивированную учётную запись
+      description: Пишет admin-аудит user.reactivate.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [deployment-admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeploymentUser'}
+        "404": {$ref: '#/components/responses/NotFound'}
+
+  /api/deployment/users/{userId}/revoke-sessions:
+    parameters:
+      - {name: userId, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: revokeDeploymentUserSessions
+      tags: [DeploymentAdmin]
+      summary: Принудительно отозвать все веб-сессии пользователя
+      description: >
+        Инкрементирует версию токена пользователя (мгновенно обесценивает уже
+        выданные сессионные JWT) и удаляет хранимые сессии. Не трогает PAT и
+        токены раннера — для этого есть deactivate.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [deployment-admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  revoked: {type: integer}
+                  token_version: {type: integer}
+        "404": {$ref: '#/components/responses/NotFound'}
+
+  /api/deployment/users/{userId}:
+    parameters:
+      - {name: userId, in: path, required: true, schema: {type: string, format: uuid}}
+    delete:
+      operationId: deleteDeploymentUser
+      tags: [DeploymentAdmin]
+      summary: Удалить (анонимизировать) учётную запись пользователя на уровне деплоя
+      description: >
+        Необратимая анонимизация персональных данных (имя заменяется на
+        фиксированную метку-заглушку, email/сторонние идентичности/MCP-креды/
+        уведомления/фидбек стираются), членства во всех пространствах
+        удаляются. Затем отзываются все живые токены/подключения — как при
+        деактивации. Нельзя удалить себя (409) и нельзя удалить учётную
+        запись, пока она сама deployment-admin — сначала отозвать роль
+        (409 с подсказкой). Пишет admin-аудит user.delete.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [deployment-admin]
+      responses:
+        "200":
+          description: OK — сводка удаления
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeleteDeploymentUserResponse'}
+        "404": {$ref: '#/components/responses/NotFound'}
+        "409":
+          description: попытка удалить себя, либо действующего deployment-admin
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/deployment/mcp-servers:
+    get:
+      operationId: listDeploymentMcpServers
+      tags: [DeploymentMcp]
+      summary: Библиотека MCP-серверов уровня деплоя
+      description: >
+        Конфигурация каждого сервера (адрес/команда/секреты) запечатана и
+        никогда не отдаётся в ответе целиком — только имя, транспорт, схема
+        запрашиваемых у пользователя credential-полей и число пространств,
+        включивших сервер.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [deployment-admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/DeploymentMcpServer'}
+    post:
+      operationId: createDeploymentMcpServer
+      tags: [DeploymentMcp]
+      summary: Добавить MCP-сервер в библиотеку деплоя
+      description: >
+        config не может содержать ключи enabled/disabled (включение —
+        прерогатива пространства через отдельную ручку) и не может содержать
+        служебный маркер маски. Если объявлена credential_schema (поля,
+        которые сервер просит у каждого пользователя), транспорт сервера
+        должен поддерживать переменные окружения — http/sse отклоняются
+        (400), т.к. у них нет env-канала для подстановки. Требует
+        GOOSAR_MCP_SECRET_KEY на сервере (иначе 503). Пишет admin-аудит
+        deployment_mcp_server.create с хэшем содержимого (само содержимое в
+        аудит не попадает).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [deployment-admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DeploymentMcpServerRequest'}
+      responses:
+        "201":
+          description: Создан
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeploymentMcpServer'}
+        "400": {$ref: '#/components/responses/BadRequest'}
+        "409":
+          description: имя уже занято
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "503":
+          description: ключ шифрования конфигурации не настроен
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/deployment/mcp-servers/{serverId}:
+    parameters:
+      - {name: serverId, in: path, required: true, schema: {type: string, format: uuid}}
+    put:
+      operationId: updateDeploymentMcpServer
+      tags: [DeploymentMcp]
+      summary: Обновить MCP-сервер библиотеки деплоя
+      description: Частичное обновление — поля, не переданные, не меняются. Валидация та же, что при создании. Пишет deployment_mcp_server.update.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [deployment-admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DeploymentMcpServerRequest'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeploymentMcpServer'}
+        "400": {$ref: '#/components/responses/BadRequest'}
+        "404": {$ref: '#/components/responses/NotFound'}
+        "409":
+          description: имя уже занято другим сервером
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+    delete:
+      operationId: deleteDeploymentMcpServer
+      tags: [DeploymentMcp]
+      summary: Удалить MCP-сервер из библиотеки деплоя
+      description: >
+        Каскадно снимает включения у всех пространств, отвязывает от всех
+        агентов и стирает пользовательские credential-значения для него.
+        Пишет deployment_mcp_server.delete.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [deployment-admin]
+      responses:
+        "204": {description: Удалён}
+        "404": {$ref: '#/components/responses/NotFound'}
+
+  /api/deployment/policy:
+    get:
+      operationId: getDeploymentPolicyAsAdmin
+      tags: [DeploymentAdmin]
+      summary: Прочитать документ политики деплоя (административный вход)
+      description: >
+        Пустая политика (`{}`), если ничего не сохранено. Тот же документ, что
+        отдаёт публичная только-для-чтения ручка /api/deployment-policy, но
+        без обязательного членства в конкретном пространстве.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [deployment-admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeploymentPolicyDocument'}
+    put:
+      operationId: putDeploymentPolicy
+      tags: [DeploymentAdmin]
+      summary: Заменить документ политики деплоя целиком
+      description: >
+        Документ — не более 64 КБ, только объект с полями llm/mcp/session (без
+        произвольных дополнительных ключей), без полей, похожих на секреты по
+        имени (key/token/secret/password — такие отклоняются 400, секреты
+        живут в слоях конфигурации пространства/пользователя, а не в
+        политике). Запись "*" в mcp поддерживает только форму
+        `{"enabled": false, "locked": true}` — общий выключатель MCP на весь
+        деплой. Пустой объект `{}` допустим и очищает политику. Каждое
+        изменение пишет в admin-аудит хэши документа до/после и инвалидирует
+        закэшированные политики сессий.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [deployment-admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [policy]
+              properties:
+                policy: {$ref: '#/components/schemas/DeploymentPolicyBody'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeploymentPolicyDocument'}
+        "400":
+          description: policy пуст/невалиден, превышает лимит, содержит
+            запрещённые/похожие-на-секрет поля, либо запись "*" не в
+            канонической форме
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/deployment/workspaces:
+    get:
+      operationId: listDeploymentWorkspaces
+      tags: [DeploymentAdmin]
+      summary: Список всех пространств деплоя с числом участников
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [deployment-admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/DeploymentWorkspace'}
+
+  /api/deployment/join-targets:
+    get:
+      operationId: listJoinTargets
+      tags: [DeploymentAdmin]
+      summary: Список ролевых пространств, открытых для самостоятельного вступления
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/JoinTarget'}
+
+  /api/deployment/join-targets/{workspaceId}/join:
+    parameters:
+      - {name: workspaceId, in: path, required: true, schema: {type: string, format: uuid}}
+    post:
+      operationId: joinTargetWorkspace
+      tags: [DeploymentAdmin]
+      summary: Самостоятельно вступить в открытое ролевое пространство участником
+      description: >
+        404, если пространство не помечено открытым для вступления. Если
+        вызывающий уже участник — идемпотентно отвечает 200 с
+        already_member:true, без ошибки. Отмечает пользователя онбордингнутым
+        при первом вступлении, публикует member.added, уведомляет
+        десктоп-раннеры. Обычный аудит запроса (не admin-аудит) — это
+        самообслуживание, а не административное действие.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      x-rate-limit: "20 запросов/час на пользователя или IP"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/JoinTargetResult'}
+        "404":
+          description: пространство не открыто для вступления
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/deployment/fleet:
+    get:
+      operationId: listDeploymentFleet
+      tags: [DeploymentAdmin]
+      summary: Обзорная сводка по всем машинам (десктоп-раннерам) деплоя
+      description: >
+        Строится на лету из уже накопленных heartbeat'ов, очереди задач и
+        реестра агентов — ничего не сохраняет. Список машин обрезается до 200
+        записей (truncated:true при обрезке), сортировка — сначала машины с
+        зависшими задачами, затем офлайн, затем устаревшая версия клиента.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [deployment-admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeploymentFleet'}
+
+  /api/deployment/workspaces/{workspaceId}:
+    parameters:
+      - {name: workspaceId, in: path, required: true, schema: {type: string, format: uuid}}
+    patch:
+      operationId: setDeploymentWorkspaceOpenJoin
+      tags: [DeploymentAdmin]
+      summary: Включить/выключить открытое самостоятельное вступление в ролевое пространство
+      description: >
+        Применимо только к пространствам, созданным из шаблона роли
+        (provisioned; иначе 400). Пишет admin-аудит workspace.open_join.set.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [deployment-admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [open_join]
+              properties:
+                open_join: {type: boolean}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: {type: string, format: uuid}
+                  name: {type: string}
+                  slug: {type: string}
+                  open_join: {type: boolean}
+        "400":
+          description: пространство не создано из шаблона роли
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "404": {$ref: '#/components/responses/NotFound'}
+
+  /api/deployment/workspaces/{workspaceId}/members:
+    parameters:
+      - {name: workspaceId, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: listDeploymentWorkspaceMembers
+      tags: [DeploymentAdmin]
+      summary: Состав участников произвольного пространства (административный обзор)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [deployment-admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/DeploymentWorkspaceMember'}
+        "404": {$ref: '#/components/responses/NotFound'}
+
+  /api/deployment/workspaces/{workspaceId}/config:
+    parameters:
+      - {name: workspaceId, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: getDeploymentWorkspaceConfig
+      tags: [DeploymentAdmin, WorkspaceConfig]
+      summary: Прочитать конфиг-слой пространства по его id (административный вход)
+      description: >
+        Тот же обработчик и та же форма ответа, что у /api/workspace-config
+        (см. описание ниже) — здесь id пространства берётся из пути, а не из
+        заголовка/query. Каждое чтение через этот административный вход
+        (когда вызывающий — deployment-admin, а не owner/admin самого
+        пространства) пишет запись в admin-аудит (config.read) с хэшем
+        прочитанного документа.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin, deployment-admin]
+      responses:
+        "200":
+          description: OK (пустой объект, если конфиг ещё не задавался)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceConfigLayer'}
+        "403":
+          description: вызывающий не участник пространства и не deployment-admin
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "503":
+          description: хранимый документ запечатан, а ключ расшифровки не настроен на сервере
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+    put:
+      operationId: putDeploymentWorkspaceConfig
+      tags: [DeploymentAdmin, WorkspaceConfig]
+      summary: Записать конфиг-слой пространства по его id (административный вход)
+      description: См. валидацию PUT /api/workspace-config ниже. Административная запись дополнительно пишет workspace_config.set в admin-аудит с хэшами до/после.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin, deployment-admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PutWorkspaceConfigRequest'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceConfigLayer'}
+        "400": {$ref: '#/components/responses/BadRequest'}
+        "403": {$ref: '#/components/responses/Forbidden'}
+        "503":
+          description: GOOSAR_MCP_SECRET_KEY не настроен, а запись требует шифрования
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/deployment/workspaces/{workspaceId}/config/overrides:
+    parameters:
+      - {name: workspaceId, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: listDeploymentWorkspaceConfigOverrides
+      tags: [DeploymentAdmin, WorkspaceConfig]
+      summary: Список персональных override'ов конфигурации всех участников пространства
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin, deployment-admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/WorkspaceUserConfigOverride'}
+        "404": {$ref: '#/components/responses/NotFound'}
+
+  /api/deployment/workspaces/{workspaceId}/config/overrides/{userId}:
+    parameters:
+      - {name: workspaceId, in: path, required: true, schema: {type: string, format: uuid}}
+      - {name: userId, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: getDeploymentWorkspaceUserConfigOverride
+      tags: [DeploymentAdmin, WorkspaceConfig]
+      summary: Прочитать персональный override конфигурации участника (административный вход)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin, deployment-admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceUserConfigOverride'}
+        "404":
+          description: override для этого пользователя не задан, либо пользователь не участник пространства
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+    put:
+      operationId: putDeploymentWorkspaceUserConfigOverride
+      tags: [DeploymentAdmin, WorkspaceConfig]
+      summary: Записать персональный override конфигурации участника (административный вход)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin, deployment-admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PutWorkspaceUserConfigOverrideRequest'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceUserConfigOverride'}
+        "400": {$ref: '#/components/responses/BadRequest'}
+        "404":
+          description: целевой пользователь не участник пространства
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+    delete:
+      operationId: deleteDeploymentWorkspaceUserConfigOverride
+      tags: [DeploymentAdmin, WorkspaceConfig]
+      summary: Удалить персональный override конфигурации участника (административный вход)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin, deployment-admin]
+      responses:
+        "204": {description: Удалён}
+        "404":
+          description: целевой пользователь не участник пространства
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  # ===========================================================================
+  # /api/assignee-frequency, /api/status — требуют членства в пространстве
+  # (заголовок/query workspace_id или slug), см. WorkspaceSlugHeader
+  # ===========================================================================
+  /api/assignee-frequency:
+    get:
+      operationId: getAssigneeFrequency
+      tags: [Workspaces]
+      summary: Частота назначений исполнителей вызывающим пользователем в пространстве
+      description: >
+        Используется для сортировки подсказок "часто назначаю". Считает и
+        изменения исполнителя в активностях, и назначения при создании
+        задачи, суммируя по паре (тип исполнителя, id исполнителя).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - {$ref: '#/components/parameters/WorkspaceSlugHeader'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/AssigneeFrequencyEntry'}
+
+  /api/status:
+    get:
+      operationId: getWorkspaceStatus
+      tags: [Workspaces]
+      summary: Единая диагностическая сводка по пространству для вызывающего (кто я, рантаймы, provisioning, MCP, периметр, LLM)
+      description: >
+        Собирает состояние из нескольких подсистем на лету специально для
+        экрана диагностики/статус-бара клиента; ничего не сохраняет.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - {$ref: '#/components/parameters/WorkspaceSlugHeader'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceStatus'}
+        "400":
+          description: workspace_id/slug не переданы или невалидны
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  # ===========================================================================
+  # /api/provisioning/**
+  # ===========================================================================
+  /api/provisioning/manifest:
+    get:
+      operationId: getProvisioningManifest
+      tags: [Provisioning]
+      summary: Разрешённый манифест пакетов (skill/mcp-server/runtime) для пространства и платформы
+      description: >
+        Если у пространства заданы pin'ы (закреплённые версии) — манифест
+        строится из них плюс их транзитивные зависимости (requires); иначе —
+        из полного каталога деплоя. Фильтруется по платформе (обязательный
+        query platform). Каждая отдача манифеста фиксируется как "доставленный
+        пакет" для последующей диагностики (used by /api/status). Пакеты,
+        отозванные политикой деплоя, перечисляются отдельно в
+        revokedPackages, не исключаясь молча.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - {$ref: '#/components/parameters/WorkspaceSlugHeader'}
+        - {name: platform, in: query, required: true, schema: {type: string, enum: ["*", darwin-arm64, darwin-x64, win-x64, linux-x64, linux-arm64]}}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProvisioningManifest'}
+        "400":
+          description: workspace_id не передан/невалиден, либо platform отсутствует/невалиден
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "502":
+          description: не удалось разрешить манифест (сбой хранилища пакетов)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "503":
+          description: provisioning не настроен на деплое
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/provisioning/blob/{name}/{version}:
+    parameters:
+      - {name: name, in: path, required: true, schema: {type: string}}
+      - {name: version, in: path, required: true, schema: {type: string}}
+    get:
+      operationId: getProvisioningBlob
+      tags: [Provisioning]
+      summary: Скачать бинарный блоб пакета (zstd-архив)
+      description: >
+        Пакет должен присутствовать в манифесте, разрешённом для пространства
+        и платформы — иначе 404, даже если блоб физически существует в
+        хранилище. Ответ несёт X-Package-Sha256 для проверки целостности на
+        стороне клиента.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - {$ref: '#/components/parameters/WorkspaceSlugHeader'}
+        - {name: platform, in: query, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: application/zstd, X-Package-Sha256, Cache-Control no-store
+          content:
+            application/zstd:
+              schema: {type: string, format: binary}
+        "400":
+          description: platform отсутствует/невалиден
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "404":
+          description: пакет не входит в разрешённый для пространства/платформы манифест, либо блоб отсутствует в хранилище
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "503":
+          description: provisioning не настроен
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/provisioning/catalog:
+    get:
+      operationId: getProvisioningCatalog
+      tags: [Provisioning]
+      summary: Полный каталог доступных пакетов деплоя (без учёта pin'ов пространства)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProvisioningCatalog'}
+        "503":
+          description: provisioning не настроен
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/provisioning/pins:
+    get:
+      operationId: getProvisioningPins
+      tags: [Provisioning]
+      summary: Список закреплённых версий пакетов пространства
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      parameters:
+        - {$ref: '#/components/parameters/WorkspaceSlugHeader'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProvisioningPinsList'}
+    put:
+      operationId: putProvisioningPins
+      tags: [Provisioning]
+      summary: Заменить набор закреплений пространства целиком
+      description: >
+        Полная замена — существующие pin'ы пространства удаляются, затем
+        вставляются переданные, одной транзакцией. package_type/package_name/
+        version должны пройти формат-валидацию; для одной пары
+        (package_type, package_name) допустима только одна запись (иначе 400
+        duplicate).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      parameters:
+        - {$ref: '#/components/parameters/WorkspaceSlugHeader'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PutProvisioningPinsRequest'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProvisioningPinsList'}
+        "400":
+          description: package_type/package_name/version невалидны, либо дублирующаяся пара
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  # ===========================================================================
+  # /api/workspace-config/**
+  # ===========================================================================
+  /api/workspace-config:
+    get:
+      operationId: getWorkspaceConfig
+      tags: [WorkspaceConfig]
+      summary: Прочитать конфиг-слой пространства (LLM base_url/model/api_key, MCP-умолчания)
+      description: >
+        Пространство определяется заголовком/query (см. WorkspaceSlugHeader),
+        не путём URL. Доступ — owner/admin пространства, либо
+        deployment-admin (в этом случае чтение дополнительно пишется в
+        admin-аудит config.read с хэшем документа). has_llm_api_key — булев
+        признак наличия ключа, сам ключ никогда не возвращается. mcp_defaults
+        возвращается маскированным: значения env заменены на true/false
+        (есть/нет), сами значения не отдаются.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin, deployment-admin]
+      parameters:
+        - {$ref: '#/components/parameters/WorkspaceSlugHeader'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceConfigLayer'}
+        "400":
+          description: workspace_id/slug не переданы
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "403":
+          description: вызывающий не owner/admin пространства и не deployment-admin
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "503":
+          description: документ запечатан, ключ расшифровки не настроен
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+    put:
+      operationId: putWorkspaceConfig
+      tags: [WorkspaceConfig]
+      summary: Записать конфиг-слой пространства
+      description: >
+        Частичный патч по слою: переданные поля заменяют текущие, отсутствующие
+        не трогаются. llm_base_url — обязательно абсолютный http(s) URL (или
+        пустая строка, чтобы очистить), ограничен по длине; llm_model
+        ограничен по длине; llm_api_key запечатывается перед сохранением и
+        никогда не возвращается открытым текстом. mcp_defaults — JSON-объект
+        {имя_сервера: {enabled?, env?}}, где env — карта строка→строка|null
+        (null удаляет переменную); документ целиком ограничен по размеру.
+        Запись llm_api_key или непустого mcp_defaults требует настроенного
+        ключа шифрования (иначе 503). Запись через deployment-admin вход
+        дополнительно пишет workspace_config.set в admin-аудит с хэшами
+        до/после.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin, deployment-admin]
+      parameters:
+        - {$ref: '#/components/parameters/WorkspaceSlugHeader'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PutWorkspaceConfigRequest'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceConfigLayer'}
+        "400":
+          description: llm_base_url не абсолютный http(s), поле превышает лимит
+            длины, либо mcp_defaults превышает лимит размера/не является
+            объектом с полями enabled/env
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "403": {$ref: '#/components/responses/Forbidden'}
+        "503":
+          description: требуется ключ шифрования, который не настроен
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/workspace-config/overrides/{userId}:
+    parameters:
+      - {name: userId, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: getWorkspaceUserConfigOverride
+      tags: [WorkspaceConfig]
+      summary: Прочитать персональный override конфигурации участника
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin, deployment-admin]
+      parameters:
+        - {$ref: '#/components/parameters/WorkspaceSlugHeader'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceUserConfigOverride'}
+        "404":
+          description: override не задан, либо userId не участник пространства
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+    put:
+      operationId: putWorkspaceUserConfigOverride
+      tags: [WorkspaceConfig]
+      summary: Записать персональный override конфигурации участника
+      description: Та же валидация полей, что у PUT /api/workspace-config, но применяется к слою конкретного участника (mcp_overrides вместо mcp_defaults).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin, deployment-admin]
+      parameters:
+        - {$ref: '#/components/parameters/WorkspaceSlugHeader'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PutWorkspaceUserConfigOverrideRequest'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceUserConfigOverride'}
+        "400": {$ref: '#/components/responses/BadRequest'}
+        "404":
+          description: userId не участник пространства
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+    delete:
+      operationId: deleteWorkspaceUserConfigOverride
+      tags: [WorkspaceConfig]
+      summary: Удалить персональный override конфигурации участника
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin, deployment-admin]
+      parameters:
+        - {$ref: '#/components/parameters/WorkspaceSlugHeader'}
+      responses:
+        "204": {description: Удалён}
+        "404":
+          description: userId не участник пространства
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  # ===========================================================================
+  # /api/workspace-mcp-servers/**
+  # ===========================================================================
+  /api/workspace-mcp-servers:
+    get:
+      operationId: listWorkspaceMcpServers
+      tags: [WorkspaceMcp]
+      summary: Список MCP-серверов, видимых пространству (свои плюс включённые из библиотеки деплоя)
+      description: >
+        Объединяет собственные MCP-серверы пространства (source=workspace) и
+        включённые пространством серверы библиотеки деплоя (source=deployment,
+        только те, что реально включены). Для каждого сервера показывает
+        credential_schema, какие поля вызывающий уже заполнил
+        (provided_credentials) и какие обязательные ещё не заполнены
+        (missing_credentials).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - {$ref: '#/components/parameters/WorkspaceSlugHeader'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/WorkspaceMcpServer'}
+        "400":
+          description: workspace_id не передан
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+    post:
+      operationId: createWorkspaceMcpServer
+      tags: [WorkspaceMcp]
+      summary: Создать собственный MCP-сервер пространства
+      description: >
+        Недоступно агенту-актору (только человеку или сервисному вызову от
+        имени владельца-человека). name — только буквы/цифры/дефис/подчёркивание,
+        уникален в пространстве. config — как у серверов деплоя (без
+        enabled/disabled и без маркера маски); при непустой credential_schema
+        транспорт должен поддерживать env (не http/sse). Требует
+        GOOSAR_MCP_SECRET_KEY.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      parameters:
+        - {$ref: '#/components/parameters/WorkspaceSlugHeader'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/WorkspaceMcpServerRequest'}
+      responses:
+        "201":
+          description: Создан
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceMcpServer'}
+        "400": {$ref: '#/components/responses/BadRequest'}
+        "403":
+          description: вызывающий — агент-актор, либо не owner/admin
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "404":
+          description: пространство не найдено (гонка с удалением пространства)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "409":
+          description: имя уже занято в пространстве
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "503":
+          description: ключ шифрования не настроен
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/workspace-mcp-servers/{serverId}:
+    parameters:
+      - {name: serverId, in: path, required: true, schema: {type: string, format: uuid}}
+    put:
+      operationId: updateWorkspaceMcpServer
+      tags: [WorkspaceMcp]
+      summary: Обновить собственный MCP-сервер пространства
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      parameters:
+        - {$ref: '#/components/parameters/WorkspaceSlugHeader'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/WorkspaceMcpServerRequest'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceMcpServer'}
+        "400": {$ref: '#/components/responses/BadRequest'}
+        "403":
+          description: вызывающий — агент-актор, либо не owner/admin
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "404": {$ref: '#/components/responses/NotFound'}
+        "409":
+          description: имя уже занято другим сервером пространства
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+    delete:
+      operationId: deleteWorkspaceMcpServer
+      tags: [WorkspaceMcp]
+      summary: Удалить собственный MCP-сервер пространства
+      description: Каскадно снимает назначения у всех агентов и стирает пользовательские credential-значения для него.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      parameters:
+        - {$ref: '#/components/parameters/WorkspaceSlugHeader'}
+      responses:
+        "204": {description: Удалён}
+        "403":
+          description: вызывающий — агент-актор, либо не owner/admin
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "404": {$ref: '#/components/responses/NotFound'}
+
+  /api/workspace-mcp-servers/{serverId}/credentials:
+    parameters:
+      - {name: serverId, in: path, required: true, schema: {type: string, format: uuid}}
+    put:
+      operationId: setWorkspaceMcpCredentials
+      tags: [WorkspaceMcp]
+      summary: Задать свои персональные значения credential-полей MCP-сервера (свой или включённый из деплоя)
+      description: >
+        Каждый участник хранит собственные значения отдельно (это не
+        административная настройка сервера, а самообслуживание — доступно
+        любому участнику пространства, не только owner/admin, но не
+        агенту-актору). Значения объединяются с уже сохранёнными:
+        пустая строка для ключа удаляет его, отсутствующий в запросе ключ —
+        сохраняется как был. Отклоняется, если у сервера вообще нет
+        credential_schema (400), если ключ не входит в схему, или если
+        значение слишком длинное. Значения запечатываются перед сохранением.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - {$ref: '#/components/parameters/WorkspaceSlugHeader'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SetWorkspaceMcpCredentialsRequest'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceMcpServer'}
+        "400":
+          description: сервер не запрашивает credential-поля, либо переданы
+            неизвестные ключи/слишком длинные значения
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "403":
+          description: вызывающий — агент-актор
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "404":
+          description: сервер не найден в этом пространстве (ни свой, ни включённый из деплоя)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "503":
+          description: ключ шифрования не настроен
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+    delete:
+      operationId: deleteWorkspaceMcpCredentials
+      tags: [WorkspaceMcp]
+      summary: Очистить свои персональные значения credential-полей MCP-сервера
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - {$ref: '#/components/parameters/WorkspaceSlugHeader'}
+      responses:
+        "200":
+          description: OK — сервер с пустыми provided_credentials
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/WorkspaceMcpServer'}
+        "403":
+          description: вызывающий — агент-актор
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "404": {$ref: '#/components/responses/NotFound'}
+
+  # ===========================================================================
+  # /api/deployment-mcp-servers/**
+  # ===========================================================================
+  /api/deployment-mcp-servers:
+    get:
+      operationId: listWorkspaceDeploymentMcpServers
+      tags: [WorkspaceMcp, DeploymentMcp]
+      summary: Список серверов из библиотеки деплоя, доступных пространству, с флагом включения
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - {$ref: '#/components/parameters/WorkspaceSlugHeader'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {$ref: '#/components/schemas/DeploymentMcpServer'}
+        "400":
+          description: workspace_id не передан
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/deployment-mcp-servers/{serverId}/enabled:
+    parameters:
+      - {name: serverId, in: path, required: true, schema: {type: string, format: uuid}}
+    put:
+      operationId: setWorkspaceDeploymentMcpServerEnabled
+      tags: [WorkspaceMcp, DeploymentMcp]
+      summary: Включить/выключить сервер из библиотеки деплоя для пространства
+      description: >
+        При выключении дополнительно снимает назначения этого сервера у всех
+        агентов пространства (иначе они остались бы ссылаться на недоступный
+        сервер). Недоступно агенту-актору.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin]
+      parameters:
+        - {$ref: '#/components/parameters/WorkspaceSlugHeader'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: {type: boolean}
+      responses:
+        "204": {description: Обновлено}
+        "400":
+          description: enabled не передан
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "403":
+          description: вызывающий — агент-актор, либо не owner/admin
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "404":
+          description: пространство или сервер не найдены
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  # ===========================================================================
+  # Одиночные ручки эффективной конфигурации и здоровья LLM
+  # ===========================================================================
+  /api/deployment-policy:
+    get:
+      operationId: getDeploymentPolicy
+      tags: [WorkspaceConfig]
+      summary: Прочитать документ политики деплоя (только для чтения, вход через членство в пространстве)
+      description: >
+        Тот же документ, что у административной ручки GET /api/deployment/policy,
+        но доступ определяется тем же правилом, что у /api/workspace-config —
+        owner/admin пространства или deployment-admin.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [owner, admin, deployment-admin]
+      parameters:
+        - {$ref: '#/components/parameters/WorkspaceSlugHeader'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeploymentPolicyDocument'}
+        "403": {$ref: '#/components/responses/Forbidden'}
+
+  /api/effective-config:
+    get:
+      operationId: getEffectiveConfigView
+      tags: [WorkspaceConfig]
+      summary: Итоговая (эффективная) конфигурация LLM/MCP для пары пространство+пользователь, с признаками происхождения и блокировки
+      description: >
+        Показывает результат наложения слоёв политика-деплоя →
+        конфиг-пространства → персональный override, с указанием, из какого
+        слоя взято каждое значение (origin) и заблокировано ли оно для
+        переопределения ниже (locked). Секретные значения не отдаются —
+        только has_api_key/has_env.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      parameters:
+        - {$ref: '#/components/parameters/WorkspaceSlugHeader'}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/EffectiveConfigView'}
+        "400":
+          description: workspace_id не передан/невалиден
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        "403":
+          description: вызывающий не участник пространства
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/deployment/client-secrets:
+    get:
+      operationId: getDeploymentClientSecrets
+      tags: [DeploymentAdmin]
+      summary: Выдать управляемому десктоп-раннеру ключ LLM деплоя и адреса библиотеки MCP вне активной задачи
+      description: >
+        Единственный канал получения секретов деплоя раннером в простое
+        (чат-помощник, самопроверка при установке); персональные MCP-креды
+        сюда не попадают, только конфигурация уровня деплоя. Доступен только
+        инсталляциям, запущенным самим приложением — определяется заголовком
+        X-Goosar-Launched-By: desktop (иначе 403 с
+        code=client_secrets_not_managed). Каждая выдача пишется в admin-аудит
+        (deployment.client_secrets.issued) со списком выданных полей, но без
+        самих значений.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [any-authenticated]
+      parameters:
+        - name: X-Goosar-Launched-By
+          in: header
+          required: true
+          schema: {type: string, enum: [desktop]}
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/DeploymentClientSecrets'}
+        "403":
+          description: код client_secrets_not_managed — вызов не от управляемой инсталляции
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/llm/health:
+    get:
+      operationId: getLlmHealth
+      tags: [WorkspaceConfig]
+      summary: Здоровье сконфигурированного на деплое LLM-эндпоинта (пингует /models)
+      description: >
+        Результат кэшируется на 60 секунд (общий кэш процесса, не привязан к
+        пространству/пользователю). unconfigured, если на деплое не заданы
+        base_url/api_key.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/LlmHealth'}
+
+components:
+  responses:
+    BadRequest:
+      description: Невалидный запрос
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Unauthorized:
+      description: Не аутентифицирован
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    Forbidden:
+      description: Недостаточно прав
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    NotFound:
+      description: Не найдено
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    CloudRuntimeUnavailable:
+      description: Облачный рантайм (биллинг) не подключён на этом деплое
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    CloudRuntimeBadGateway:
+      description: Облачный рантайм ответил ошибкой или недоступен
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+    CloudRuntimeTimeout:
+      description: Превышено время ожидания ответа облачного рантайма
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+
+  schemas:
+    # ------------------------------------------------------------------
+    # Workspaces
+    # ------------------------------------------------------------------
+    WorkspaceItem:
+      description: >
+        Форма ровно как #/components/schemas/Workspace в общем фрагменте
+        контракта; продублирована здесь полями для сверки, а не как
+        отдельная схема — реализатор должен использовать общий Workspace.
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        slug: {type: string}
+        description: {type: string, nullable: true}
+        context: {type: string, nullable: true}
+        settings: {type: object}
+        repos: {type: array, items: {type: object}}
+        issue_prefix: {type: string}
+        avatar_url: {type: string, nullable: true}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+      required: [id, name, slug, issue_prefix, created_at, updated_at]
+
+    CreateWorkspaceRequest:
+      type: object
+      required: [name, slug]
+      properties:
+        name: {type: string, description: "обрезается по пробелам, не может быть пустым после обрезки"}
+        slug:
+          type: string
+          description: >
+            приводится к нижнему регистру; после нормализации должен
+            соответствовать `^[a-z0-9]+(?:-[a-z0-9]+)*$`; не должен входить в
+            список зарезервированных слов (code=workspace_slug_reserved)
+        description: {type: string, nullable: true}
+        context: {type: string, nullable: true}
+        issue_prefix: {type: string, nullable: true, description: "если не задан — выводится из первых букв имени, до 3 символов, в верхнем регистре"}
+        template_key: {type: string, nullable: true, description: "ключ шаблона роли для предзаполнения пространства при создании"}
+
+    UpdateWorkspaceRequest:
+      type: object
+      description: Частичный патч — присутствующие поля заменяют текущие значения.
+      properties:
+        name: {type: string, description: "непустая строка после обрезки пробелов"}
+        description: {type: string, nullable: true}
+        context: {type: string, nullable: true}
+        settings: {type: object}
+        repos:
+          type: array
+          description: >
+            массив {url, description?}; url обязателен, должен быть валидным
+            http(s) или ssh git URL; дубликаты по url молча схлопываются
+          items:
+            type: object
+            required: [url]
+            properties:
+              url: {type: string}
+              description: {type: string}
+        issue_prefix: {type: string, description: "приводится к верхнему регистру; пустая строка игнорируется"}
+        avatar_url: {type: string}
+
+    WorkspaceCapabilities:
+      type: object
+      properties:
+        template_key: {type: string}
+        role_name: {type: string}
+        role_summary: {type: string}
+        capabilities:
+          type: array
+          items: {$ref: '#/components/schemas/WorkspaceCapability'}
+        sample_tasks:
+          type: array
+          items: {$ref: '#/components/schemas/WorkspaceSampleTask'}
+    WorkspaceCapability:
+      type: object
+      properties:
+        key: {type: string}
+        title: {type: string}
+        body: {type: string}
+    WorkspaceSampleTask:
+      type: object
+      properties:
+        key: {type: string}
+        title: {type: string}
+        prompt: {type: string}
+        requires: {type: array, items: {type: string}}
+
+    WorkspaceMemberWithUser:
+      description: >
+        Расширение общего #/components/schemas/Member полями пользователя.
+        Поля для сверки: id, workspace_id, user_id, role, created_at, name,
+        email, avatar_url, perimeter_access.
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        user_id: {type: string, format: uuid}
+        role: {type: string, enum: [owner, admin, member]}
+        created_at: {type: string, format: date-time}
+        name: {type: string}
+        email: {type: string}
+        avatar_url: {type: string, nullable: true}
+        perimeter_access: {type: boolean}
+      required: [id, workspace_id, user_id, role, created_at, name, email, perimeter_access]
+
+    InviteWorkspaceMemberRequest:
+      type: object
+      required: [email]
+      properties:
+        email: {type: string, format: email}
+        role: {type: string, enum: [member, admin], description: "owner запрещён для приглашения; пусто = member"}
+
+    UpdateWorkspaceMemberRequest:
+      type: object
+      description: Должно быть передано хотя бы одно из role/perimeter_access.
+      properties:
+        role: {type: string, enum: [owner, admin, member]}
+        perimeter_access: {type: boolean}
+
+    WorkspaceInvitation:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        inviter_id: {type: string, format: uuid}
+        invitee_email: {type: string}
+        invitee_user_id: {type: string, format: uuid, nullable: true}
+        role: {type: string, enum: [owner, admin, member]}
+        status: {type: string, enum: [pending, accepted, declined, revoked, expired]}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        expires_at: {type: string, format: date-time}
+        inviter_name: {type: string}
+        inviter_email: {type: string}
+        workspace_name: {type: string}
+      required: [id, workspace_id, inviter_id, invitee_email, role, status, created_at, updated_at, expires_at]
+
+    WorkspaceExportJob:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        status: {type: string, enum: [pending, running, completed, failed]}
+        error: {type: string, nullable: true}
+        size_bytes: {type: integer}
+        created_at: {type: string, format: date-time}
+        completed_at: {type: string, format: date-time, nullable: true}
+        manifest: {type: object, nullable: true}
+        download_url: {type: string, nullable: true, description: "присутствует только когда status=completed"}
+      required: [id, workspace_id, status, size_bytes, created_at]
+
+    GitHubInstallation:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        installation_id: {type: integer, nullable: true, description: "виден только owner/admin, иначе null"}
+        account_login: {type: string}
+        account_type: {type: string}
+        account_avatar_url: {type: string, nullable: true}
+        created_at: {type: string, format: date-time}
+    GitHubInstallationsResponse:
+      type: object
+      properties:
+        installations:
+          type: array
+          items: {$ref: '#/components/schemas/GitHubInstallation'}
+        configured: {type: boolean}
+        repository_browse_configured: {type: boolean}
+        can_manage: {type: boolean}
+    GitHubConnectResponse:
+      type: object
+      properties:
+        url: {type: string}
+        configured: {type: boolean}
+    GitHubRepository:
+      type: object
+      properties:
+        id: {type: integer}
+        full_name: {type: string}
+        html_url: {type: string}
+        clone_url: {type: string}
+        description: {type: string, nullable: true}
+        private: {type: boolean}
+        archived: {type: boolean}
+        default_branch: {type: string}
+    GitHubRepositoriesResponse:
+      type: object
+      properties:
+        repositories:
+          type: array
+          items: {$ref: '#/components/schemas/GitHubRepository'}
+        total_count: {type: integer}
+        next_page: {type: integer, nullable: true}
+
+    VcsConnection:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        provider: {type: string}
+        instance_url: {type: string}
+        account_login: {type: string}
+        webhook_url: {type: string}
+        webhook_path: {type: string}
+        created_at: {type: string, format: date-time}
+    VcsConnectionsResponse:
+      type: object
+      properties:
+        connections:
+          type: array
+          items: {$ref: '#/components/schemas/VcsConnection'}
+        available: {type: boolean}
+        configured: {type: boolean}
+        can_manage: {type: boolean}
+    ConnectVcsRequest:
+      type: object
+      required: [provider, instance_url, access_token]
+      properties:
+        provider: {type: string}
+        instance_url: {type: string}
+        access_token: {type: string}
+    VcsConnectResponse:
+      allOf:
+        - {$ref: '#/components/schemas/VcsConnection'}
+        - type: object
+          properties:
+            webhook_secret: {type: string, description: "отдаётся только в ответ на подключение/ротацию, больше нигде не читается"}
+
+    RuntimeProfile:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        display_name: {type: string}
+        protocol_family: {type: string}
+        command_name: {type: string}
+        description: {type: string, nullable: true}
+        fixed_args: {type: array, items: {type: string}}
+        visibility: {type: string}
+        created_by: {type: string, format: uuid, nullable: true}
+        enabled: {type: boolean}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    RuntimeProfilesResponse:
+      type: object
+      properties:
+        runtime_profiles:
+          type: array
+          items: {$ref: '#/components/schemas/RuntimeProfile'}
+    CreateRuntimeProfileRequest:
+      type: object
+      required: [display_name, protocol_family, command_name]
+      properties:
+        display_name: {type: string}
+        protocol_family: {type: string, description: "один из поддерживаемых типов агентского протокола"}
+        command_name: {type: string, description: "одиночный токен без пробелов и NUL-байтов"}
+        description: {type: string, nullable: true}
+        fixed_args: {type: array, items: {type: string}, description: "непустые строки без NUL-байтов"}
+        enabled: {type: boolean, default: true}
+    UpdateRuntimeProfileRequest:
+      type: object
+      properties:
+        display_name: {type: string}
+        command_name: {type: string}
+        description: {type: string, nullable: true}
+        fixed_args: {type: array, items: {type: string}}
+        enabled: {type: boolean}
+
+    SlackInstallation:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        agent_id: {type: string, format: uuid}
+        team_id: {type: string}
+        bot_user_id: {type: string}
+        installer_user_id: {type: string, format: uuid}
+        status: {type: string}
+        installed_at: {type: string, format: date-time}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    SlackInstallationsResponse:
+      type: object
+      properties:
+        installations:
+          type: array
+          items: {$ref: '#/components/schemas/SlackInstallation'}
+        configured: {type: boolean}
+        install_supported: {type: boolean}
+    RegisterSlackBotRequest:
+      type: object
+      properties:
+        bot_token: {type: string}
+        app_token: {type: string}
+
+    # ------------------------------------------------------------------
+    # Composio
+    # ------------------------------------------------------------------
+    ComposioConnectInitRequest:
+      type: object
+      required: [toolkit_slug]
+      properties:
+        toolkit_slug: {type: string}
+    ComposioConnectInitResponse:
+      type: object
+      properties:
+        redirect_url: {type: string}
+    ComposioConnection:
+      type: object
+      properties:
+        id: {type: string}
+        toolkit_slug: {type: string}
+        status: {type: string}
+        connected_at: {type: string, format: date-time}
+        last_used_at: {type: string, format: date-time, nullable: true}
+    ComposioToolkit:
+      type: object
+      properties:
+        slug: {type: string}
+        name: {type: string}
+        logo: {type: string}
+        category: {type: string}
+        connectable: {type: boolean}
+
+    # ------------------------------------------------------------------
+    # Tokens
+    # ------------------------------------------------------------------
+    PersonalAccessToken:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        token_prefix: {type: string}
+        expires_at: {type: string, format: date-time, nullable: true}
+        last_used_at: {type: string, format: date-time, nullable: true}
+        created_at: {type: string, format: date-time}
+    CreatePersonalAccessTokenRequest:
+      type: object
+      required: [name]
+      properties:
+        name: {type: string}
+        expires_in_days: {type: integer, nullable: true, description: "> 0; отсутствие/0/отрицательное = бессрочный"}
+    CreatePersonalAccessTokenResponse:
+      allOf:
+        - {$ref: '#/components/schemas/PersonalAccessToken'}
+        - type: object
+          properties:
+            token: {type: string, description: "значение в открытом виде, отдаётся один раз"}
+    RenewPersonalAccessTokenResponse:
+      type: object
+      properties:
+        expires_at: {type: string, description: "пустая строка для бессрочного токена"}
+        renewed: {type: boolean}
+
+    # ------------------------------------------------------------------
+    # Cloud billing (проксируется к внешнему биллинговому сервису как есть)
+    # ------------------------------------------------------------------
+    BillingBalance:
+      type: object
+      properties:
+        owner_id: {type: string}
+        balance_micro: {type: number}
+        balance_credit: {type: number}
+        updated_at: {type: string}
+    BillingTransaction:
+      type: object
+      properties:
+        id: {type: string}
+        owner_id: {type: string}
+        idempotency_key: {type: string}
+        tx_type: {type: string, enum: [topup, deduction, refund, expire, adjustment]}
+        source: {type: string, enum: [gateway, fleet, topup, refund, admin, system]}
+        amount_micro: {type: number}
+        balance_after: {type: number}
+        reference_id: {type: string}
+        description: {type: string}
+        metadata: {type: object}
+        created_at: {type: string}
+    BillingTransactionsPage:
+      type: object
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/BillingTransaction'}}
+        total: {type: integer}
+        page: {type: integer}
+        page_size: {type: integer}
+    BillingBatch:
+      type: object
+      properties:
+        id: {type: string}
+        owner_id: {type: string}
+        source_tx_id: {type: string}
+        source_type: {type: string, enum: [purchase, bonus, adjustment]}
+        total_micro: {type: number}
+        remaining_micro: {type: number}
+        expires_at: {type: string, nullable: true}
+        created_at: {type: string}
+        updated_at: {type: string}
+    BillingBatchesPage:
+      type: object
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/BillingBatch'}}
+        total: {type: integer}
+        page: {type: integer}
+        page_size: {type: integer}
+    BillingTopup:
+      type: object
+      properties:
+        id: {type: string}
+        owner_id: {type: string}
+        amount_cents: {type: number}
+        currency: {type: string}
+        credits: {type: number}
+        bonus_credits: {type: number}
+        status: {type: string, enum: [pending, paid, credited, failed, canceled]}
+        tier_id: {type: string}
+        stripe_checkout_id: {type: string}
+        purchase_batch_id: {type: string}
+        created_at: {type: string}
+        updated_at: {type: string}
+    BillingTopupsPage:
+      type: object
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/BillingTopup'}}
+        total: {type: integer}
+        page: {type: integer}
+        page_size: {type: integer}
+    BillingPriceTier:
+      type: object
+      properties:
+        id: {type: string}
+        display_name: {type: string}
+        amount_cents: {type: number}
+        credits: {type: number}
+        bonus_credits: {type: number}
+        bonus_expires_in: {type: string}
+    CreateBillingCheckoutSessionRequest:
+      type: object
+      required: [tier_id]
+      properties:
+        tier_id: {type: string}
+        customer_email: {type: string, format: email}
+    CreateBillingCheckoutSessionResponse:
+      type: object
+      properties:
+        order_id: {type: string}
+        session_id: {type: string}
+        url: {type: string}
+    BillingCheckoutSessionStatus:
+      type: object
+      properties:
+        order_id: {type: string}
+        status: {type: string}
+        amount_cents: {type: number}
+        credits: {type: number}
+        bonus_credits: {type: number}
+        currency: {type: string}
+        tier_id: {type: string}
+    CreateBillingPortalSessionResponse:
+      type: object
+      properties:
+        url: {type: string}
+
+    # ------------------------------------------------------------------
+    # Deployment admin
+    # ------------------------------------------------------------------
+    DeploymentAdmin:
+      type: object
+      properties:
+        user_id: {type: string, format: uuid}
+        email: {type: string}
+        name: {type: string}
+        granted_by: {type: string, format: uuid}
+        granted_at: {type: string, format: date-time}
+    DeploymentAdminPendingRequest:
+      type: object
+      properties:
+        status: {type: string, enum: [pending]}
+        request_id: {type: string, format: uuid}
+        action: {type: string, enum: [grant, revoke]}
+        target_user_id: {type: string, format: uuid}
+        target_email: {type: string}
+        requested_by: {type: string, format: uuid}
+        requested_at: {type: string, format: date-time}
+        confirm_hint: {type: string, description: "человекочитаемая инструкция, как подтвердить/отклонить заявку отдельной серверной admin-командой по request_id; показывать как есть"}
+    DeploymentAuditEntry:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        source: {type: string, enum: [admin, auth]}
+        action: {type: string}
+        actor_user_id: {type: string, format: uuid}
+        actor_type: {type: string}
+        actor_id: {type: string}
+        actor_role: {type: string}
+        target_type: {type: string}
+        target_id: {type: string}
+        outcome: {type: string}
+        reason: {type: string}
+        before_hash: {type: string}
+        after_hash: {type: string}
+        workspace_id: {type: string, format: uuid}
+        request_id: {type: string}
+        client_ip: {type: string}
+        user_agent: {type: string}
+        created_at: {type: string, format: date-time}
+        cursor: {type: string, description: "непрозрачный курсор постраничности этой записи"}
+    DeploymentUser:
+      type: object
+      properties:
+        user_id: {type: string, format: uuid}
+        email: {type: string}
+        name: {type: string}
+        deactivated: {type: boolean}
+        deactivated_at: {type: string, format: date-time, nullable: true}
+        token_version: {type: integer}
+        revoked_tokens: {type: integer}
+        closed_connections: {type: integer}
+    DeleteDeploymentUserResponse:
+      type: object
+      properties:
+        user_id: {type: string, format: uuid}
+        email: {type: string, description: "email анонимизированной записи (уже заменён на непригодное для входа значение)"}
+        name: {type: string, description: "фиксированная метка-заглушка, не исходное имя"}
+        removed_memberships: {type: integer}
+        revoked_tokens: {type: integer}
+        closed_connections: {type: integer}
+
+    McpCredentialField:
+      type: object
+      description: >
+        Одно поле, которое MCP-сервер просит заполнить у каждого пользователя
+        (например, персональный API-ключ стороннего сервиса).
+      required: [key, required]
+      properties:
+        key:
+          type: string
+          description: "1-128 символов, буквы/цифры/подчёркивание, не начинается с цифры, уникален в пределах схемы"
+        label: {type: string, maxLength: 500}
+        hint: {type: string, maxLength: 500}
+        required: {type: boolean}
+
+    DeploymentMcpServer:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        transport: {type: string, enum: [stdio, http, unknown]}
+        credential_schema:
+          type: array
+          items: {$ref: '#/components/schemas/McpCredentialField'}
+        enabled_workspaces: {type: integer, description: "только в административном списке — сколько пространств включили сервер"}
+        enabled: {type: boolean, description: "только когда сервер показан в контексте конкретного пространства — включён ли он там"}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    DeploymentMcpServerRequest:
+      type: object
+      description: name обязателен при создании; при обновлении пустая строка = не менять.
+      properties:
+        name: {type: string, description: "буквы/цифры/дефис/подчёркивание"}
+        config:
+          type: object
+          description: >
+            JSON-объект подключения сервера (адрес/команда/секреты). Не может
+            содержать ключи enabled/disabled и служебный маркер маски.
+            Хранится запечатанным, никогда не отдаётся обратно.
+        credential_schema:
+          type: array
+          items: {$ref: '#/components/schemas/McpCredentialField'}
+
+    DeploymentPolicyBody:
+      type: object
+      description: >
+        Не более 64 КБ, только объект; допускаются только ключи llm/mcp/session
+        (любой другой ключ верхнего уровня отклоняется, как и любое поле,
+        похожее на секрет по имени — key/token/secret/password).
+      properties:
+        llm:
+          type: object
+          properties:
+            base_url: {type: string}
+            model: {type: string}
+            locked: {type: boolean}
+        mcp:
+          type: object
+          description: >
+            имя_сервера → {enabled?, locked?}; запись "*" — общий выключатель
+            MCP на деплое и допускает только {"enabled": false, "locked": true}
+          additionalProperties:
+            type: object
+            properties:
+              enabled: {type: boolean}
+              locked: {type: boolean}
+        session:
+          type: object
+          description: "idle_timeout_hours/absolute_lifetime_days/max_concurrent_sessions/require_mfa"
+    DeploymentPolicyDocument:
+      type: object
+      properties:
+        policy: {$ref: '#/components/schemas/DeploymentPolicyBody'}
+        updated_at: {type: string, format: date-time, nullable: true}
+
+    DeploymentWorkspace:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        slug: {type: string}
+        member_count: {type: integer}
+    DeploymentWorkspaceMember:
+      type: object
+      properties:
+        user_id: {type: string, format: uuid}
+        name: {type: string}
+        email: {type: string}
+        role: {type: string, enum: [owner, admin, member]}
+        deactivated: {type: boolean}
+    JoinTarget:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        slug: {type: string}
+        name: {type: string}
+        description: {type: string}
+        template_key: {type: string}
+        member_count: {type: integer}
+    JoinTargetResult:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        slug: {type: string}
+        name: {type: string}
+        already_member: {type: boolean}
+
+    DeploymentFleetAgent:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        system_key: {type: string}
+        status: {type: string}
+    DeploymentFleetRuntime:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string}
+        provider: {type: string}
+        visibility: {type: string}
+        status: {type: string}
+        online: {type: boolean}
+        last_seen_at: {type: string, format: date-time, nullable: true}
+        running_tasks: {type: integer}
+        stuck_tasks: {type: integer}
+        agents: {type: array, items: {$ref: '#/components/schemas/DeploymentFleetAgent'}}
+    DeploymentFleetMachine:
+      type: object
+      properties:
+        daemon_id: {type: string}
+        workspace_id: {type: string, format: uuid}
+        workspace_name: {type: string}
+        workspace_slug: {type: string}
+        owner_email: {type: string}
+        owner_name: {type: string}
+        device_info: {type: string}
+        online: {type: boolean}
+        last_heartbeat_at: {type: string, format: date-time, nullable: true}
+        client_version: {type: string}
+        version_outdated: {type: boolean}
+        running_tasks: {type: integer}
+        stuck_tasks: {type: integer}
+        runtimes: {type: array, items: {$ref: '#/components/schemas/DeploymentFleetRuntime'}}
+    DeploymentFleetSummary:
+      type: object
+      properties:
+        machines_total: {type: integer}
+        machines_online: {type: integer}
+        machines_offline: {type: integer}
+        outdated_versions: {type: integer}
+        running_tasks: {type: integer}
+        stuck_tasks: {type: integer}
+    DeploymentFleet:
+      type: object
+      properties:
+        machines: {type: array, items: {$ref: '#/components/schemas/DeploymentFleetMachine'}}
+        summary: {$ref: '#/components/schemas/DeploymentFleetSummary'}
+        total: {type: integer}
+        truncated: {type: boolean, description: "true, если список машин обрезан до лимита в 200 записей"}
+        min_client_version: {type: string}
+
+    # ------------------------------------------------------------------
+    # Workspace / user config layers
+    # ------------------------------------------------------------------
+    WorkspaceConfigLayer:
+      type: object
+      properties:
+        llm_base_url: {type: string}
+        llm_model: {type: string}
+        has_llm_api_key: {type: boolean}
+        mcp_defaults:
+          type: object
+          description: "маскированная форма: {имя_сервера: {enabled?, env?: {ключ: true}}}"
+        updated_at: {type: string, format: date-time, nullable: true}
+        updated_by: {type: string, format: uuid}
+    PutWorkspaceConfigRequest:
+      type: object
+      properties:
+        llm_base_url: {type: string, description: "абсолютный http(s) URL, ≤2048 символов; пустая строка очищает"}
+        llm_model: {type: string, maxLength: 256}
+        llm_api_key: {type: string, maxLength: 4096, description: "write-only, запечатывается перед сохранением"}
+        mcp_defaults:
+          type: object
+          description: >
+            {имя_сервера: {enabled?: boolean, env?: {ключ: строка|null}} | null},
+            null на верхнем уровне полностью очищает слой MCP; null у значения
+            env удаляет переменную; документ ограничен 64 КБ
+    WorkspaceUserConfigOverride:
+      type: object
+      properties:
+        user_id: {type: string, format: uuid}
+        llm_base_url: {type: string}
+        llm_model: {type: string}
+        has_llm_api_key: {type: boolean}
+        mcp_overrides: {type: object, description: "та же маскированная форма, что mcp_defaults"}
+        updated_at: {type: string, format: date-time, nullable: true}
+        updated_by: {type: string, format: uuid}
+    PutWorkspaceUserConfigOverrideRequest:
+      allOf:
+        - {$ref: '#/components/schemas/PutWorkspaceConfigRequest'}
+      description: то же тело, что PutWorkspaceConfigRequest, но поле называется mcp_overrides.
+
+    WorkspaceMcpServer:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        workspace_id: {type: string, format: uuid}
+        name: {type: string}
+        transport: {type: string, enum: [stdio, http, unknown]}
+        source: {type: string, enum: [workspace, deployment]}
+        enabled: {type: boolean, description: "присутствует только для серверов, включаемых пространством из библиотеки деплоя"}
+        credential_schema: {type: array, items: {$ref: '#/components/schemas/McpCredentialField'}}
+        provided_credentials: {type: array, items: {type: string}, description: "ключи, значения которых вызывающий уже сохранил"}
+        missing_credentials: {type: array, items: {type: string}, description: "обязательные ключи схемы, ещё не заполненные вызывающим"}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    WorkspaceMcpServerRequest:
+      type: object
+      properties:
+        name: {type: string, description: "буквы/цифры/дефис/подчёркивание"}
+        config:
+          type: object
+          description: то же ограничение, что у DeploymentMcpServerRequest.config
+        credential_schema: {type: array, items: {$ref: '#/components/schemas/McpCredentialField'}}
+    SetWorkspaceMcpCredentialsRequest:
+      type: object
+      required: [values]
+      properties:
+        values:
+          type: object
+          description: "ключ схемы → значение; пустая строка удаляет сохранённое значение"
+          additionalProperties: {type: string}
+
+    # ------------------------------------------------------------------
+    # Effective config / status / health
+    # ------------------------------------------------------------------
+    EffectiveConfigView:
+      type: object
+      properties:
+        schema_version: {type: integer}
+        llm:
+          type: object
+          properties:
+            base_url: {type: string}
+            model: {type: string}
+            has_api_key: {type: boolean}
+            origin: {type: string, description: "слой, из которого взято значение"}
+            locked: {type: boolean}
+        mcp:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              enabled: {type: boolean}
+              has_env: {type: boolean}
+              env_keys: {type: array, items: {type: string}}
+              origin: {type: string}
+              locked: {type: boolean}
+        revoked_packages: {type: array, items: {type: string}}
+    DeploymentClientSecrets:
+      type: object
+      properties:
+        llm:
+          type: object
+          nullable: true
+          properties:
+            api_base: {type: string}
+            model: {type: string}
+            api_key: {type: string}
+        integrations:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              url: {type: string}
+    LlmHealth:
+      type: object
+      properties:
+        status: {type: string, enum: [ok, auth_rejected, degraded, unreachable, unconfigured]}
+        checked_at: {type: string, format: date-time}
+        latency_ms: {type: integer}
+
+    WorkspaceStatus:
+      type: object
+      properties:
+        generated_at: {type: string, format: date-time}
+        workspace:
+          type: object
+          properties:
+            id: {type: string, format: uuid}
+            name: {type: string}
+            slug: {type: string}
+        caller:
+          type: object
+          properties:
+            actor: {type: string, description: "human | agent | иной тип актора"}
+            agent_id: {type: string, format: uuid}
+            agent_name: {type: string}
+            runtime_id: {type: string, format: uuid}
+            runtime_status: {type: string}
+            note: {type: string}
+        runtimes:
+          type: object
+          properties:
+            state: {type: string}
+            total: {type: integer}
+            online: {type: integer}
+            items:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: {type: string, format: uuid}
+                  name: {type: string}
+                  provider: {type: string}
+                  status: {type: string}
+                  last_seen_at: {type: string, format: date-time}
+            note: {type: string}
+        provisioning:
+          type: object
+          properties:
+            state: {type: string}
+            pinned_packages: {type: integer}
+            delivered_packages: {type: integer}
+            last_delivered_at: {type: string, format: date-time}
+            note: {type: string}
+        mcp:
+          type: object
+          properties:
+            state: {type: string}
+            workspace_servers: {type: integer}
+            tools_verified: {type: string}
+            assigned:
+              type: array
+              items:
+                type: object
+                properties:
+                  name: {type: string}
+                  transport: {type: string}
+                  enabled: {type: boolean}
+            note: {type: string}
+        perimeter:
+          type: object
+          properties:
+            delivery_profile: {type: string}
+            deployment_profile: {type: string}
+            member_access: {type: string}
+            kerberos: {type: string}
+            note: {type: string}
+        llm:
+          type: object
+          properties:
+            state: {type: string}
+            base_url: {type: string}
+            model: {type: string}
+            has_api_key: {type: boolean}
+            origin: {type: string}
+            locked: {type: boolean}
+            note: {type: string}
+
+    AssigneeFrequencyEntry:
+      type: object
+      properties:
+        assignee_type: {type: string}
+        assignee_id: {type: string, format: uuid}
+        frequency: {type: integer}
+
+    # ------------------------------------------------------------------
+    # Provisioning
+    # ------------------------------------------------------------------
+    ProvisioningPackage:
+      type: object
+      properties:
+        schemaVersion: {type: integer}
+        name: {type: string}
+        version: {type: string}
+        type: {type: string, enum: [skill, mcp-server, runtime]}
+        platform: {type: string, description: '"*" или конкретная платформа'}
+        sha256: {type: string}
+        size: {type: integer}
+        requires: {type: array, items: {type: string}, description: "ссылки вида тип:имя@версия"}
+    ProvisioningUnavailablePackage:
+      type: object
+      properties:
+        key: {type: string}
+        reason: {type: string}
+    ProvisioningManifest:
+      type: object
+      properties:
+        schemaVersion: {type: integer}
+        packages: {type: array, items: {$ref: '#/components/schemas/ProvisioningPackage'}}
+        totalBeforePlatformFilter: {type: integer}
+        platformsAvailable: {type: array, items: {type: string}}
+        revokedPackages: {type: array, items: {type: string}}
+        unavailablePackages: {type: array, items: {$ref: '#/components/schemas/ProvisioningUnavailablePackage'}}
+    ProvisioningCatalog:
+      type: object
+      properties:
+        schemaVersion: {type: integer}
+        packages: {type: array, items: {$ref: '#/components/schemas/ProvisioningPackage'}}
+    ProvisioningPin:
+      type: object
+      properties:
+        package_name: {type: string}
+        package_type: {type: string, enum: [skill, mcp-server, runtime]}
+        version: {type: string}
+        enabled: {type: boolean}
+        updated_at: {type: string, format: date-time}
+        updated_by: {type: string, format: uuid, nullable: true}
+    ProvisioningPinsList:
+      type: object
+      properties:
+        pins: {type: array, items: {$ref: '#/components/schemas/ProvisioningPin'}}
+    PutProvisioningPinsRequest:
+      type: object
+      required: [pins]
+      properties:
+        pins:
+          type: array
+          items:
+            type: object
+            required: [package_name, package_type, version, enabled]
+            properties:
+              package_name: {type: string, description: 'формат `^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$`'}
+              package_type: {type: string, enum: [skill, mcp-server, runtime]}
+              version: {type: string, description: "тот же формат идентификатора, что package_name"}
+              enabled: {type: boolean}
