@@ -448,10 +448,6 @@ func (d *Deps) handleRevokeAllSessions(w http.ResponseWriter, r *http.Request) {
 	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"revoked": n, "token_version": epoch})
 }
 
-func (d *Deps) notImplemented(w http.ResponseWriter, r *http.Request) {
-	httpapi.WriteNotImplemented(w, r)
-}
-
 // --- helpers -----------------------------------------------------------------
 
 func normalizeEmail(e string) string { return strings.TrimSpace(strings.ToLower(e)) }

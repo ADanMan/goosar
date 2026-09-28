@@ -23,6 +23,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/adanman/goosar/server2/internal/httpapi"
 )
 
 // oidcCacheTTL — как долго доверять уже загрученным discovery-документу и
@@ -332,12 +334,33 @@ func signOIDCState(secret, state, client, nonce string, ttl time.Duration) strin
 // oidc возвращает (и лениво создаёт) клиент для d.Config.OIDC.IssuerURL —
 // один экземпляр на процесс, переиспользующий кэш discovery/JWKS между
 // запросами. Не вызывать, когда IssuerURL пуст (проверка — на вызывающей
-// стороне, handlers_oidc_start.go/handlers_oidc_callback.go).
+// стороне, handleOidcStart/handleOidcCallback ниже).
 func (d *Deps) oidc() *oidcClient {
 	d.oidcOnce.Do(func() {
 		d.oidcInstance = newOIDCClient(d.Config.OIDC.IssuerURL)
 	})
 	return d.oidcInstance
+}
+
+// issueOIDCState генерирует state+nonce и ставит подписанную cookie с ними
+// (contract: "Редирект на IdP; ставит подписанную state-cookie") — общая
+// подготовка для handleOidcStart, вынесенная сюда, чтобы сам обработчик не
+// разбирался в деталях подписи/TTL cookie.
+func (d *Deps) issueOIDCState(w http.ResponseWriter, client string) (state, nonce string, err error) {
+	state, err = randomToken("", 16)
+	if err != nil {
+		return "", "", err
+	}
+	nonce, err = randomToken("", 16)
+	if err != nil {
+		return "", "", err
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: oidcStateCookie, Value: signOIDCState(d.Config.JWTSecret, state, client, nonce, oidcStateTTL),
+		Path: "/", HttpOnly: true, Secure: d.Config.IsProduction(),
+		SameSite: http.SameSiteLaxMode, MaxAge: int(oidcStateTTL.Seconds()),
+	})
+	return state, nonce, nil
 }
 
 // checkOIDCCallbackState читает и стирает state-cookie, затем сверяет её
@@ -368,7 +391,7 @@ func (d *Deps) checkOIDCCallbackState(w http.ResponseWriter, r *http.Request) (c
 // resolveOIDCIdentity — весь путь от "code" из query-параметра callback до
 // проверенной identity: обмен на id_token, проверка подписи/claim'ов, сверка
 // nonce с тем, что было в state-cookie, разбор sub/email/name. failCode —
-// какой auth_error приложить к редиректу на неудаче (handlers_oidc_callback.go
+// какой auth_error приложить к редиректу на неудаче (handleOidcCallback
 // решает, что делать дальше — эта функция только классифицирует причину).
 func (d *Deps) resolveOIDCIdentity(ctx context.Context, code, wantNonce string) (sub, email, name, failCode string, err error) {
 	idToken, err := d.oidc().exchangeCode(ctx, code, d.oidcRedirectURL(), d.Config.OIDC.ClientID, d.Config.OIDC.ClientSecret)
@@ -458,4 +481,98 @@ func (d *Deps) oidcRedirectURL() string {
 		return ""
 	}
 	return strings.TrimRight(d.Config.PublicURL, "/") + "/api/auth/oidc/callback"
+}
+
+// --- HTTP-обработчики ------------------------------------------------------
+
+// handleOidcStart — GET /api/auth/oidc/start: редирект на authorization_endpoint
+// IdP с подписанной state-cookie (contract: "Редирект на IdP; ставит
+// подписанную state-cookie"). Ответы этой операции в контракте — только
+// 302/404/500 (нет 429): при исчерпанном лимите эта ручка всё равно отвечает
+// 429 JSON — контракт группирует её лимит с verify-code/verify-link/mfa-verify
+// под одним RATE_LIMIT_AUTH_VERIFY (§1.5), и оставить его молча
+// неисполняемым здесь было бы дырой в защите, которую §1.5 явно требует (см.
+// server2/docs/decisions.md, раздел T-029).
+func (d *Deps) handleOidcStart(w http.ResponseWriter, r *http.Request) {
+	if d.Config.OIDC.IssuerURL == "" {
+		httpapi.WriteError(w, http.StatusNotFound, "OIDC not enabled on this server", "oidc_not_enabled")
+		return
+	}
+	ip := httpapi.ClientIP(r)
+	if !d.AuthVerifyIPLimiter.Enforce(w, ip, "too many requests") {
+		return
+	}
+
+	client := "web"
+	if r.URL.Query().Get("client") == "desktop" {
+		client = "desktop"
+	}
+	disc, err := d.oidc().discover(r.Context())
+	if err != nil {
+		d.Logger.Error("auth: oidc: discovery", "err", err)
+		httpapi.WriteError(w, http.StatusInternalServerError, "failed to prepare state", "internal_error")
+		return
+	}
+	state, nonce, err := d.issueOIDCState(w, client)
+	if err != nil {
+		httpapi.WriteError(w, http.StatusInternalServerError, "failed to prepare state", "internal_error")
+		return
+	}
+
+	q := url.Values{
+		"response_type": {"code"},
+		"client_id":     {d.Config.OIDC.ClientID},
+		"redirect_uri":  {d.oidcRedirectURL()},
+		"scope":         {"openid email profile"},
+		"state":         {state},
+		"nonce":         {nonce},
+	}
+	http.Redirect(w, r, disc.AuthorizationEndpoint+"?"+q.Encode(), http.StatusFound)
+}
+
+// handleOidcCallback — GET /api/auth/oidc/callback: обмен code на identity,
+// дальше как verify-code, но результат — редирект (contract §3.3/§3.6:
+// "Always responds with an HTTP redirect"). Раз контракт прямо обещает
+// редирект даже на ошибку, rate limit здесь тоже отвечает редиректом с
+// auth_error=rate_limited, а не голым 429 (в отличие от oidc/start, чей
+// список ответов не содержит прозы "always a redirect").
+func (d *Deps) handleOidcCallback(w http.ResponseWriter, r *http.Request) {
+	client, nonce, stateErr := d.checkOIDCCallbackState(w, r)
+	if d.Config.OIDC.IssuerURL == "" {
+		httpapi.WriteError(w, http.StatusNotFound, "OIDC not enabled on this server", "oidc_not_enabled")
+		return
+	}
+	ip := httpapi.ClientIP(r)
+	if !d.AuthVerifyIPLimiter.Allow(ip) {
+		d.oidcFailRedirect(w, r, client, "rate_limited")
+		return
+	}
+	if errParam := r.URL.Query().Get("error"); errParam != "" {
+		d.oidcFailRedirect(w, r, client, "oidc_"+errParam)
+		return
+	}
+	if stateErr != "" {
+		d.oidcFailRedirect(w, r, client, stateErr)
+		return
+	}
+
+	sub, email, name, failCode, err := d.resolveOIDCIdentity(r.Context(), r.URL.Query().Get("code"), nonce)
+	if err != nil {
+		d.oidcAbort(w, r, client, "обмен кода/идентификация", failCode, err)
+		return
+	}
+	acct, err := d.loginOrLinkExternal(r, "oidc", sub, email, name)
+	if err != nil {
+		d.oidcAbort(w, r, client, "вход/создание аккаунта", "internal_error", err)
+		return
+	}
+	d.finishExternalLogin(w, r, client, acct)
+}
+
+// oidcAbort логирует причину неудачи одной строкой и уводит редиректом на
+// /login#auth_error=<failCode> — общий финал для обоих шагов после
+// checkOIDCCallbackState, которым нужно и то, и другое.
+func (d *Deps) oidcAbort(w http.ResponseWriter, r *http.Request, client, step, failCode string, err error) {
+	d.Logger.Error("auth: oidc: "+step, "err", err)
+	d.oidcFailRedirect(w, r, client, failCode)
 }
