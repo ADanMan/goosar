@@ -1105,7 +1105,8 @@
       "confirm_cancel": "취소",
       "confirm_apply": "MCP 기본값 업데이트",
       "toggle_off_aria": "{{name}} 전달 중단",
-      "env_value_aria": "{{name}}에 추가할 변수의 값"
+      "env_value_aria": "{{name}}에 추가할 변수의 값",
+      "notice_dismiss": "닫기"
     },
     "overrides": {
       "title": "멤버 오버라이드",
@@ -1133,7 +1134,9 @@
       "toast_remove_failed": "오버라이드를 제거하지 못했습니다",
       "remove_confirm_title": "{{name}}의 오버라이드를 해제할까요?",
       "remove_confirm_description": "{{name}}의 머신은 다음 동기화 시 워크스페이스 계층으로 돌아갑니다. 이 오버라이드에만 저장된 키는 삭제되며 다시 읽을 수 없습니다.",
-      "remove_confirm_apply": "오버라이드 해제"
+      "remove_confirm_apply": "오버라이드 해제",
+      "row_actions_aria": "{{name}} 작업",
+      "notice_dismiss": "닫기"
     },
     "pins": {
       "title": "패키지 핀",
@@ -1202,7 +1205,8 @@
       "first_pin_no_change_description": "이 워크스페이스에는 핀이 없어 머신이 배포 카탈로그 전체를 받고 있습니다. {{name}}을(를) 고정해도 머신 입장에서는 달라지는 것이 없습니다: {{name}}과(와) 그것이 필요로 하는 패키지가 현재 카탈로그가 게시하는 전부이기 때문입니다.",
       "effect_breaks": "이 변경 이후에는 이 워크스페이스에서 배포 카탈로그를 확인할 수 없게 되어, 누락된 패키지가 다시 게시되거나 핀을 되돌릴 때까지 멤버의 머신은 패키지 대신 오류를 받습니다.",
       "effect_repair_unpinned": "이 워크스페이스의 전달이 현재 중단되어 있습니다: 활성화된 핀 중 하나가 배포 카탈로그에 없어 멤버의 머신이 패키지 대신 오류를 받고 있습니다. 핀이 하나도 남지 않으면 워크스페이스는 배포 카탈로그 전체를 다시 전달합니다.",
-      "requires_enable_blocked": "배포 카탈로그가 {{name}}에 필요한 모든 것을 게시하지는 않으므로, 핀을 켜면 워크스페이스 전체의 전달이 중단됩니다. 누락된 패키지가 다시 게시될 때까지 꺼진 상태로 유지됩니다."
+      "requires_enable_blocked": "배포 카탈로그가 {{name}}에 필요한 모든 것을 게시하지는 않으므로, 핀을 켜면 워크스페이스 전체의 전달이 중단됩니다. 누락된 패키지가 다시 게시될 때까지 꺼진 상태로 유지됩니다.",
+      "notice_dismiss": "닫기"
     },
     "typed_confirm": {
       "type_prefix": "확인하려면",
@@ -1285,7 +1289,8 @@
       "unkill_confirm": "다시 활성화",
       "mcp_entries_label": "MCP 정책 항목",
       "mcp_entry_disabled": "비활성화됨",
-      "mcp_entry_locked": "잠김"
+      "mcp_entry_locked": "잠김",
+      "notice_dismiss": "닫기"
     },
     "workspaces": {
       "api_key_label": "LLM API 키",
@@ -1370,7 +1375,12 @@
       "toast_reactivate_failed": "접근을 복구하지 못했습니다",
       "toast_reactivated": "접근을 복구했습니다",
       "toast_revoke_failed": "세션을 종료하지 못했습니다.",
-      "toast_sessions_revoked": "세션 {{count}}개를 종료했습니다."
+      "toast_sessions_revoked": "세션 {{count}}개를 종료했습니다.",
+      "col_name": "이름",
+      "col_members": "멤버",
+      "empty_title": "아직 워크스페이스가 없습니다",
+      "row_actions_aria": "{{name}} 작업",
+      "notice_dismiss": "닫기"
     },
     "fleet": {
       "title": "플릿",
@@ -1402,7 +1412,9 @@
       "visibility_public": "공개",
       "status_online": "온라인",
       "status_offline": "오프라인",
-      "no_agents": "없음"
+      "no_agents": "없음",
+      "search_placeholder": "머신 검색",
+      "empty_title": "표시할 머신이 없습니다"
     },
     "mcp": {
       "title": "배포 MCP 라이브러리",
@@ -1423,7 +1435,13 @@
       "delete_title": "이 배포 MCP 서버를 삭제할까요?",
       "delete_description": "\"{{name}}\"이(가) 배포, 이를 활성화한 모든 워크스페이스, 할당된 모든 에이전트에서 제거됩니다.",
       "delete_confirm": "삭제",
-      "cancel": "취소"
+      "cancel": "취소",
+      "col_name": "이름",
+      "col_transport": "전송 방식",
+      "row_actions_aria": "{{name}} 작업",
+      "search_placeholder": "MCP 서버 검색",
+      "no_matches": "검색 결과에 해당하는 서버가 없습니다.",
+      "notice_dismiss": "닫기"
     }
   },
   "mcp": {
@@ -1529,7 +1547,11 @@
     "save": "세션 정책 저장",
     "save_failed": "세션 정책을 저장하지 못했습니다.",
     "saved": "세션 정책을 저장했습니다.",
-    "title": "세션과 2단계 인증"
+    "title": "세션과 2단계 인증",
+    "idle_error": "1~720 사이의 정수(시간)를 입력하세요.",
+    "absolute_error": "1~365 사이의 정수(일)를 입력하세요.",
+    "max_error": "0(무제한)~1000 사이의 정수를 입력하세요.",
+    "notice_dismiss": "닫기"
   },
   "integrations": {
     "list_description": "이 워크스페이스에서 쓸 수 있는 모든 외부 연동과 각각에 아직 필요한 것.",

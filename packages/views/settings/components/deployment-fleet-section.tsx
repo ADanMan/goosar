@@ -2,8 +2,18 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Search, ServerOff } from 'lucide-react';
+import { Alert, AlertDescription } from '@goosar/ui/components/ui/alert';
 import { Badge } from '@goosar/ui/components/ui/badge';
 import { Button } from '@goosar/ui/components/ui/button';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@goosar/ui/components/ui/empty';
+import { Input } from '@goosar/ui/components/ui/input';
 import type { DeploymentFleetMachine } from '@goosar/core/api/deployment-fleet';
 import { deploymentFleetOptions } from '@goosar/core/deployment/admin';
 import { useT, useUiLocale } from '../../i18n';
@@ -17,6 +27,7 @@ export function DeploymentFleetSection() {
   const { t } = useT('settings');
   const uiLocale = useUiLocale();
   const [filter, setFilter] = useState<FleetFilter>('all');
+  const [search, setSearch] = useState('');
   const { data: fleet, isError, isPending, dataUpdatedAt } = useQuery(deploymentFleetOptions());
 
   const [now, setNow] = useState(() => Date.now());
@@ -27,11 +38,23 @@ export function DeploymentFleetSection() {
 
   const machines = useMemo(() => {
     const all = fleet?.machines ?? [];
-    if (filter === 'online') return all.filter((m) => m.online === true);
-    if (filter === 'offline') return all.filter((m) => m.online !== true);
-    if (filter === 'outdated') return all.filter((m) => m.version_outdated === true);
-    return all;
-  }, [fleet, filter]);
+    const byFilter =
+      filter === 'online'
+        ? all.filter((m) => m.online === true)
+        : filter === 'offline'
+          ? all.filter((m) => m.online !== true)
+          : filter === 'outdated'
+            ? all.filter((m) => m.version_outdated === true)
+            : all;
+    const query = search.trim().toLowerCase();
+    if (query === '') return byFilter;
+    return byFilter.filter((m) =>
+      [m.device_info, m.daemon_id, m.workspace_name, m.owner_email]
+        .join(' ')
+        .toLowerCase()
+        .includes(query),
+    );
+  }, [fleet, filter, search]);
 
   const summary = fleet?.summary;
   const ageSeconds = dataUpdatedAt > 0 ? Math.max(0, Math.round((now - dataUpdatedAt) / 1000)) : 0;
@@ -83,6 +106,17 @@ export function DeploymentFleetSection() {
         </div>
       ) : null}
 
+      <div className="relative sm:w-72">
+        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t(($) => $.deployment.fleet.search_placeholder)}
+          aria-label={t(($) => $.deployment.fleet.search_placeholder)}
+          className="pl-8"
+        />
+      </div>
+
       <div className="flex flex-wrap gap-1.5">
         {(['all', 'online', 'offline', 'outdated'] as const).map((value) => (
           <Button
@@ -104,31 +138,43 @@ export function DeploymentFleetSection() {
         ))}
       </div>
 
-      <SettingsCard>
-        {isError ? (
-          <div role="alert" className="px-4 py-3.5 text-sm text-destructive">
-            {t(($) => $.deployment.fleet.failed)}
-          </div>
-        ) : isPending ? (
-          <div className="px-4 py-3.5 text-sm text-muted-foreground">
-            {t(($) => $.deployment.fleet.loading)}
-          </div>
-        ) : machines.length === 0 ? (
-          <div className="px-4 py-3.5 text-sm text-muted-foreground">
-            {(fleet?.machines.length ?? 0) === 0
-              ? t(($) => $.deployment.fleet.empty)
-              : t(($) => $.deployment.fleet.no_matches)}
-          </div>
-        ) : (
-          machines.map((machine, index) => (
-            <FleetRow
-              key={`${machine.daemon_id}:${machine.workspace_id}:${index}`}
-              machine={machine}
-              heartbeat={formatHeartbeat(machine.last_heartbeat_at)}
-            />
-          ))
-        )}
-      </SettingsCard>
+      {isError ? (
+        <Alert variant="destructive">
+          <AlertDescription>{t(($) => $.deployment.fleet.failed)}</AlertDescription>
+        </Alert>
+      ) : !isPending && machines.length === 0 ? (
+        <SettingsCard>
+          <Empty className="border-none py-8">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <ServerOff />
+              </EmptyMedia>
+              <EmptyTitle>{t(($) => $.deployment.fleet.empty_title)}</EmptyTitle>
+              <EmptyDescription>
+                {(fleet?.machines.length ?? 0) === 0
+                  ? t(($) => $.deployment.fleet.empty)
+                  : t(($) => $.deployment.fleet.no_matches)}
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        </SettingsCard>
+      ) : (
+        <SettingsCard>
+          {isPending ? (
+            <div className="px-4 py-3.5 text-sm text-muted-foreground">
+              {t(($) => $.deployment.fleet.loading)}
+            </div>
+          ) : (
+            machines.map((machine, index) => (
+              <FleetRow
+                key={`${machine.daemon_id}:${machine.workspace_id}:${index}`}
+                machine={machine}
+                heartbeat={formatHeartbeat(machine.last_heartbeat_at)}
+              />
+            ))
+          )}
+        </SettingsCard>
+      )}
 
       {fleet?.truncated === true ? (
         <p className="px-0.5 text-xs text-muted-foreground">

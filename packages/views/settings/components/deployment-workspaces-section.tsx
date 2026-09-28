@@ -1,8 +1,13 @@
 'use client';
 
-import { useState } from 'react';
-import { toast } from 'sonner';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import {
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+} from '@tanstack/react-table';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,9 +52,26 @@ import {
   useSetDeploymentUserConfigOverride,
   useUpdateDeploymentWorkspaceConfig,
 } from '@goosar/core/deployment/admin';
+import { DataTable } from '@goosar/ui/components/ui/data-table';
+import { DataTableColumnHeader } from '@goosar/ui/components/ui/data-table-column-header';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@goosar/ui/components/ui/dropdown-menu';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@goosar/ui/components/ui/empty';
+import { Building2, MoreHorizontal, Power, PowerOff, ShieldOff, UserCog } from 'lucide-react';
 import { useT } from '../../i18n';
 import { describeServerFailure } from '../../common/server-error';
 import { SettingsCard, SettingsRow, SettingsSection } from './settings-layout';
+import { SectionNotice, type SectionNoticeState } from './section-notice';
 
 export function DeploymentWorkspacesSection() {
   const { t } = useT('settings');
@@ -68,81 +90,126 @@ export function DeploymentWorkspacesSection() {
         );
   const selected = list.find((ws) => ws.id === selectedId) ?? null;
 
+  const columns = useMemo<ColumnDef<DeploymentWorkspaceEntry>[]>(
+    () => [
+      {
+        id: 'name',
+        accessorKey: 'name',
+        header: ({ column }) => (
+          <DataTableColumnHeader column={column} label={t(($) => $.deployment.workspaces.col_name)} />
+        ),
+        cell: ({ row }) => {
+          const ws = row.original;
+          const identified = ws.id !== '';
+          return (
+            <div className="min-w-0">
+              <div className="truncate text-sm font-medium">{ws.name}</div>
+              <div className="truncate text-xs text-muted-foreground">
+                {identified ? '/' + ws.slug : t(($) => $.deployment.workspaces.no_identity)}
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: 'member_count',
+        accessorKey: 'member_count',
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            column={column}
+            label={t(($) => $.deployment.workspaces.col_members)}
+          />
+        ),
+        cell: ({ row }) => (
+          <Badge variant="outline">
+            {t(($) => $.deployment.workspaces.member_count, { total: row.original.member_count })}
+          </Badge>
+        ),
+      },
+      {
+        id: 'actions',
+        header: '',
+        size: 96,
+        enableSorting: false,
+        cell: ({ row }) => {
+          const ws = row.original;
+          const identified = ws.id !== '';
+          return (
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                aria-label={t(($) => $.deployment.workspaces.open_aria, { name: ws.name })}
+                onClick={() => setSelectedId(ws.id)}
+                disabled={!identified}
+              >
+                {t(($) => $.deployment.workspaces.open_action)}
+              </Button>
+            </div>
+          );
+        },
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [t],
+  );
+
+  const table = useReactTable({
+    data: filtered,
+    columns,
+    getRowId: (row, index) => (row.id !== '' ? row.id : `unidentified-${index}`),
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
   return (
     <SettingsSection
       title={t(($) => $.deployment.workspaces.title)}
       description={t(($) => $.deployment.workspaces.description)}
     >
-      <SettingsCard>
-        <div className="px-4 py-3">
-          <Input
-            aria-label={t(($) => $.deployment.workspaces.search_aria)}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t(($) => $.deployment.workspaces.search_placeholder)}
-            autoComplete="off"
-          />
-        </div>
-        {/* An unanswered or refused read is NOT an empty deployment: the
-            empty state is reachable only from a successful answer. */}
-        {directoryAnswer.known === false && directoryAnswer.failed ? (
+      <div className="px-0.5 sm:w-72">
+        <Input
+          aria-label={t(($) => $.deployment.workspaces.search_aria)}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t(($) => $.deployment.workspaces.search_placeholder)}
+          autoComplete="off"
+        />
+      </div>
+      {/* An unanswered or refused read is NOT an empty deployment: the
+          empty state is reachable only from a successful answer. */}
+      {directoryAnswer.known === false && directoryAnswer.failed ? (
+        <SettingsCard>
           <QueryFailure
             message={t(($) => $.deployment.workspaces.list_error)}
             error={directoryAnswer.error}
             onRetry={() => void workspacesQuery.refetch()}
             retryLabel={t(($) => $.deployment.workspaces.retry)}
           />
-        ) : directoryAnswer.known === false ? (
+        </SettingsCard>
+      ) : directoryAnswer.known === false ? (
+        <SettingsCard>
           <p className="px-4 py-3 text-sm text-muted-foreground">
             {t(($) => $.deployment.workspaces.loading)}
           </p>
-        ) : list.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-muted-foreground">
-            {t(($) => $.deployment.workspaces.empty)}
-          </p>
-        ) : filtered.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-muted-foreground">
-            {t(($) => $.deployment.workspaces.no_matches)}
-          </p>
-        ) : (
-          filtered.map((ws, index) => {
-            const identified = ws.id !== '';
-            return (
-              <div
-                key={identified ? ws.id : `unidentified-${index}`}
-                className="flex items-center gap-3 px-4 py-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{ws.name}</div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    {identified ? '/' + ws.slug : t(($) => $.deployment.workspaces.no_identity)}
-                  </div>
-                </div>
-                {/* `total`, not `count`: i18next reserves `count` for plural
-                    selection, and this is a fixed counter label ("Members: 3")
-                    with no plural-sensitive wording in any of the five
-                    bundles. */}
-                <Badge variant="outline">
-                  {t(($) => $.deployment.workspaces.member_count, {
-                    total: ws.member_count,
-                  })}
-                </Badge>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  aria-label={t(($) => $.deployment.workspaces.open_aria, {
-                    name: ws.name,
-                  })}
-                  onClick={() => setSelectedId(ws.id)}
-                  disabled={!identified}
-                >
-                  {t(($) => $.deployment.workspaces.open_action)}
-                </Button>
-              </div>
-            );
-          })
-        )}
-      </SettingsCard>
+        </SettingsCard>
+      ) : list.length === 0 ? (
+        <SettingsCard>
+          <Empty className="border-none py-8">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Building2 />
+              </EmptyMedia>
+              <EmptyTitle>{t(($) => $.deployment.workspaces.empty_title)}</EmptyTitle>
+              <EmptyDescription>{t(($) => $.deployment.workspaces.empty)}</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        </SettingsCard>
+      ) : (
+        <SettingsCard>
+          <DataTable table={table} emptyMessage={t(($) => $.deployment.workspaces.no_matches)} />
+        </SettingsCard>
+      )}
 
       {selected && (
         <DeploymentWorkspaceCard
@@ -250,6 +317,7 @@ function DeploymentWorkspaceCard({
   const [dialogMember, setDialogMember] = useState<DeploymentWorkspaceMemberEntry | null>(null);
   const [removeMember, setRemoveMember] = useState<DeploymentWorkspaceMemberEntry | null>(null);
   const [offboardMember, setOffboardMember] = useState<DeploymentWorkspaceMemberEntry | null>(null);
+  const [notice, setNotice] = useState<SectionNoticeState | null>(null);
   const offboardPending = deactivateUser.isPending === true || reactivateUser.isPending === true;
 
   const serverBaseUrl = config?.llm_base_url ?? '';
@@ -286,12 +354,12 @@ function DeploymentWorkspaceCard({
       setDraftModel(null);
       setKeyInput('');
       setConfigConfirmOpen(false);
-      toast.success(t(($) => $.deployment.workspaces.toast_config_saved));
+      setNotice({ tone: 'success', message: t(($) => $.deployment.workspaces.toast_config_saved) });
     } catch (err) {
       const failure = describeApiFailure(err);
       const fallback = t(($) => $.deployment.workspaces.toast_config_save_failed);
       setConfigError(failure.message ?? fallback);
-      toast.error(failure.message ?? fallback);
+      setNotice({ tone: 'destructive', message: failure.message ?? fallback });
     }
   };
 
@@ -302,10 +370,13 @@ function DeploymentWorkspaceCard({
     try {
       await setOverride.mutateAsync({ userId: member.user_id, patch });
       setDialogMember(null);
-      toast.success(t(($) => $.deployment.workspaces.toast_override_saved));
+      setNotice({ tone: 'success', message: t(($) => $.deployment.workspaces.toast_override_saved) });
     } catch (err) {
       const failure = describeApiFailure(err);
-      toast.error(failure.message ?? t(($) => $.deployment.workspaces.toast_override_save_failed));
+      setNotice({
+        tone: 'destructive',
+        message: failure.message ?? t(($) => $.deployment.workspaces.toast_override_save_failed),
+      });
     }
   };
 
@@ -313,12 +384,16 @@ function DeploymentWorkspaceCard({
     try {
       await deleteOverride.mutateAsync(member.user_id);
       setRemoveMember(null);
-      toast.success(t(($) => $.deployment.workspaces.toast_override_removed));
+      setNotice({
+        tone: 'success',
+        message: t(($) => $.deployment.workspaces.toast_override_removed),
+      });
     } catch (err) {
       const failure = describeApiFailure(err);
-      toast.error(
-        failure.message ?? t(($) => $.deployment.workspaces.toast_override_remove_failed),
-      );
+      setNotice({
+        tone: 'destructive',
+        message: failure.message ?? t(($) => $.deployment.workspaces.toast_override_remove_failed),
+      });
     }
   };
 
@@ -331,11 +406,12 @@ function DeploymentWorkspaceCard({
         await deactivateUser.mutateAsync(member.user_id);
       }
       setOffboardMember(null);
-      toast.success(
-        reactivating
+      setNotice({
+        tone: 'success',
+        message: reactivating
           ? t(($) => $.deployment.workspaces.toast_reactivated)
           : t(($) => $.deployment.workspaces.toast_deactivated),
-      );
+      });
     } catch (err) {
       const failure = describeServerFailure(
         tCommon,
@@ -344,10 +420,11 @@ function DeploymentWorkspaceCard({
           ? t(($) => $.deployment.workspaces.toast_reactivate_failed)
           : t(($) => $.deployment.workspaces.toast_deactivate_failed),
       );
-      toast.error(
-        failure.text,
-        failure.detail === undefined ? undefined : { description: failure.detail },
-      );
+      setNotice({
+        tone: 'destructive',
+        message:
+          failure.detail === undefined ? failure.text : `${failure.text} ${failure.detail}`,
+      });
     }
   };
 
@@ -500,63 +577,69 @@ function DeploymentWorkspaceCard({
                 >
                   {t(($) => $.deployment.workspaces.override_action)}
                 </Button>
-                {knowledge.kind === 'present' && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    aria-label={t(($) => $.deployment.workspaces.override_remove_aria, {
-                      name: memberDisplayName(member),
-                    })}
-                    onClick={() => setRemoveMember(member)}
-                    disabled={deleteOverride.isPending === true}
-                  >
-                    {t(($) => $.deployment.workspaces.override_remove_action)}
-                  </Button>
-                )}
-                {/* Ends this person's sessions without blocking the account
-                    (#391). No typed-phrase dialog: the person signs in again,
-                    so the action is recoverable by them alone. */}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label={t(($) => $.deployment.workspaces.revoke_sessions_aria, {
-                    name: memberDisplayName(member),
-                  })}
-                  disabled={!identified || revokeSessions.isPending === true}
-                  onClick={async () => {
-                    try {
-                      const result = await revokeSessions.mutateAsync(member.user_id ?? '');
-                      toast.success(
-                        t(($) => $.deployment.workspaces.toast_sessions_revoked, {
-                          count: result.revoked,
-                        }),
-                      );
-                    } catch {
-                      toast.error(t(($) => $.deployment.workspaces.toast_revoke_failed));
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={t(($) => $.deployment.workspaces.row_actions_aria, {
+                          name: memberDisplayName(member),
+                        })}
+                      >
+                        <MoreHorizontal />
+                      </Button>
                     }
-                  }}
-                >
-                  {t(($) => $.deployment.workspaces.revoke_sessions_action)}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label={
-                    member.deactivated
-                      ? t(($) => $.deployment.workspaces.reactivate_aria, {
-                          name: memberDisplayName(member),
-                        })
-                      : t(($) => $.deployment.workspaces.deactivate_aria, {
-                          name: memberDisplayName(member),
-                        })
-                  }
-                  onClick={() => setOffboardMember(member)}
-                  disabled={!identified || offboardPending}
-                >
-                  {member.deactivated
-                    ? t(($) => $.deployment.workspaces.reactivate_action)
-                    : t(($) => $.deployment.workspaces.deactivate_action)}
-                </Button>
+                  />
+                  <DropdownMenuContent align="end">
+                    {knowledge.kind === 'present' && (
+                      <DropdownMenuItem
+                        variant="destructive"
+                        disabled={deleteOverride.isPending === true}
+                        onClick={() => setRemoveMember(member)}
+                      >
+                        <ShieldOff />
+                        {t(($) => $.deployment.workspaces.override_remove_action)}
+                      </DropdownMenuItem>
+                    )}
+                    {/* Ends this person's sessions without blocking the
+                        account (#391). No typed-phrase dialog: the person
+                        signs in again, so the action is recoverable by them
+                        alone. */}
+                    <DropdownMenuItem
+                      disabled={!identified || revokeSessions.isPending === true}
+                      onClick={async () => {
+                        try {
+                          const result = await revokeSessions.mutateAsync(member.user_id ?? '');
+                          setNotice({
+                            tone: 'success',
+                            message: t(($) => $.deployment.workspaces.toast_sessions_revoked, {
+                              count: result.revoked,
+                            }),
+                          });
+                        } catch {
+                          setNotice({
+                            tone: 'destructive',
+                            message: t(($) => $.deployment.workspaces.toast_revoke_failed),
+                          });
+                        }
+                      }}
+                    >
+                      <UserCog />
+                      {t(($) => $.deployment.workspaces.revoke_sessions_action)}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      variant={member.deactivated ? 'default' : 'destructive'}
+                      disabled={!identified || offboardPending}
+                      onClick={() => setOffboardMember(member)}
+                    >
+                      {member.deactivated ? <Power /> : <PowerOff />}
+                      {member.deactivated
+                        ? t(($) => $.deployment.workspaces.reactivate_action)
+                        : t(($) => $.deployment.workspaces.deactivate_action)}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             );
           })
@@ -676,6 +759,12 @@ function DeploymentWorkspaceCard({
           onConfirmedSave={(patch) => applyOverride(dialogMember, patch)}
         />
       )}
+
+      <SectionNotice
+        notice={notice}
+        onDismiss={() => setNotice(null)}
+        dismissLabel={t(($) => $.deployment.workspaces.notice_dismiss)}
+      />
     </SettingsSection>
   );
 }

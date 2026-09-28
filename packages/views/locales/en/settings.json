@@ -1113,7 +1113,8 @@
       "confirm_cancel": "Cancel",
       "confirm_apply": "Update MCP defaults",
       "toggle_off_aria": "Stop delivering {{name}}",
-      "env_value_aria": "Value of the new variable for {{name}}"
+      "env_value_aria": "Value of the new variable for {{name}}",
+      "notice_dismiss": "Dismiss"
     },
     "overrides": {
       "title": "Member overrides",
@@ -1141,7 +1142,9 @@
       "toast_remove_failed": "Couldn't remove the override",
       "remove_confirm_title": "Remove the override for {{name}}?",
       "remove_confirm_description": "{{name}}'s machines go back to the workspace layer on their next sync. A key stored only in this override is deleted and cannot be read back.",
-      "remove_confirm_apply": "Remove override"
+      "remove_confirm_apply": "Remove override",
+      "row_actions_aria": "Actions for {{name}}",
+      "notice_dismiss": "Dismiss"
     },
     "pins": {
       "title": "Provisioning pins",
@@ -1210,7 +1213,8 @@
       "first_pin_no_change_description": "This workspace has no pins, so its machines receive the whole deployment catalog. Pinning {{name}} changes nothing for them: {{name}} and the packages it requires are everything the catalog publishes today.",
       "effect_breaks": "After this change the deployment catalog can no longer be resolved for this workspace, so every member's machine gets an error instead of packages until the missing package is published or the pins are put back.",
       "effect_repair_unpinned": "Delivery is down for this workspace right now: an enabled pin is not in the deployment catalog, so members' machines get an error instead of packages. With no pins left the workspace delivers the whole deployment catalog again.",
-      "requires_enable_blocked": "The deployment catalog does not publish everything {{name}} requires, so turning the pin on would break delivery for the whole workspace. It stays off until the missing package is published."
+      "requires_enable_blocked": "The deployment catalog does not publish everything {{name}} requires, so turning the pin on would break delivery for the whole workspace. It stays off until the missing package is published.",
+      "notice_dismiss": "Dismiss"
     },
     "typed_confirm": {
       "type_prefix": "Type",
@@ -1293,7 +1297,8 @@
       "unkill_confirm": "Re-enable",
       "mcp_entries_label": "MCP policy entries",
       "mcp_entry_disabled": "disabled",
-      "mcp_entry_locked": "locked"
+      "mcp_entry_locked": "locked",
+      "notice_dismiss": "Dismiss"
     },
     "workspaces": {
       "api_key_label": "LLM API key",
@@ -1378,7 +1383,12 @@
       "toast_reactivate_failed": "Couldn't restore access",
       "toast_reactivated": "Access restored",
       "toast_revoke_failed": "The sessions could not be ended.",
-      "toast_sessions_revoked": "Signed out of {{count}} session(s)."
+      "toast_sessions_revoked": "Signed out of {{count}} session(s).",
+      "col_name": "Name",
+      "col_members": "Members",
+      "empty_title": "No workspaces yet",
+      "row_actions_aria": "Actions for {{name}}",
+      "notice_dismiss": "Dismiss"
     },
     "fleet": {
       "title": "Fleet",
@@ -1410,7 +1420,9 @@
       "visibility_public": "Public",
       "status_online": "online",
       "status_offline": "offline",
-      "no_agents": "none"
+      "no_agents": "none",
+      "search_placeholder": "Search machines",
+      "empty_title": "No machines to show"
     },
     "mcp": {
       "title": "Deployment MCP library",
@@ -1431,7 +1443,13 @@
       "delete_title": "Delete this deployment MCP server?",
       "delete_description": "\"{{name}}\" will be removed from the deployment, from every workspace that enabled it, and from every agent it was assigned to.",
       "delete_confirm": "Delete",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "col_name": "Name",
+      "col_transport": "Transport",
+      "row_actions_aria": "Actions for {{name}}",
+      "search_placeholder": "Search MCP servers",
+      "no_matches": "No servers match the search.",
+      "notice_dismiss": "Dismiss"
     }
   },
   "mcp": {
@@ -1537,7 +1555,11 @@
     "save": "Save session policy",
     "save_failed": "The session policy could not be saved.",
     "saved": "Session policy saved.",
-    "title": "Sessions and second factor"
+    "title": "Sessions and second factor",
+    "idle_error": "Enter a whole number of hours from 1 to 720.",
+    "absolute_error": "Enter a whole number of days from 1 to 365.",
+    "max_error": "Enter a whole number from 0 (no limit) to 1000.",
+    "notice_dismiss": "Dismiss"
   },
   "integrations": {
     "list_description": "Every third-party connection this workspace can use, and what each one still needs.",

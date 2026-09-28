@@ -21,11 +21,6 @@ vi.mock('@goosar/core/deployment/admin', () => ({
   }),
 }));
 
-vi.mock('sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn() },
-}));
-
-import { toast } from 'sonner';
 import { DeploymentAdminsSection } from './deployment-admins-section';
 
 const ADMINS = [
@@ -51,6 +46,17 @@ const GRANT_PENDING = {
   confirm_hint: 'goosar_admin confirm req-2',
 };
 
+/** Opens the row overflow menu for `name` and clicks "Request revoke". */
+async function requestRemove(name: string) {
+  fireEvent.click(screen.getByLabelText(`Actions for ${name}`));
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Request revoke' }));
+}
+
+/** Confirms the destructive revoke dialog that requestRemove() opened. */
+function confirmRemoveDialog() {
+  fireEvent.click(screen.getAllByRole('button', { name: 'Request revoke' }).at(-1)!);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.addPending = false;
@@ -63,9 +69,12 @@ describe('DeploymentAdminsSection remove', () => {
   it('files a pending revoke and keeps the row: nothing changes until the server confirm', async () => {
     renderWithI18n(<DeploymentAdminsSection admins={ADMINS} pending={[]} />);
 
-    fireEvent.click(
-      screen.getByLabelText('Request revoking the deployment admin role from dev@corp.example'),
-    );
+    await requestRemove('dev@corp.example');
+    expect(
+      screen.getByText('Request revoking the role from dev@corp.example?'),
+    ).toBeTruthy();
+    confirmRemoveDialog();
+
     await waitFor(() => expect(mocks.removeAdmin).toHaveBeenCalledTimes(1));
     expect(mocks.removeAdmin).toHaveBeenCalledWith('user-2');
 
@@ -73,7 +82,7 @@ describe('DeploymentAdminsSection remove', () => {
     expect(screen.queryByText('Pending')).toBeNull();
   });
 
-  it("surfaces the server's refusal (last-admin lockout) via role=alert", async () => {
+  it("surfaces the server's refusal (last-admin lockout) as an inline notice with the response text", async () => {
     mocks.removeAdmin.mockRejectedValue(
       new ApiError(
         'API error: 409 Conflict',
@@ -85,25 +94,23 @@ describe('DeploymentAdminsSection remove', () => {
     );
     renderWithI18n(<DeploymentAdminsSection admins={ADMINS} pending={[]} />);
 
-    fireEvent.click(
-      screen.getByLabelText('Request revoking the deployment admin role from root@corp.example'),
-    );
+    await requestRemove('root@corp.example');
+    confirmRemoveDialog();
 
-    const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toBe('cannot revoke the last deployment admin');
+    const notice = await screen.findByRole('alert');
+    expect(notice.textContent).toContain('cannot revoke the last deployment admin');
     expect(screen.queryByText('Pending')).toBeNull();
   });
 
-  it('disables remove buttons while a revoke is in flight', () => {
+  it('disables the revoke action in the row menu while a revoke is in flight', async () => {
     mocks.removePending = true;
     renderWithI18n(<DeploymentAdminsSection admins={ADMINS} pending={[]} />);
 
-    const remove = screen.getByLabelText(
-      'Request revoking the deployment admin role from dev@corp.example',
-    ) as HTMLButtonElement;
-    expect(remove.disabled).toBe(true);
-    fireEvent.click(remove);
-    expect(mocks.removeAdmin).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText('Actions for dev@corp.example'));
+    const remove = (await screen.findByRole('menuitem', {
+      name: 'Request revoke',
+    })) as HTMLElement;
+    expect(remove.getAttribute('data-disabled')).not.toBeNull();
   });
 });
 
@@ -134,9 +141,8 @@ describe('DeploymentAdminsSection add', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Request grant' }));
 
-    await waitFor(() =>
-      expect(toast.success).toHaveBeenCalledWith('dev@corp.example already holds the role'),
-    );
+    const notice = await screen.findByRole('alert');
+    expect(notice.textContent).toContain('dev@corp.example already holds the role');
     expect(screen.queryByText('Pending')).toBeNull();
   });
 
@@ -171,7 +177,7 @@ describe('DeploymentAdminsSection add', () => {
     expect(mocks.addAdmin).not.toHaveBeenCalled();
   });
 
-  it('surfaces an add failure via role=alert and clears it on the next attempt', async () => {
+  it('surfaces an add failure as an inline notice and clears it on the next attempt', async () => {
     mocks.addAdmin.mockRejectedValueOnce(
       new ApiError(
         'API error: 404 Not Found',
@@ -187,8 +193,8 @@ describe('DeploymentAdminsSection add', () => {
     fireEvent.change(email, { target: { value: 'nobody@corp.example' } });
     fireEvent.click(screen.getByRole('button', { name: 'Request grant' }));
 
-    const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toBe('no user with this email');
+    const notice = await screen.findByRole('alert');
+    expect(notice.textContent).toContain('no user with this email');
     expect((email as HTMLInputElement).value).toBe('nobody@corp.example');
 
     fireEvent.change(email, { target: { value: 'new@corp.example' } });
@@ -231,5 +237,14 @@ describe('DeploymentAdminsSection list', () => {
   it('renders the empty state when there are no admins', () => {
     renderWithI18n(<DeploymentAdminsSection admins={[]} pending={[]} />);
     expect(screen.getByText('No deployment administrators.')).toBeTruthy();
+  });
+
+  it('filters the table by the search box', () => {
+    renderWithI18n(<DeploymentAdminsSection admins={ADMINS} pending={[]} />);
+    fireEvent.change(screen.getByLabelText('Search administrators'), {
+      target: { value: 'dev@' },
+    });
+    expect(screen.getByText('dev@corp.example')).toBeTruthy();
+    expect(screen.queryByText('root@corp.example')).toBeNull();
   });
 });

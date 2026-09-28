@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertDialog,
@@ -36,6 +35,7 @@ import {
 import { deploymentPolicyOptions, useUpdateDeploymentPolicy } from '@goosar/core/deployment/admin';
 import { useT } from '../../i18n';
 import { SettingsCard, SettingsRow, SettingsSection } from './settings-layout';
+import { SectionNotice, type SectionNoticeState } from './section-notice';
 
 export const MCP_KILL_CONFIRM_PHRASE = 'DISABLE';
 
@@ -52,6 +52,7 @@ export function DeploymentPolicySection() {
   const [llmConfirmOpen, setLlmConfirmOpen] = useState(false);
   const [killDialogOpen, setKillDialogOpen] = useState(false);
   const [unkillConfirmOpen, setUnkillConfirmOpen] = useState(false);
+  const [notice, setNotice] = useState<SectionNoticeState | null>(null);
 
   const serverBaseUrl = doc.llm?.base_url ?? '';
   const serverModel = doc.llm?.model ?? '';
@@ -63,9 +64,15 @@ export function DeploymentPolicySection() {
     try {
       await updatePolicy.mutateAsync(next);
       onSaved?.();
-      toast.success(t(($) => $.deployment.policy.toast_saved));
-    } catch {
-      toast.error(t(($) => $.deployment.policy.toast_save_failed));
+      setNotice({ tone: 'success', message: t(($) => $.deployment.policy.toast_saved) });
+    } catch (err) {
+      setNotice({
+        tone: 'destructive',
+        message:
+          err instanceof Error && err.message
+            ? err.message
+            : t(($) => $.deployment.policy.toast_save_failed),
+      });
     }
   };
 
@@ -222,6 +229,12 @@ export function DeploymentPolicySection() {
         onOpenChange={setKillDialogOpen}
         loading={updatePolicy.isPending}
         onConfirm={applyKillSwitch}
+      />
+
+      <SectionNotice
+        notice={notice}
+        onDismiss={() => setNotice(null)}
+        dismissLabel={t(($) => $.deployment.policy.notice_dismiss)}
       />
     </SettingsSection>
   );

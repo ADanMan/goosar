@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
 import { Info, TriangleAlert, X } from 'lucide-react';
 import { Badge } from '@goosar/ui/components/ui/badge';
@@ -33,6 +32,7 @@ import type { ProvisioningPin, ProvisioningPinInput } from '@goosar/core/api/wor
 import { useT } from '../../i18n';
 import { SettingsCard, SettingsSection } from './settings-layout';
 import { TypedConfirmDialog } from './typed-confirm-dialog';
+import { SectionNotice, type SectionNoticeState } from './section-notice';
 
 interface PinRow {
   name: string;
@@ -69,6 +69,7 @@ export function AdminPinsSection({ wsId }: { wsId: string }) {
     : UNKNOWN_CATALOG;
 
   const [action, setAction] = useState<PinAction | null>(null);
+  const [notice, setNotice] = useState<SectionNoticeState | null>(null);
   const outcome = action === null ? null : pinOutcome(pins, catalog, action);
 
   const rowsByKey = new Map<string, PinRow>();
@@ -107,10 +108,10 @@ export function AdminPinsSection({ wsId }: { wsId: string }) {
   const submit = async (next: ProvisioningPinInput[]): Promise<boolean> => {
     try {
       await updatePins.mutateAsync(next);
-      toast.success(t(($) => $.admin.pins.toast_saved));
+      setNotice({ tone: 'success', message: t(($) => $.admin.pins.toast_saved) });
       return true;
     } catch {
-      toast.error(t(($) => $.admin.pins.toast_save_failed));
+      setNotice({ tone: 'destructive', message: t(($) => $.admin.pins.toast_save_failed) });
       return false;
     }
   };
@@ -501,6 +502,12 @@ export function AdminPinsSection({ wsId }: { wsId: string }) {
         })}
       </SettingsCard>
       {outcome !== null && <TypedConfirmDialog {...dialogProps(outcome)} />}
+
+      <SectionNotice
+        notice={notice}
+        onDismiss={() => setNotice(null)}
+        dismissLabel={t(($) => $.admin.pins.notice_dismiss)}
+      />
     </SettingsSection>
   );
 }

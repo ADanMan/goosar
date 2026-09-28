@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { Plus, X } from 'lucide-react';
-import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertDialog,
@@ -25,6 +24,7 @@ import {
 import type { McpConfigEntry, McpConfigEntryPatch } from '@goosar/core/api/workspace-admin';
 import { useT } from '../../i18n';
 import { SettingsCard, SettingsSection } from './settings-layout';
+import { SectionNotice, type SectionNoticeState } from './section-notice';
 
 type PendingWrite = {
   op: 'disable' | 'remove' | 'env-remove' | 'env-set';
@@ -41,6 +41,7 @@ export function AdminMcpDefaultsSection({ wsId }: { wsId: string }) {
 
   const [newServerName, setNewServerName] = useState('');
   const [pending, setPending] = useState<PendingWrite | null>(null);
+  const [notice, setNotice] = useState<SectionNoticeState | null>(null);
 
   const entries = config?.mcp_defaults ?? {};
   const serverNames = Object.keys(entries).sort();
@@ -48,10 +49,10 @@ export function AdminMcpDefaultsSection({ wsId }: { wsId: string }) {
   const patchEntry = async (name: string, patch: McpConfigEntryPatch | null) => {
     try {
       await updateConfig.mutateAsync({ mcp_defaults: { [name]: patch } });
-      toast.success(t(($) => $.admin.mcp.toast_saved));
+      setNotice({ tone: 'success', message: t(($) => $.admin.mcp.toast_saved) });
       return true;
     } catch {
-      toast.error(t(($) => $.admin.mcp.toast_save_failed));
+      setNotice({ tone: 'destructive', message: t(($) => $.admin.mcp.toast_save_failed) });
       return false;
     }
   };
@@ -213,6 +214,12 @@ export function AdminMcpDefaultsSection({ wsId }: { wsId: string }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <SectionNotice
+        notice={notice}
+        onDismiss={() => setNotice(null)}
+        dismissLabel={t(($) => $.admin.mcp.notice_dismiss)}
+      />
     </SettingsSection>
   );
 }

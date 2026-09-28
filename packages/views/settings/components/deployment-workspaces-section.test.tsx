@@ -111,11 +111,6 @@ vi.mock('@goosar/core/deployment/admin', () => ({
   }),
 }));
 
-vi.mock('sonner', () => ({
-  toast: { success: vi.fn(), error: vi.fn() },
-}));
-
-import { toast } from 'sonner';
 import { DeploymentWorkspacesSection } from './deployment-workspaces-section';
 
 const WORKSPACES = [
@@ -176,6 +171,11 @@ beforeEach(() => {
 
 function openAcmeCard() {
   fireEvent.click(screen.getByLabelText('Open workspace Acme Team'));
+}
+
+/** Opens the row overflow menu for a member's `name`. */
+function openMemberMenu(name: string) {
+  fireEvent.click(screen.getByLabelText(`Actions for ${name}`));
 }
 
 describe('DeploymentWorkspacesSection directory', () => {
@@ -379,13 +379,10 @@ describe('DeploymentWorkspacesSection card', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText(
+        screen.getAllByText(
           'cannot edit mcp configuration: stored document is sealed and GOOSAR_MCP_SECRET_KEY is not configured on this server',
-        ),
-      ).toBeTruthy(),
-    );
-    expect(toast.error).toHaveBeenCalledWith(
-      'cannot edit mcp configuration: stored document is sealed and GOOSAR_MCP_SECRET_KEY is not configured on this server',
+        ).length,
+      ).toBeGreaterThan(0),
     );
   });
 });
@@ -418,8 +415,12 @@ describe('DeploymentWorkspacesSection overrides', () => {
     renderWithI18n(<DeploymentWorkspacesSection />);
     openAcmeCard();
 
-    expect(screen.queryByLabelText('Remove override for Root')).toBeNull();
-    fireEvent.click(screen.getByLabelText('Remove override for Dev'));
+    openMemberMenu('Root');
+    expect(screen.queryByRole('menuitem', { name: 'Remove' })).toBeNull();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+
+    openMemberMenu('Dev');
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove' }));
 
     expect(screen.getByText('Remove the override for Dev?')).toBeTruthy();
     expect(mocks.deleteOverride).not.toHaveBeenCalled();
@@ -637,7 +638,7 @@ describe('DeploymentWorkspacesSection override knowledge', () => {
     expect(screen.queryByText('Unknown')).toBeNull();
   });
 
-  it('gives a member row without a user_id no actions', () => {
+  it('gives a member row without a user_id no actions', async () => {
     state.members = [{ user_id: '', name: 'Ghost', email: '', role: 'member' }];
     state.overrides = [];
     renderWithI18n(<DeploymentWorkspacesSection />);
@@ -645,9 +646,13 @@ describe('DeploymentWorkspacesSection override knowledge', () => {
 
     const configure = screen.getByLabelText('Configure override for Ghost') as HTMLButtonElement;
     expect(configure.disabled).toBe(true);
-    expect(screen.queryByLabelText('Remove override for Ghost')).toBeNull();
-    const deactivate = screen.getByLabelText('Deactivate Ghost') as HTMLButtonElement;
-    expect(deactivate.disabled).toBe(true);
+
+    openMemberMenu('Ghost');
+    expect(screen.queryByRole('menuitem', { name: 'Remove' })).toBeNull();
+    const deactivate = (await screen.findByRole('menuitem', {
+      name: 'Deactivate',
+    })) as HTMLElement;
+    expect(deactivate.getAttribute('data-disabled')).not.toBeNull();
   });
 });
 
@@ -656,7 +661,8 @@ describe('DeploymentWorkspacesSection offboarding', () => {
     renderWithI18n(<DeploymentWorkspacesSection />);
     openAcmeCard();
 
-    fireEvent.click(screen.getByLabelText('Deactivate Dev'));
+    openMemberMenu('Dev');
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Deactivate' }));
     expect(screen.getByText('Deactivate Dev?')).toBeTruthy();
     expect(mocks.deactivateUser).not.toHaveBeenCalled();
 
@@ -667,14 +673,16 @@ describe('DeploymentWorkspacesSection offboarding', () => {
     );
     await waitFor(() => expect(mocks.deactivateUser).toHaveBeenCalledTimes(1));
     expect(mocks.deactivateUser).toHaveBeenCalledWith('user-2');
-    expect(toast.success).toHaveBeenCalledWith('Account deactivated');
+    const notice = await screen.findByRole('alert');
+    expect(notice.textContent).toContain('Account deactivated');
   });
 
-  it('sends nothing when the offboarding confirm is declined', () => {
+  it('sends nothing when the offboarding confirm is declined', async () => {
     renderWithI18n(<DeploymentWorkspacesSection />);
     openAcmeCard();
 
-    fireEvent.click(screen.getByLabelText('Deactivate Dev'));
+    openMemberMenu('Dev');
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Deactivate' }));
     fireEvent.click(
       within(screen.getByRole('alertdialog')).getByRole('button', {
         name: 'Cancel',
@@ -689,9 +697,10 @@ describe('DeploymentWorkspacesSection offboarding', () => {
     openAcmeCard();
 
     expect(screen.getByText('Deactivated')).toBeTruthy();
-    expect(screen.queryByLabelText('Deactivate Dev')).toBeNull();
 
-    fireEvent.click(screen.getByLabelText('Restore access for Dev'));
+    openMemberMenu('Dev');
+    expect(screen.queryByRole('menuitem', { name: 'Deactivate' })).toBeNull();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Restore access' }));
     expect(screen.getByText('Restore access for Dev?')).toBeTruthy();
     fireEvent.click(
       within(screen.getByRole('alertdialog')).getByRole('button', {
@@ -701,7 +710,8 @@ describe('DeploymentWorkspacesSection offboarding', () => {
     await waitFor(() => expect(mocks.reactivateUser).toHaveBeenCalledTimes(1));
     expect(mocks.reactivateUser).toHaveBeenCalledWith('user-2');
     expect(mocks.deactivateUser).not.toHaveBeenCalled();
-    expect(toast.success).toHaveBeenCalledWith('Access restored');
+    const notice = await screen.findByRole('alert');
+    expect(notice.textContent).toContain('Access restored');
   });
 
   it('shows the server refusal instead of a silent failure', async () => {
@@ -717,25 +727,34 @@ describe('DeploymentWorkspacesSection offboarding', () => {
     renderWithI18n(<DeploymentWorkspacesSection />);
     openAcmeCard();
 
-    fireEvent.click(screen.getByLabelText('Deactivate Dev'));
+    openMemberMenu('Dev');
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Deactivate' }));
     fireEvent.click(
       within(screen.getByRole('alertdialog')).getByRole('button', {
         name: 'Deactivate',
       }),
     );
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
-    expect(String(vi.mocked(toast.error).mock.calls[0]?.[0])).toContain(
-      'cannot deactivate your own account',
+    // The AlertDialog stays open on failure (so the admin can retry), which
+    // marks the rest of the page inert for the accessibility tree — so the
+    // notice is asserted by text, the same way as the config-save failure
+    // above, rather than by role="alert" (getByRole excludes inert content).
+    await waitFor(() =>
+      expect(
+        screen.getAllByText('cannot deactivate your own account', { exact: false }).length,
+      ).toBeGreaterThan(0),
     );
   });
 
-  it('locks the action while a call is in flight', () => {
+  it('locks the action while a call is in flight', async () => {
     mocks.offboardPending = true;
     renderWithI18n(<DeploymentWorkspacesSection />);
     openAcmeCard();
 
-    const button = screen.getByLabelText('Deactivate Dev') as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
+    openMemberMenu('Dev');
+    const button = (await screen.findByRole('menuitem', {
+      name: 'Deactivate',
+    })) as HTMLElement;
+    expect(button.getAttribute('data-disabled')).not.toBeNull();
   });
 });

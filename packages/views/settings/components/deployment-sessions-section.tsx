@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@goosar/ui/components/ui/button';
 import { Input } from '@goosar/ui/components/ui/input';
@@ -24,38 +23,65 @@ import type { DeploymentPolicyDoc } from '@goosar/core/api/deployment-admin';
 import { deploymentPolicyOptions, useUpdateDeploymentPolicy } from '@goosar/core/deployment/admin';
 import { useT } from '../../i18n';
 import { SettingsCard, SettingsSection } from './settings-layout';
+import { SectionNotice, type SectionNoticeState } from './section-notice';
 
 function NumberRow({
   id,
   label,
   hint,
   value,
+  min,
+  max,
+  error,
   onChange,
+  onValidChange,
 }: {
   id: string;
   label: string;
   hint: string;
   value: number;
+  min: number;
+  max: number;
+  error: string;
   onChange: (next: number) => void;
+  onValidChange: (valid: boolean) => void;
 }) {
   const [draft, setDraft] = useState(String(value));
   useEffect(() => setDraft(String(value)), [value]);
+
+  const parsed = Number(draft);
+  const invalid =
+    draft.trim() === '' || !Number.isInteger(parsed) || parsed < min || parsed > max;
+
+  useEffect(() => {
+    onValidChange(!invalid);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invalid]);
+
   return (
     <div className="space-y-1">
       <Label htmlFor={id}>{label}</Label>
       <Input
         id={id}
         inputMode="numeric"
+        aria-invalid={invalid}
+        aria-describedby={invalid ? `${id}-error` : undefined}
         value={draft}
         onChange={(e) => {
           setDraft(e.target.value);
-          const parsed = Number(e.target.value);
-          if (e.target.value.trim() !== '' && Number.isFinite(parsed)) {
-            onChange(parsed);
+          const next = Number(e.target.value);
+          if (e.target.value.trim() !== '' && Number.isInteger(next) && next >= min && next <= max) {
+            onChange(next);
           }
         }}
       />
-      <p className="text-xs text-muted-foreground">{hint}</p>
+      {invalid ? (
+        <p id={`${id}-error`} className="text-xs text-destructive">
+          {error}
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground">{hint}</p>
+      )}
     </div>
   );
 }
@@ -77,16 +103,24 @@ export function DeploymentSessionsSection() {
     setDraft(JSON.parse(storedKey) as SessionPolicy);
   }, [storedKey]);
 
+  const [notice, setNotice] = useState<SectionNoticeState | null>(null);
+  const [idleValid, setIdleValid] = useState(true);
+  const [absoluteValid, setAbsoluteValid] = useState(true);
+  const [maxValid, setMaxValid] = useState(true);
+  const allValid = idleValid && absoluteValid && maxValid;
+
   const dirty = JSON.stringify(draft) !== storedKey;
 
   const save = () => {
+    if (!allValid) return;
     const next: DeploymentPolicyDoc = { ...(data?.policy ?? {}), session: { ...draft } };
     update.mutate(next, {
-      onSuccess: () => toast.success(t(($) => $.deployment_sessions.saved)),
+      onSuccess: () => setNotice({ tone: 'success', message: t(($) => $.deployment_sessions.saved) }),
       onError: (err: unknown) =>
-        toast.error(
-          err instanceof Error ? err.message : t(($) => $.deployment_sessions.save_failed),
-        ),
+        setNotice({
+          tone: 'destructive',
+          message: err instanceof Error ? err.message : t(($) => $.deployment_sessions.save_failed),
+        }),
     });
   };
 
@@ -102,25 +136,37 @@ export function DeploymentSessionsSection() {
             label={t(($) => $.deployment_sessions.idle_label)}
             hint={t(($) => $.deployment_sessions.idle_hint)}
             value={draft.idle_timeout_hours}
+            min={1}
+            max={720}
+            error={t(($) => $.deployment_sessions.idle_error)}
             onChange={(idle_timeout_hours) => setDraft((prev) => ({ ...prev, idle_timeout_hours }))}
+            onValidChange={setIdleValid}
           />
           <NumberRow
             id="session-absolute"
             label={t(($) => $.deployment_sessions.absolute_label)}
             hint={t(($) => $.deployment_sessions.absolute_hint)}
             value={draft.absolute_lifetime_days}
+            min={1}
+            max={365}
+            error={t(($) => $.deployment_sessions.absolute_error)}
             onChange={(absolute_lifetime_days) =>
               setDraft((prev) => ({ ...prev, absolute_lifetime_days }))
             }
+            onValidChange={setAbsoluteValid}
           />
           <NumberRow
             id="session-max"
             label={t(($) => $.deployment_sessions.max_label)}
             hint={t(($) => $.deployment_sessions.max_hint)}
             value={draft.max_concurrent_sessions}
+            min={0}
+            max={1000}
+            error={t(($) => $.deployment_sessions.max_error)}
             onChange={(max_concurrent_sessions) =>
               setDraft((prev) => ({ ...prev, max_concurrent_sessions }))
             }
+            onValidChange={setMaxValid}
           />
           <div className="space-y-1">
             <Label htmlFor="session-require-mfa">
@@ -152,13 +198,16 @@ export function DeploymentSessionsSection() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button disabled={!dirty || update.isPending} onClick={save}>
+            <Button disabled={!dirty || !allValid || update.isPending} onClick={save}>
               {t(($) => $.deployment_sessions.save)}
             </Button>
             <Button
               variant="ghost"
               disabled={!dirty}
-              onClick={() => setDraft(JSON.parse(storedKey) as SessionPolicy)}
+              onClick={() => {
+                setDraft(JSON.parse(storedKey) as SessionPolicy);
+                setNotice(null);
+              }}
             >
               {t(($) => $.deployment_sessions.reset)}
             </Button>
@@ -171,6 +220,12 @@ export function DeploymentSessionsSection() {
           </p>
         </div>
       </SettingsCard>
+
+      <SectionNotice
+        notice={notice}
+        onDismiss={() => setNotice(null)}
+        dismissLabel={t(($) => $.deployment_sessions.notice_dismiss)}
+      />
     </SettingsSection>
   );
 }

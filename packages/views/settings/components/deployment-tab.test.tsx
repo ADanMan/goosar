@@ -217,9 +217,9 @@ describe('DeploymentTab administrators', () => {
 
   it('files a revoke as pending — the row does not disappear', async () => {
     renderWithI18n(<DeploymentTab />);
-    fireEvent.click(
-      screen.getByLabelText('Request revoking the deployment admin role from second@corp.example'),
-    );
+    fireEvent.click(screen.getByLabelText('Actions for second@corp.example'));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Request revoke' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Request revoke' }).at(-1)!);
 
     await waitFor(() => expect(mocks.removeAdmin).toHaveBeenCalledTimes(1));
     expect(mocks.removeAdmin).toHaveBeenCalledWith('user-2');
@@ -232,12 +232,12 @@ describe('DeploymentTab administrators', () => {
       new ApiError(sentence, 409, 'Conflict', { error: sentence }, sentence),
     );
     renderWithI18n(<DeploymentTab />);
-    fireEvent.click(
-      screen.getByLabelText('Request revoking the deployment admin role from root@corp.example'),
-    );
+    fireEvent.click(screen.getByLabelText('Actions for root@corp.example'));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Request revoke' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Request revoke' }).at(-1)!);
 
-    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
-    expect(screen.getByRole('alert').textContent).toBe(sentence);
+    const notice = await screen.findByRole('alert');
+    expect(notice.textContent).toContain(sentence);
   });
 });
 

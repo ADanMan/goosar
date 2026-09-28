@@ -1105,7 +1105,8 @@
       "confirm_cancel": "取消",
       "confirm_apply": "更新 MCP 默认值",
       "toggle_off_aria": "停止下发 {{name}}",
-      "env_value_aria": "要为 {{name}} 添加的变量值"
+      "env_value_aria": "要为 {{name}} 添加的变量值",
+      "notice_dismiss": "关闭"
     },
     "overrides": {
       "title": "成员覆盖",
@@ -1133,7 +1134,9 @@
       "toast_remove_failed": "无法移除覆盖",
       "remove_confirm_title": "移除 {{name}} 的覆盖？",
       "remove_confirm_description": "{{name}} 的机器将在下次同步时回到工作区层。仅保存在此覆盖中的密钥会被删除，且无法再读取。",
-      "remove_confirm_apply": "移除覆盖"
+      "remove_confirm_apply": "移除覆盖",
+      "row_actions_aria": "{{name}} 的操作",
+      "notice_dismiss": "关闭"
     },
     "pins": {
       "title": "包固定",
@@ -1202,7 +1205,8 @@
       "first_pin_no_change_description": "此工作区没有固定，因此机器会收到整个部署目录。固定 {{name}} 对机器来说没有变化：{{name}} 及其所需的包就是目录当前发布的全部内容。",
       "effect_breaks": "此次更改之后，该工作区将无法解析部署目录；在缺失的包重新发布或把固定改回去之前，成员的机器只会收到错误，而不是包。",
       "effect_repair_unpinned": "此工作区的下发目前已中断：某个已启用的固定不在部署目录中，成员的机器收到的是错误而不是包。没有固定后，工作区会重新下发整个部署目录。",
-      "requires_enable_blocked": "部署目录没有发布 {{name}} 所需的全部内容，启用这个固定会让整个工作区的下发中断。在缺失的包重新发布前，它保持停用。"
+      "requires_enable_blocked": "部署目录没有发布 {{name}} 所需的全部内容，启用这个固定会让整个工作区的下发中断。在缺失的包重新发布前，它保持停用。",
+      "notice_dismiss": "关闭"
     },
     "typed_confirm": {
       "type_prefix": "输入",
@@ -1285,7 +1289,8 @@
       "unkill_confirm": "重新启用",
       "mcp_entries_label": "MCP 策略条目",
       "mcp_entry_disabled": "已禁用",
-      "mcp_entry_locked": "已锁定"
+      "mcp_entry_locked": "已锁定",
+      "notice_dismiss": "关闭"
     },
     "workspaces": {
       "api_key_label": "LLM API 密钥",
@@ -1370,7 +1375,12 @@
       "toast_reactivate_failed": "未能恢复访问",
       "toast_reactivated": "访问已恢复",
       "toast_revoke_failed": "无法结束会话。",
-      "toast_sessions_revoked": "已结束 {{count}} 个会话。"
+      "toast_sessions_revoked": "已结束 {{count}} 个会话。",
+      "col_name": "名称",
+      "col_members": "成员",
+      "empty_title": "暂无工作区",
+      "row_actions_aria": "{{name}} 的操作",
+      "notice_dismiss": "关闭"
     },
     "fleet": {
       "title": "机群",
@@ -1402,7 +1412,9 @@
       "visibility_public": "公开",
       "status_online": "在线",
       "status_offline": "离线",
-      "no_agents": "无"
+      "no_agents": "无",
+      "search_placeholder": "搜索机器",
+      "empty_title": "暂无可显示的机器"
     },
     "mcp": {
       "title": "部署级 MCP 库",
@@ -1423,7 +1435,13 @@
       "delete_title": "删除该部署级 MCP 服务器？",
       "delete_description": "“{{name}}”将从部署、所有已启用它的工作区以及所有已分配它的智能体处移除。",
       "delete_confirm": "删除",
-      "cancel": "取消"
+      "cancel": "取消",
+      "col_name": "名称",
+      "col_transport": "传输方式",
+      "row_actions_aria": "{{name}} 的操作",
+      "search_placeholder": "搜索 MCP 服务器",
+      "no_matches": "没有匹配搜索的服务器。",
+      "notice_dismiss": "关闭"
     }
   },
   "mcp": {
@@ -1529,7 +1547,11 @@
     "save": "保存会话策略",
     "save_failed": "无法保存会话策略。",
     "saved": "会话策略已保存。",
-    "title": "会话与第二重验证"
+    "title": "会话与第二重验证",
+    "idle_error": "请输入 1 到 720 之间的整数小时数。",
+    "absolute_error": "请输入 1 到 365 之间的整数天数。",
+    "max_error": "请输入 0（不限）到 1000 之间的整数。",
+    "notice_dismiss": "关闭"
   },
   "integrations": {
     "list_description": "这个工作区可用的所有第三方连接，以及每个连接还缺什么。",

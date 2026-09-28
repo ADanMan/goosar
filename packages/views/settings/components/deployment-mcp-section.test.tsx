@@ -117,7 +117,12 @@ describe('DeploymentMcpSection', () => {
     renderSection();
     const user = userEvent.setup();
 
-    await user.click(await screen.findByRole('button', { name: COPY.remove_server }));
+    await user.click(
+      await screen.findByRole('button', {
+        name: COPY.row_actions_aria.replace('{{name}}', 'corp-jira'),
+      }),
+    );
+    await user.click(await screen.findByRole('menuitem', { name: COPY.remove_server }));
     const expected = COPY.delete_description.replace('{{name}}', 'corp-jira');
     await waitFor(() => expect(document.body.textContent).toContain(COPY.delete_title));
     expect(document.body.textContent).toContain(expected);

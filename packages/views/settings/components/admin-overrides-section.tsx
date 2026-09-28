@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { toast } from 'sonner';
+import { MoreHorizontal, ShieldOff } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import {
   AlertDialog,
@@ -25,6 +25,12 @@ import {
   DialogTitle,
 } from '@goosar/ui/components/ui/dialog';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@goosar/ui/components/ui/dropdown-menu';
+import {
   useDeleteUserConfigOverride,
   userConfigOverrideOptions,
   useSetUserConfigOverride,
@@ -37,6 +43,7 @@ import type { MemberWithUser } from '@goosar/core/types';
 import { useT } from '../../i18n';
 import { memberLabel } from './member-label';
 import { SettingsCard, SettingsSection } from './settings-layout';
+import { SectionNotice, type SectionNoticeState } from './section-notice';
 
 export function AdminOverridesSection({
   wsId,
@@ -54,6 +61,7 @@ export function AdminOverridesSection({
 
   const [dialogMember, setDialogMember] = useState<MemberWithUser | null>(null);
   const [removeMember, setRemoveMember] = useState<MemberWithUser | null>(null);
+  const [notice, setNotice] = useState<SectionNoticeState | null>(null);
 
   const overrideFor = (userId: string): UserConfigOverrideView | null => {
     const idx = members.findIndex((m) => m.user_id === userId);
@@ -65,9 +73,9 @@ export function AdminOverridesSection({
     try {
       await deleteOverride.mutateAsync(member.user_id);
       setRemoveMember(null);
-      toast.success(t(($) => $.admin.overrides.toast_removed));
+      setNotice({ tone: 'success', message: t(($) => $.admin.overrides.toast_removed) });
     } catch {
-      toast.error(t(($) => $.admin.overrides.toast_remove_failed));
+      setNotice({ tone: 'destructive', message: t(($) => $.admin.overrides.toast_remove_failed) });
     }
   };
 
@@ -141,13 +149,22 @@ export function AdminOverridesSection({
                 patch,
               });
               setDialogMember(null);
-              toast.success(t(($) => $.admin.overrides.toast_saved));
+              setNotice({ tone: 'success', message: t(($) => $.admin.overrides.toast_saved) });
             } catch {
-              toast.error(t(($) => $.admin.overrides.toast_save_failed));
+              setNotice({
+                tone: 'destructive',
+                message: t(($) => $.admin.overrides.toast_save_failed),
+              });
             }
           }}
         />
       )}
+
+      <SectionNotice
+        notice={notice}
+        onDismiss={() => setNotice(null)}
+        dismissLabel={t(($) => $.admin.overrides.notice_dismiss)}
+      />
     </SettingsSection>
   );
 }
@@ -203,17 +220,27 @@ function OverrideRow({
         {t(($) => $.admin.overrides.configure_action)}
       </Button>
       {hasOverride && (
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label={t(($) => $.admin.overrides.remove_aria, {
-            name: memberLabel(member),
-          })}
-          onClick={onRemove}
-          disabled={busy}
-        >
-          {t(($) => $.admin.overrides.remove_action)}
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={t(($) => $.admin.overrides.row_actions_aria, {
+                  name: memberLabel(member),
+                })}
+              >
+                <MoreHorizontal />
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem variant="destructive" disabled={busy} onClick={onRemove}>
+              <ShieldOff />
+              {t(($) => $.admin.overrides.remove_action)}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </div>
   );

@@ -384,15 +384,17 @@ describe('AdminTab member overrides', () => {
 
   it('removes an override', async () => {
     renderWithI18n(<AdminTab />);
-    fireEvent.click(screen.getByRole('button', { name: 'Remove override for Bob' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Bob' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove' }));
     expect(mocks.deleteOverride).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Remove override' }));
     await waitFor(() => expect(mocks.deleteOverride).toHaveBeenCalledWith('user-2'));
   });
 
-  it('does not remove an override until a confirm naming the member is accepted (§3 L2)', () => {
+  it('does not remove an override until a confirm naming the member is accepted (§3 L2)', async () => {
     renderWithI18n(<AdminTab />);
-    fireEvent.click(screen.getByRole('button', { name: 'Remove override for Bob' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Bob' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove' }));
 
     expect(screen.getByText('Remove the override for Bob?')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
@@ -453,7 +455,7 @@ describe('AdminTab member overrides', () => {
     expect(screen.queryByText('Apply the override for Carol?')).toBeNull();
   });
 
-  it('names a member with no display name by their email, everywhere', () => {
+  it('names a member with no display name by their email, everywhere', async () => {
     membersRef.current = [
       member({ id: 'm1', user_id: 'user-1', role: 'owner', name: 'Alice' }),
       member({
@@ -473,9 +475,10 @@ describe('AdminTab member overrides', () => {
     ).toBeTruthy();
     fireEvent.click(
       screen.getByRole('button', {
-        name: 'Remove override for bob@goosar.test',
+        name: 'Actions for bob@goosar.test',
       }),
     );
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Remove' }));
     expect(screen.getByText('Remove the override for bob@goosar.test?')).toBeTruthy();
     expect(
       screen.getByText(

@@ -1105,7 +1105,8 @@
       "confirm_cancel": "キャンセル",
       "confirm_apply": "MCP デフォルトを更新",
       "toggle_off_aria": "{{name}} の配信を停止",
-      "env_value_aria": "{{name}} に追加する変数の値"
+      "env_value_aria": "{{name}} に追加する変数の値",
+      "notice_dismiss": "閉じる"
     },
     "overrides": {
       "title": "メンバーのオーバーライド",
@@ -1133,7 +1134,9 @@
       "toast_remove_failed": "オーバーライドを削除できませんでした",
       "remove_confirm_title": "{{name}} のオーバーライドを解除しますか？",
       "remove_confirm_description": "{{name}} のマシンは次回の同期時にワークスペースの設定に戻ります。このオーバーライドにだけ保存されていたキーは削除され、読み戻せません。",
-      "remove_confirm_apply": "オーバーライドを解除"
+      "remove_confirm_apply": "オーバーライドを解除",
+      "row_actions_aria": "{{name}} の操作",
+      "notice_dismiss": "閉じる"
     },
     "pins": {
       "title": "パッケージのピン",
@@ -1202,7 +1205,8 @@
       "first_pin_no_change_description": "このワークスペースにはピンがないため、マシンはデプロイカタログ全体を受け取っています。{{name}} をピン留めしてもマシンにとっては何も変わりません：{{name}} とそれが必要とするパッケージが、現在カタログが公開しているすべてだからです。",
       "effect_breaks": "この変更のあと、このワークスペースではデプロイカタログを解決できなくなり、不足しているパッケージが再公開されるかピンを元に戻すまで、メンバーのマシンはパッケージの代わりにエラーを受け取ります。",
       "effect_repair_unpinned": "このワークスペースへの配信は現在停止しています：有効なピンの一つがデプロイカタログにないため、メンバーのマシンはパッケージの代わりにエラーを受け取っています。ピンがなくなると、ワークスペースは再びデプロイカタログ全体を配信します。",
-      "requires_enable_blocked": "デプロイカタログは {{name}} が必要とするものをすべて公開していないため、ピンを有効にするとワークスペース全体の配信が壊れます。不足しているパッケージが再公開されるまで無効のままです。"
+      "requires_enable_blocked": "デプロイカタログは {{name}} が必要とするものをすべて公開していないため、ピンを有効にするとワークスペース全体の配信が壊れます。不足しているパッケージが再公開されるまで無効のままです。",
+      "notice_dismiss": "閉じる"
     },
     "typed_confirm": {
       "type_prefix": "確認のため",
@@ -1285,7 +1289,8 @@
       "unkill_confirm": "再度有効化",
       "mcp_entries_label": "MCP ポリシーエントリ",
       "mcp_entry_disabled": "無効",
-      "mcp_entry_locked": "ロック中"
+      "mcp_entry_locked": "ロック中",
+      "notice_dismiss": "閉じる"
     },
     "workspaces": {
       "api_key_label": "LLM API キー",
@@ -1370,7 +1375,12 @@
       "toast_reactivate_failed": "アクセスを復元できませんでした",
       "toast_reactivated": "アクセスを復元しました",
       "toast_revoke_failed": "セッションを終了できませんでした。",
-      "toast_sessions_revoked": "{{count}} 件のセッションを終了しました。"
+      "toast_sessions_revoked": "{{count}} 件のセッションを終了しました。",
+      "col_name": "名前",
+      "col_members": "メンバー",
+      "empty_title": "ワークスペースはまだありません",
+      "row_actions_aria": "{{name}} の操作",
+      "notice_dismiss": "閉じる"
     },
     "fleet": {
       "title": "フリート",
@@ -1402,7 +1412,9 @@
       "visibility_public": "公開",
       "status_online": "オンライン",
       "status_offline": "オフライン",
-      "no_agents": "なし"
+      "no_agents": "なし",
+      "search_placeholder": "マシンを検索",
+      "empty_title": "表示できるマシンはありません"
     },
     "mcp": {
       "title": "デプロイメント MCP ライブラリ",
@@ -1423,7 +1435,13 @@
       "delete_title": "このデプロイメント MCP サーバーを削除しますか？",
       "delete_description": "「{{name}}」はデプロイメント、有効化していたすべてのワークスペース、割り当てられていたすべてのエージェントから削除されます。",
       "delete_confirm": "削除",
-      "cancel": "キャンセル"
+      "cancel": "キャンセル",
+      "col_name": "名前",
+      "col_transport": "トランスポート",
+      "row_actions_aria": "{{name}} の操作",
+      "search_placeholder": "MCP サーバーを検索",
+      "no_matches": "検索条件に一致するサーバーはありません。",
+      "notice_dismiss": "閉じる"
     }
   },
   "mcp": {
@@ -1529,7 +1547,11 @@
     "save": "セッションポリシーを保存",
     "save_failed": "セッションポリシーを保存できませんでした。",
     "saved": "セッションポリシーを保存しました。",
-    "title": "セッションと 2 段階認証"
+    "title": "セッションと 2 段階認証",
+    "idle_error": "1〜720 の整数（時間）を入力してください。",
+    "absolute_error": "1〜365 の整数（日数）を入力してください。",
+    "max_error": "0（無制限）〜1000 の整数を入力してください。",
+    "notice_dismiss": "閉じる"
   },
   "integrations": {
     "list_description": "このワークスペースで使えるすべての外部連携と、それぞれに足りないもの。",
