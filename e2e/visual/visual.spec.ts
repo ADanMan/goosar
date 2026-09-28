@@ -14,6 +14,8 @@ test.describe('Visual regression', () => {
       await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
 
       await page.goto('/', { waitUntil: 'networkidle' });
+      // Next.js dev-mode overlay is not part of the product; hide it so it never lands in a snapshot.
+      await page.addStyleTag({ content: 'nextjs-portal{display:none!important}' });
       // The landing hero terminal replays a scripted "typing" sequence even
       // under prefers-reduced-motion; give it time to reach its steady state
       // so consecutive screenshots are pixel-stable.
@@ -32,6 +34,8 @@ test.describe('Visual regression', () => {
         localStorage.setItem('goosar:chat:isOpen', 'false');
       }, token);
       await page.goto(`/${workspace.slug}/issues`, { waitUntil: 'domcontentloaded' });
+      // Next.js dev-mode overlay is not part of the product; hide it so it never lands in a snapshot.
+      await page.addStyleTag({ content: 'nextjs-portal{display:none!important}' });
       await page.waitForLoadState('networkidle');
 
       // A first-run product tour can cover the issues list; dismiss it if present.
