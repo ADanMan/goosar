@@ -654,3 +654,35 @@ func (s *Store) DeleteRuntimeProfile(ctx context.Context, workspaceID, id string
 	}
 	return tag.RowsAffected(), nil
 }
+
+// TicketNumbering — пара (следующий порядковый номер, текущий префикс
+// воркспейса), которую IncrementTicketSeq выдаёт домену task для присвоения
+// number/identifier новой задаче (docs/51-data-model.md, «Нумерация задач»).
+type TicketNumbering struct {
+	Seq    int64
+	Prefix string
+}
+
+// ticketSeqQuerier — минимум, нужный IncrementTicketSeq: и *pgxpool.Pool, и
+// pgx.Tx ему удовлетворяют.
+type ticketSeqQuerier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// IncrementTicketSeq инкрементирует ws_next_ticket_seq пространства (блокируя
+// его строку в spaces до конца транзакции q) и возвращает новый номер вместе
+// с текущим ws_ticket_prefix. Домен task вызывает это внутри собственной
+// транзакции создания задачи, чтобы инкремент и вставка строки tickets были
+// атомарны (q — тот же pgx.Tx, в котором создаётся tickets).
+func (s *Store) IncrementTicketSeq(ctx context.Context, q ticketSeqQuerier, workspaceID string) (TicketNumbering, error) {
+	var n TicketNumbering
+	err := q.QueryRow(ctx, `UPDATE spaces SET ws_next_ticket_seq = ws_next_ticket_seq + 1 WHERE id = $1
+		RETURNING ws_next_ticket_seq, ws_ticket_prefix`, workspaceID).Scan(&n.Seq, &n.Prefix)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return TicketNumbering{}, ErrNotFound
+	}
+	if err != nil {
+		return TicketNumbering{}, fmt.Errorf("workspace: инкремент номера задачи: %w", err)
+	}
+	return n, nil
+}

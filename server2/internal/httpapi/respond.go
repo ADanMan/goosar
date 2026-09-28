@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 )
 
@@ -43,6 +44,19 @@ func DecodeJSON(r *http.Request, v any) error {
 		return nil
 	}
 	return json.NewDecoder(r.Body).Decode(v)
+}
+
+// ReadBody читает тело запроса целиком как []byte (пустое тело — []byte(nil),
+// не ошибка). В отличие от DecodeJSON, оставляет вызывающему сами байты —
+// нужно, когда одно и то же тело разбирается дважды разными способами
+// (например строгий DTO плюс "какие ключи вообще присутствовали" для
+// различения "поле не передано" от "поле передано как null", см.
+// internal/task/patch.go).
+func ReadBody(r *http.Request) ([]byte, error) {
+	if r.Body == nil || r.ContentLength == 0 {
+		return nil, nil
+	}
+	return io.ReadAll(r.Body)
 }
 
 // statusHelper фиксирует пару (код статуса, дефолтное сообщение, код ошибки)

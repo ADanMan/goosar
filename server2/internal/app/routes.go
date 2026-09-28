@@ -3,10 +3,18 @@ package app
 import (
 	"net/http"
 
+	"github.com/adanman/goosar/server2/internal/asset"
 	"github.com/adanman/goosar/server2/internal/authn"
+	"github.com/adanman/goosar/server2/internal/chat"
+	"github.com/adanman/goosar/server2/internal/feed"
 	"github.com/adanman/goosar/server2/internal/httpapi"
 	"github.com/adanman/goosar/server2/internal/identity"
+	"github.com/adanman/goosar/server2/internal/note"
+	"github.com/adanman/goosar/server2/internal/pin"
+	"github.com/adanman/goosar/server2/internal/project"
 	"github.com/adanman/goosar/server2/internal/realtime"
+	"github.com/adanman/goosar/server2/internal/tagging"
+	"github.com/adanman/goosar/server2/internal/task"
 	"github.com/adanman/goosar/server2/internal/workspace"
 )
 
@@ -28,7 +36,15 @@ func NewRouter(d *Deps) *httpapi.Router {
 	authn.Register(router, d.Authn)
 	identity.Register(router, d.Identity)
 	workspace.Register(router, d.Workspace)
-	realtime.Register(router, d.Hub, d.Authn, d.Workspace.Store.RealtimeMembership(), d.Logger)
+	task.Register(router, d.Task)
+	project.Register(router, d.Project)
+	feed.Register(router, d.Feed)
+	chat.Register(router, d.Chat)
+	tagging.Register(router, d.Tagging)
+	asset.Register(router, d.Asset)
+	note.Register(router, d.Note)
+	pin.Register(router, d.Pin)
+	realtime.Register(router, d.Hub, d.Authn, d.Workspace.Store.RealtimeMembership(), d.Task.RealtimeTaskAccess(), chat.NewChatAccessBridge(d.Chat.Store), d.Logger)
 
 	RegisterStubs(router)
 	return router

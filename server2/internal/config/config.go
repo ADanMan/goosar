@@ -29,6 +29,13 @@ type Config struct {
 	MigrationsDir  string
 
 	ServerVersion string // GOOSAR_SERVER_VERSION, иначе "dev"
+
+	// Вложения (T-027, internal/asset) — имена совпадают с
+	// docs/50-api-contract.md §1.9 "Вложения".
+	LocalUploadDir         string // LOCAL_UPLOAD_DIR — включает локальный backend и маршрут /uploads/*
+	S3Bucket               string // S3_BUCKET — наличие означает выбранный (но не реализованный) S3-backend
+	AttachmentDownloadMode string // ATTACHMENT_DOWNLOAD_MODE: auto/cloudfront/presign/proxy
+	AttachmentDownloadTTL  int    // ATTACHMENT_DOWNLOAD_URL_TTL, минуты, по умолчанию 30
 }
 
 // Load собирает Config из os.Environ(). Отсутствующие необязательные значения
@@ -49,6 +56,11 @@ func Load() Config {
 		MigrateOnStart:       getBool("MIGRATE", false),
 		MigrationsDir:        getenv("MIGRATIONS_DIR", "server2/migrations"),
 		ServerVersion:        getenv("GOOSAR_SERVER_VERSION", "dev"),
+
+		LocalUploadDir:         os.Getenv("LOCAL_UPLOAD_DIR"),
+		S3Bucket:               os.Getenv("S3_BUCKET"),
+		AttachmentDownloadMode: getenv("ATTACHMENT_DOWNLOAD_MODE", "auto"),
+		AttachmentDownloadTTL:  getInt("ATTACHMENT_DOWNLOAD_URL_TTL", 30),
 	}
 	return c
 }
@@ -77,6 +89,18 @@ func getBool(key string, def bool) bool {
 		return def
 	}
 	return b
+}
+
+func getInt(key string, def int) int {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+	return n
 }
 
 // Validate проверяет обязательные для запуска сервера значения.

@@ -166,6 +166,139 @@ docs/51-data-model.md) не хватает, реализатор принима�
     (контракт: «ошибка отправки только логируется, ответ API не меняется»);
     dev-реализация просто пишет его в лог (T-029 подключит Resend/SMTP).
 
+## T-027 (project/feed/chat): пробелы спецификации
+
+Реализатор этой сессии отвечал за `internal/{project,feed,chat}` (проекты,
+инбокс/уведомления, чат) — `internal/task`/`internal/dispatch` делает
+параллельная сессия.
+
+1. **Схема уже существовала.** `initiatives`/`initiative_resources`
+   (005_tasks.up.sql), `alerts`/`notification_prefs` (009_feed.up.sql),
+   `convos`/`convo_messages`/`convo_drafts`/`convo_pinned_operatives`/
+   `convo_channel_links` (007_chat.up.sql) и `dispatch_jobs`
+   (008_dispatch.up.sql) были спроектированы ещё в T-025 (см. `cmd/import`) и
+   покрывают почти всю доменную область T-027 без изменений. Единственная
+   добавленная миграция — `140_chat_read_state.up/down.sql`
+   (`convos.cv_last_read_at`): у чат-сессии ровно один читатель-человек (её
+   создатель), поэтому достаточно одной метки на строке `convos`, а не
+   отдельной таблицы "прочитано на пользователя", как у `alerts`.
+
+2. **`feed.Notify` — группа/severity уведомления по `al_kind`.** Контракт
+   перечисляет известные значения `InboxItem.type`, но нигде не сопоставляет
+   их ни с шестью группами `NotificationPreferencesInput`, ни со `severity` по
+   умолчанию. Решение — таблицы `kindToGroup`/`defaultSeverity` в
+   `internal/feed/notify.go`, экспортированная `GroupFor(kind)`; значение вне
+   таблицы попадает в группу `updates` с `severity=info` (список типов
+   контракт прямо называет открытым). Если получатель — участник и его группа
+   выставлена в `muted`, `Notify` не создаёт строку вовсе (не создаёт и не
+   помечает прочитанной) и возвращает `created=false, err=nil` — это не
+   ошибка вызывающего домена.
+
+3. **`archiveCompletedInbox` — что считать "завершённым".** `tk_status` не
+   знает значения `completed` (005_tasks.up.sql: `backlog/todo/in_progress/
+   in_review/done/blocked/cancelled`). Решение: считать тикет завершённым,
+   если `tk_status IN ('done', 'cancelled')`.
+
+4. **`chat.CanInvoke` — алгоритм доступа "invoke" к агенту.** Контракт
+   описывает форму `operatives.op_permission_mode` (`private`/`public_to`) и
+   `operative_targets`, но не сам алгоритм проверки. Решение (см.
+   `internal/chat/store.go`, `Store.CanInvoke`): owner/admin воркспейса может
+   вызвать любого агента; `private` — только его `op_owner_account_id`;
+   `public_to` — если для агента в `operative_targets` есть подходящая цель
+   (весь воркспейс, сам вызывающий как `member`, либо отряд из `crew_members`,
+   где вызывающий состоит участником). Та же проверка используется и в
+   `createChatSession`, и в `pinChatAgent`.
+
+5. **Приоритет чат-задач в очереди.** Контракт требует "приоритет чата" выше
+   фонового, не называя число (`dispatch_jobs.dj_priority DEFAULT 0`,
+   `ORDER BY dj_priority DESC`). Решение — константа `chatPriority = 10` в
+   `internal/chat/handlers.go`.
+
+6. **Генерация заголовка сессии по первому сообщению — эвристика, не LLM.**
+   Контракт описывает "асинхронно запускается генерация заголовка сессии по
+   содержимому сообщения", что в реальном сервисе, видимо, означает вызов
+   LLM; в clean-room без внешнего API это не воспроизвести. Решение —
+   `generateTitle` в `internal/chat/handlers.go`: обрезка первого сообщения
+   до 60 рун с многоточием, синхронно (не асинхронно — нет фоновой очереди
+   для этого в рамках T-027).
+
+7. **`dj_context_snapshot` для чатовых задач — минимальный состав.** Контракт
+   и `008_dispatch.up.sql` описывают снапшот как "то, что демону нужно при
+   claim", не фиксируя точный набор полей для канала chat. Решение —
+   `Store.BuildContextSnapshot` кладёт `initiator_name`, `chat_session_title`
+   и, если сессия привязана к проекту, `project_title`.
+
+8. **Вложения чат-сообщений: `assets` уже существует (домен `asset`,
+   параллельная сессия), их FK на `convo_message_id` — общий контракт между
+   доменами.** `sendChatMessage` не создаёт вложения сама (это `POST
+   /api/upload-file`, чужой домен) — она только "заявляет" уже загруженные,
+   ещё не занятые строки `assets` (`convo_id` = текущая сессия,
+   `convo_message_id IS NULL`) на id нового сообщения одним `UPDATE ...
+   RETURNING id`, что само по себе и реализует "без дублей/уже занятых" из
+   контракта. `ChatDraftRestore.attachments` при этом всегда `[]`: у
+   `convo_drafts` нет колонки-владельца в `assets` (черновик — не сообщение),
+   заводить её ради этого редкого сценария (черновик появляется только после
+   отмены задачи) сочтено избыточным для рамок T-027.
+
+9. **`POST /api/tasks/{taskId}/cancel` (`cancelTaskByUser`) — не реализован
+   в этой сессии.** Эндпоинт тега `Tasks`, отменяющий и issue-, и chat-задачи
+   в одном хендлере (`dispatch.CancelJob` + опционально запись
+   `convo_drafts`), логически ближе к домену `task`/`dispatch` (параллельная
+   сессия), у которого уже есть вся инфраструктура отмены. Со стороны chat
+   для него подготовлена точка входа `Store.CreateDraftRestore(ctx, convoID,
+   taskID, content)` (см. `internal/chat/store.go`) — вызывающий домен читает
+   отменённое пользовательское сообщение сам (`dispatch_job_id` совпадает с
+   `taskID`) и передаёт его текст сюда, не обращаясь к остальному чат-стору.
+
+10. **`getChatChannelHistory`/`getChatThread` — внешние каналы (Slack и т.п.)
+    не реализованы.** `convo_channel_links` (007_chat.up.sql) — таблица есть,
+    но привязку к внешнему каналу создаёт домен интеграций (T-029, вне E8 на
+    момент этой сессии). Оба маршрута проверяют `X-Actor-Source: task_token` +
+    `X-Task-ID` (через `dispatch.Store.GetJob`, публичный метод) и всегда
+    отвечают `note` вместо ошибки — ровно то поведение, что контракт
+    оговаривает для сессии без канала.
+
+11. **`realtime.TaskAccess`/`ChatAccess` (пробел зафиксирован ещё в
+    `internal/realtime/ws.go` до этой сессии).** Реализована `ChatAccess`
+    (`internal/chat/access.go`, `ChatAccessBridge.CanAccessChat`: found —
+    сессия существует в воркспейсе, allowed — вызывающий её создатель) и
+    подключена в `internal/app/routes.go`. `TaskAccess` оставлена `nil` —
+    это домен `task`, не мой.
+
+12. **Общая правка `internal/httpapi`:** добавлены `RoleAgent`,
+    `WorkspaceMembership` и `RequireWorkspaceMember` (`workspace.go`) — общий
+    пролог для доменов, чей контракт резолвит пространство только по
+    заголовку/query, без `{id}` в пути (Projects/Inbox/Chat). Это чисто
+    добавочные экспортируемые имена, ни одна существующая сигнатура не
+    менялась.
+
+13. **Общая правка `internal/workspace`:** добавлен
+    `Store.HTTPAPIMembership()` (`httpapi_adapter.go`) — единственная
+    реализация `httpapi.WorkspaceMembership` поверх `workspace.Store`,
+    которой пользуются `project`/`feed`/`chat`, вместо трёх копий одного и
+    того же адаптера в каждом домене.
+
+14. **Общая правка `internal/dispatch`:** добавлен `Store.CancelActiveForConvo`
+    + `Deps.CancelActiveForConvo` (`deps.go`, `store.go`) — тот же приём, что
+    `CancelActiveForTicket`, по `convo_id`; нужен `deleteChatSession`
+    (контракт требует отменять незавершённые задачи сессии при её удалении).
+    Заодно исправлена ошибка типов в `Store.insert` (`NULLIF($n,'')` без
+    явного `::uuid` — Postgres отказывался присваивать `text` результату
+    `NULLIF` в `uuid`-колонку; воспроизводилось на любом вызове `Enqueue` с
+    хотя бы одним пустым uuid-полем, в том числе из `chat`). Добавлен
+    `::uuid` к каждому `NULLIF` uuid-колонки (`ticket_id`, `initiative_id`,
+    `crew_id`, `convo_id`, `sentinel_run_id`, `dj_trigger_note_id`,
+    `dj_trigger_thread_id`, `dj_initiator_id`, `dj_parent_job_id`) — без
+    изменения сигнатур. Тест на регрессию —
+    `internal/dispatch/cancel_convo_test.go`.
+
+15. **Общая правка `internal/app` (`deps.go`, `routes.go`):** заведены поля
+    `Dispatch`/`Project`/`Feed`/`Chat`, их сборка в `New`, три строки
+    регистрации доменов и обновлён вызов `realtime.Register` (сигнатура уже
+    требовала `TaskAccess`/`ChatAccess` — правка `internal/realtime` до этой
+    сессии); `taskAccess` передан `nil` с комментарием, что это зона домена
+    `task`.
+
 ## Прочитанные файлы (кроме docs/50-api-contract.{md,yaml}, docs/51-data-model.md)
 
 Session T-025:
@@ -180,5 +313,27 @@ Session T-026 (дополнительно к списку выше):
 - `server2/migrations/001_identity.up.sql`, `002_workspace.up.sql`.
 - `e2e/contract/README.md`, `client.go`, `harness.go`, `contract_test.go`
   (только код разделов auth/workspaces/me и общие `call`/`ensureX` хелперы).
+
+Session T-027 (project/feed/chat, дополнительно к спискам выше):
+- `docs/31-backlog.md` — разделы T-027/T-028 (границы доменов, "Затрагивает").
+- `server2/README.md`, `server2/docs/adr/0001-stack.md`, `server2/docs/decisions.md`.
+- `server2/internal/app/{deps.go,routes.go}`, `internal/httpapi/*.go` (кроме
+  `middleware.go`, читанного только частично), `internal/realtime/{hub.go,ws.go}`.
+- `server2/internal/workspace/*.go` (образец домена, см. T-026).
+- `server2/internal/identity/handlers_me.go` (образец без {id}-пути).
+- `server2/migrations/002_workspace.up.sql`, `003_agents.up.sql`,
+  `004_crews.up.sql`, `005_tasks.up.sql`, `007_chat.up.sql`,
+  `008_dispatch.up.sql`, `009_feed.up.sql`, `migrations/check_names.py`.
+- Пакеты соседней параллельной сессии (только код, не их черновые
+  комментарии по существу задачи task/dispatch): `internal/dispatch/*.go`,
+  `internal/wsctx/resolver.go`, `internal/asset/{deps.go,register.go,store.go,handlers.go}`
+  (для форм `Attachment`/`assets`, без изменения этих файлов),
+  `internal/task/deps.go` (только сигнатура `Deps`, для сверки соглашений).
+- `e2e/contract/{README.md,client.go,harness.go,contract_test.go}` — код
+  разделов auth/workspaces/me и общие хелперы (уже было в T-026); разделы
+  projects/inbox/chat дописаны этой сессией.
+- `server2/internal/importer/integration_test.go`,
+  `internal/migrate/migrate_test.go` — образец интеграционного теста на
+  одноразовой БД (использован в `project`/`feed`/`chat`/`dispatch` тестах).
 
 `server/**` и `packages/core/**` не открывались.
