@@ -2,8 +2,18 @@ import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { AlertCircle, AlertTriangle, Check, Info } from 'lucide-react';
 import { Button } from '@goosar/ui/components/ui/button';
 import { Checkbox } from '@goosar/ui/components/ui/checkbox';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@goosar/ui/components/ui/alert-dialog';
 import { cn } from '@goosar/ui/lib/utils';
-import { SettingsCard, SettingsRow, SettingsSection } from '@goosar/views/settings';
+import { SettingsCard, SettingsRow, SettingsSection, TypedConfirmDialog } from '@goosar/views/settings';
 import { useT } from '@goosar/views/i18n';
 
 import {
@@ -175,6 +185,7 @@ export function UninstallSection() {
   const [running, setRunning] = useState(false);
   const [outcome, setOutcome] = useState<UninstallOutcome | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const review = useCallback(async () => {
     setPlanning(true);
@@ -204,6 +215,13 @@ export function UninstallSection() {
       setRunning(false);
     }
   }, [includeUserData]);
+
+  // The destructive button only opens a confirmation; performUninstall runs
+  // from inside the confirm dialogs below, never straight from the click.
+  const confirmRemove = () => {
+    setConfirmOpen(false);
+    void remove();
+  };
 
   const selected = useMemo(() => {
     if (!plan) return [];
@@ -307,7 +325,7 @@ export function UninstallSection() {
           >
             <Button
               variant="destructive"
-              onClick={remove}
+              onClick={() => setConfirmOpen(true)}
               disabled={running || selected.length === 0}
             >
               {running
@@ -335,6 +353,52 @@ export function UninstallSection() {
       )}
 
       {outcome !== null && <OutcomeReport outcome={outcome} />}
+
+      {/* Deleting the daemon's own config is recoverable (reinstalling rebuilds
+          it), so a plain confirm is enough. Deleting the user's own data is not,
+          so that path is gated by TypedConfirmDialog below instead. */}
+      {confirmOpen && !includeUserData && (
+        <AlertDialog
+          open
+          onOpenChange={(next) => {
+            if (!next) setConfirmOpen(false);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t(($) => $.desktop.uninstall.confirm_daemon_title)}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t(($) => $.desktop.uninstall.confirm_daemon_description, {
+                  size: formatBytes(totalBytes(selected)),
+                })}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t(($) => $.desktop.uninstall.confirm_cancel)}</AlertDialogCancel>
+              <AlertDialogAction variant="destructive" onClick={confirmRemove}>
+                {t(($) => $.desktop.uninstall.confirm_action)}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
+
+      {confirmOpen && includeUserData && (
+        <TypedConfirmDialog
+          inputId="uninstall-confirm-typed"
+          title={t(($) => $.desktop.uninstall.confirm_user_data_title)}
+          description={t(($) => $.desktop.uninstall.confirm_user_data_description, {
+            size: formatBytes(totalBytes(selected)),
+          })}
+          target={t(($) => $.desktop.uninstall.confirm_word)}
+          unavailableNote=""
+          confirmLabel={t(($) => $.desktop.uninstall.confirm_action)}
+          cancelLabel={t(($) => $.desktop.uninstall.confirm_cancel)}
+          loading={running}
+          onClose={() => setConfirmOpen(false)}
+          onConfirm={confirmRemove}
+        />
+      )}
     </SettingsSection>
   );
 }

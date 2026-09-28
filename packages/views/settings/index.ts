@@ -1,4 +1,4 @@
-export { SettingsPage } from './components';
+export { SettingsPage, TypedConfirmDialog } from './components';
 export type { ExtraSettingsTab } from './components';
 export {
   SettingsCard,

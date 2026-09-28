@@ -100,6 +100,18 @@ function removeButton(): HTMLElement {
   return screen.getByRole('button', { name: /^Remove / });
 }
 
+// Clicks Remove, then accepts whichever confirmation dialog it opens: a plain
+// confirm when only the daemon config is selected, or the typed-word dialog
+// once the user-data opt-in is ticked (must type the exact confirmation word).
+async function removeAndConfirm(): Promise<void> {
+  fireEvent.click(removeButton());
+  const typedInput = screen.queryByPlaceholderText('Exact value');
+  if (typedInput) {
+    fireEvent.change(typedInput, { target: { value: 'delete' } });
+  }
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+}
+
 describe('UninstallSection', () => {
   it('offers nothing destructive before the list has been read', () => {
     render(<UninstallSection />);
@@ -161,7 +173,7 @@ describe('UninstallSection', () => {
     showTheList();
     await screen.findByText(RUNTIME.path);
 
-    fireEvent.click(removeButton());
+    await removeAndConfirm();
 
     await waitFor(() =>
       expect(mocks.performUninstall).toHaveBeenCalledWith({
@@ -176,12 +188,54 @@ describe('UninstallSection', () => {
     await screen.findByText(RUNTIME.path);
 
     fireEvent.click(screen.getByRole('checkbox'));
-    fireEvent.click(removeButton());
+    await removeAndConfirm();
 
     await waitFor(() =>
       expect(mocks.performUninstall).toHaveBeenCalledWith({
         includeUserData: true,
       }),
+    );
+  });
+
+  it('does not call performUninstall until a plain confirm is accepted (daemon config only)', async () => {
+    render(<UninstallSection />);
+    showTheList();
+    await screen.findByText(RUNTIME.path);
+
+    fireEvent.click(removeButton());
+    expect(mocks.performUninstall).not.toHaveBeenCalled();
+    expect(screen.getByText('Remove the daemon configuration?')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(mocks.performUninstall).not.toHaveBeenCalled();
+    expect(screen.queryByText('Remove the daemon configuration?')).toBeNull();
+  });
+
+  it('requires the exact confirmation word before deleting user data', async () => {
+    render(<UninstallSection />);
+    showTheList();
+    await screen.findByText(RUNTIME.path);
+    fireEvent.click(screen.getByRole('checkbox'));
+
+    fireEvent.click(removeButton());
+    expect(screen.getByText('Delete your configuration and user files?')).toBeTruthy();
+    const confirmButton = screen.getByRole('button', { name: 'Delete' });
+    expect(confirmButton).toBeDisabled();
+
+    fireEvent.change(screen.getByPlaceholderText('Exact value'), {
+      target: { value: 'wrong' },
+    });
+    expect(confirmButton).toBeDisabled();
+    expect(mocks.performUninstall).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByPlaceholderText('Exact value'), {
+      target: { value: 'delete' },
+    });
+    expect(confirmButton).not.toBeDisabled();
+    fireEvent.click(confirmButton);
+
+    await waitFor(() =>
+      expect(mocks.performUninstall).toHaveBeenCalledWith({ includeUserData: true }),
     );
   });
 
@@ -225,7 +279,7 @@ describe('UninstallSection', () => {
     showTheList();
     await screen.findByText(RUNTIME.path);
 
-    fireEvent.click(removeButton());
+    await removeAndConfirm();
 
     expect(await screen.findByText(/Nothing was removed/i)).toBeTruthy();
     expect(screen.getByText(/pid 4242/)).toBeTruthy();
@@ -249,7 +303,7 @@ describe('UninstallSection', () => {
     showTheList();
     await screen.findByText(RUNTIME.path);
 
-    fireEvent.click(removeButton());
+    await removeAndConfirm();
 
     expect(await screen.findByText(/still on this computer/i)).toBeTruthy();
     expect(screen.getByText(/permission denied/)).toBeTruthy();
@@ -262,7 +316,7 @@ describe('UninstallSection', () => {
     showTheList();
     await screen.findByText(RUNTIME.path);
 
-    fireEvent.click(removeButton());
+    await removeAndConfirm();
 
     expect(await screen.findByText(/did not report back/i)).toBeTruthy();
     expect(screen.getByText(/channel closed/)).toBeTruthy();
