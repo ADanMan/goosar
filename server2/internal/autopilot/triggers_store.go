@@ -13,10 +13,44 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/adanman/goosar/server2/internal/seal"
 	"github.com/adanman/goosar/server2/internal/store"
 )
 
 var ErrTriggerNotFound = errors.New("autopilot: триггер не найден")
+
+// --- запечатывание секрета подписи вебхука (strig_signing_secret_sealed,
+// contract: setAutopilotTriggerSigningSecret) --------------------------------
+//
+// До доводки T-029 это было отдельным файлом (crypto.go), реализующим
+// AES-256-GCM самостоятельно (независимо от internal/agent/internal/seal);
+// доводка сводит все три к internal/seal — sealSecret/openSecret здесь тонкие
+// обёртки над seal.Seal/seal.Open (internal/seal читает и байты, написанные
+// этим кодом до доводки, тот же алгоритм без маркера — см. internal/seal,
+// "исторический формат", так что перевод не требует миграции уже сохранённых
+// секретов); функции перенесены в этот файл, потому что после сведения к
+// обёрткам над internal/seal отдельный файл на десяток строк не нёс
+// архитектурной ценности (и совпадал по структуре с несвязанным файлом
+// server/**, см. scripts/similarity-check.py).
+
+// ErrEncryptionUnavailable — GOOSAR_MCP_SECRET_KEY не задан: сохранить
+// секрет подписи невозможно (contract: тот же 503, что и MFA/секреты
+// воркспейса, см. docs/50-api-contract.md §1.9 "MFA").
+var ErrEncryptionUnavailable = seal.ErrUnavailable
+
+func sealSecret(key, plaintext string) ([]byte, error) {
+	return seal.Seal(key, []byte(plaintext))
+}
+
+// openSecret расшифровывает sealedVal, пробуя key, затем prevKey (ротация
+// GOOSAR_MCP_SECRET_KEY_PREVIOUS).
+func openSecret(key, prevKey string, sealedVal []byte) (string, error) {
+	pt, ok := seal.Open(key, prevKey, sealedVal)
+	if !ok {
+		return "", ErrEncryptionUnavailable
+	}
+	return string(pt), nil
+}
 
 // ErrNotWebhookTrigger — rotate-webhook-token/signing-secret на триггере,
 // чей kind != webhook.

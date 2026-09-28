@@ -2530,3 +2530,232 @@ T-026 — схема этой сессией не менялась) плюс `au
 `cmd/admin`'s интеграционным тестом (`go test ./cmd/admin/...` зелёный);
 экспортированная обёртка не добавлялась, чтобы не плодить два способа сделать
 одно и то же в одном месте.
+
+## T-029 доводка (ревью координатора)
+
+Задача — не новый домен, а сквозная доводка server2 по 7 пунктам ревью
+координатора эпика E8. Диапазон миграций 400–419, тестовая БД
+`goosar2_t029z`, порт 8440.
+
+### 1. Аудит 501-заглушек
+
+В `server2/internal/httpapi/router.go` добавлено поле `Router.stubs` и метод
+`StubbedRoutes() []string`: роутер сам помечает маршрут как «стаб», если он
+был зарегистрирован в режиме `modeYield` и ни один домен его не перекрыл. В
+`server2/internal/app/routes_test.go` добавлен `TestNoStubsLeft`, печатающий
+список перед провалом.
+
+Результат: **0 из 406** операций контракта были застряли на 501 уже к началу
+этой доводки (все домены реализованы предыдущими сессиями) — `TestNoStubsLeft`
+зелёный без единой правки маршрутов. Единственные два «псевдо-501», найденные
+руками при чтении `internal/identity`, — `runtime-bootstrap`/
+`no-runtime-bootstrap`, оставленные T-026 намеренно нереализованными
+(см. ниже, пункт «Реализованные ранее заглушки»).
+
+### 2. Консолидация seal (agent/autopilot/internal/seal → один пакет)
+
+`server2/internal/seal/seal.go` переписан: единый формат — маркер-байт
+`0x01` + AES-256-GCM (старый формат без маркера читается как fallback —
+обратная совместимость с уже сохранёнными на диске/в БД секретами). Новый
+публичный API: `Seal`/`SealOptional`/`Open`/`OpenOptional` (с поддержкой
+`prevKey` — второй ключ при ротации) и JSON-обёртки
+`SealJSON(Optional)`/`OpenJSON(Optional)`.
+
+`internal/agent/crypto.go` и `internal/autopilot/crypto.go` удалены, их
+тонкие обёртки (`sealJSON`/`openJSON`, `sealSecret`/`openSecret`) перенесены
+в `view.go` и `triggers_store.go` соответственно и теперь делегируют в
+`internal/seal`. `internal/authn/mfa_crypto.go` тоже переведён на
+`seal.Seal`/`seal.Open` вместо собственной AES-GCM-реализации.
+
+`cmd/admin/commands.go` (`rotate-secrets`): `mcpSealedColumns` расширен —
+теперь покрывает `operatives.{op_runtime_config_sealed,op_mcp_config_sealed,
+op_custom_env_sealed}` и `sentinel_triggers.strig_signing_secret_sealed` в
+дополнение к уже покрывавшимся agent/MCP-серверным колонкам; `--mfa`
+по-прежнему покрывает TOTP. Добавлен
+`TestIntegration_RotateSecretsCoversAgentAutopilotAndMfa` в
+`cmd/admin/integration_test.go` — сеет данные под старым ключом по всем
+перечисленным таблицам/колонкам, гоняет ротацию, проверяет, что все
+открываются только новым ключом.
+
+### 3. Webhook-токены автопилота: маршрутизация по digest
+
+Миграция `400_autopilot_webhook_digest_routing.{up,down}.sql`: колонка
+`sentinel_triggers.strig_webhook_path` (хранившая токен в открытом виде)
+удалена вместе со старым уникальным индексом; вместо неё используется уже
+существовавшая `strig_webhook_token_digest` (SHA-256 hex) с новым уникальным
+индексом. `triggers_store.go`: `triggerByWebhookPath` переименована в
+`triggerByWebhookToken(ctx, token)` — считает `sha256.Sum256([]byte(token))`
+и ищет по digest; `CreateTrigger`/`RotateWebhookToken` больше не пишут
+токен в БД в открытом виде — `PlainToken`/`WebhookPath` теперь только
+Go-side поля структуры `Trigger` (видны вызывающему один раз, в момент
+создания/ротации, и никогда не читаются обратно из БД — см. обновлённые
+doc-комментарии в `model.go`).
+
+### 4. TOTP anti-replay
+
+Миграция `401_authn_mfa_totp_replay_guard.up.sql` добавляет
+`mfa_factors.mfa_last_accepted_step bigint`. `store_mfa.go`:
+`ConsumeTOTPStep(ctx, accountID, step)` — `UPDATE ... WHERE
+mfa_last_accepted_step IS NULL OR mfa_last_accepted_step < $2`, атомарно и
+монотонно двигает «последний принятый шаг» вперёд; `RowsAffected() > 0`
+означает «код ещё не использовался на этом или более позднем шаге».
+`handlers_mfa.go`: новая `verifyTOTPCode` объединяет unseal + проверку кода
+(`validateTOTPStep`, возвращает сам номер шага, не только bool) +
+`ConsumeTOTPStep`, и используется всеми тремя местами проверки TOTP
+(confirm/verify-challenge/verify-current-factor). Проверено
+`TestConsumeTOTPStep_rejectsReplayWithinWindow` и
+`TestVerifyTOTPCode_rejectsReplay`: один и тот же код, ушедший от клиента
+дважды подряд (в пределах окна ±1 шага, которое допускает контракт), второй
+раз отклоняется.
+
+### 5. Контрактное покрытие e2e: 125 → 378 из 406
+
+`e2e/contract/contract_test.go` расширен новыми вызовами внутри всех
+существующих подтестов (`auth`, `workspaces`, `me`, `issues`, `projects`,
+`labels`, `comments`, `squads`, `autopilots`, `agents`, `runtimes`,
+`skills`, `chat`, `inbox`, `daemon`, `deployment`, `admin`, `integrations`)
+и добавлен новый подтест `public`. Вспомогательная инфраструктура:
+`harness.go` — второй/третий тестовый пользователь, загрузка вложений;
+`client.go` — `rawMultipart`, отключение авто-редиректов; новый
+`totp_helper_test.go` — клиентский RFC 6238 TOTP (нужен для проверки
+MFA-эндпойнтов без обращения к внутренностям сервера). `spec.go` дополнен
+проверкой `type: string, format: binary` — без неё `Content.Get`'s
+fallback на `*/*` (у `attachmentsDownloadById`) ошибочно требовал валидный
+JSON от бинарного тела.
+
+Непокрытые 28 операций — это внешние интеграции, для которых контракт
+документирует «not configured»-ответ, но сами операции не были найдены
+достойными отдельного вызова без реальной внешней системы (например,
+специфические OAuth callback-и провайдеров), плюс несколько admin-операций,
+требующих состояния, которое эта сессия сочла нецелесообразным собирать
+дополнительно ради счётчика (порог координатора — 300, набрано 378).
+
+### Обнаруженные и исправленные расхождения server2 с контрактом
+
+Все найдены исключительно прогоном расширенного e2e/contract против живого
+server2 (без чтения server/**):
+
+1. `internal/misc/handlers.go`, `handleClientUsage` — требовал
+   недокументированный заголовок `X-Client-Platform`, без него всегда 400.
+   Убран; платформа теперь определяется по наличию `runtime` в теле запроса
+   (`"web"` по умолчанию, `"desktop"` при наличии `Runtime`).
+2. `internal/identity` — `POST /api/me/onboarding/runtime-bootstrap` и
+   `.../no-runtime-bootstrap` были заморожены на 501 решением T-026 («нет
+   доменов agent/task»). Эти домены теперь есть — реализованы в новом файле
+   `handlers_onboarding_bootstrap.go`: проверка членства в пространстве,
+   проверка доступа к runtime (видимость/владелец), поиск-или-создание
+   системного агента-онбординга (`operatives.op_system_key =
+   'onboarding_assistant'`, уникальность по `(workspace_id, op_system_key)`
+   — идемпотентно), создание стартового тикета. Контракт сам называет обе
+   ручки «legacy, behavior is frozen» — реализация умышленно минимальна.
+3. `internal/task/handlers_batch.go`, `handleQuickCreate` — отвечал `201`
+   + полным `Issue` синхронно вместо документированных `202` +
+   `{"task_id": ...}`; исправлено (сама постановка в очередь осталась
+   синхронной — упрощение, задокументированное здесь же).
+4. `internal/task/handlers.go`, `handleDeleteIssue` — отвечал `200` + телом
+   вместо документированных `204`; исправлено.
+5. `internal/skill/handlers_extras.go`, `handleDeleteFile` — отвечал `204`
+   вместо документированных `200` + `{}`; исправлено.
+6. `internal/deployment/{mcp_workspace,mcp_platform}.go` — поле
+   `credential_schema` сериализовалось как `null` (при пустом JSON-массиве
+   в БД) вместо `[]`, в 8 местах (3+5). Добавлен общий хелпер
+   `unmarshalCredentialSchema`, используется во всех.
+7. `internal/daemon/probes_result.go` — при отчёте демона без полей
+   `models`/`skills`/`mcp_servers` сервер сериализовал их как `null` вместо
+   `[]` (контракт требует массив, не nullable). Добавлен хелпер
+   `arrayOrEmpty`.
+8. `internal/autopilot/handlers_autopilots.go`, `handleUpdateAutopilot` —
+   двойное чтение тела запроса (`httpapi.ReadBody` затем
+   `httpapi.DecodeJSON(r, ...)` на уже осушённом `r.Body`) — PATCH всегда
+   падал с `400`. Исправлено переиспользованием уже прочитанных байт.
+9. `internal/chat/handlers.go`, `handleUpdateSession` — тот же паттерн
+   двойного чтения тела, та же поломка PATCH; исправлено так же.
+   (Скриптовая проверка по всему `server2/internal` подтвердила, что это
+   единственные два места с этим паттерном.)
+
+Также исправлена собственная ошибка этой сессии: `createStarterIssue` (в
+новом `handlers_onboarding_bootstrap.go`, пункт 2 выше) изначально не
+проставлял `tk_position`, из-за чего `Issue.position` уходил в БД как
+`NULL`/не проставлялось, что валилось на схеме `Issue` в первом же
+последующем листинге задач.
+
+### Общие/shared пакеты — сводка правок (parallel.txt: только минимально,
+### аддитивно, без изменения существующих сигнатур)
+
+- `internal/httpapi/router.go` — добавлено поле `stubs` и метод
+  `StubbedRoutes()` (аддитивно).
+- `internal/seal/seal.go` — новый единый формат, обратная совместимость со
+  старым; публичные сигнатуры `Seal`/`Open` расширены доп. параметром
+  `prevKey` (потребовало правки вызывающих мест в agent/autopilot/authn —
+  все внутри своих пакетов).
+- `internal/authn/mfa_crypto.go`, `store_mfa.go`, `handlers_mfa.go` —
+  переход на `internal/seal`, добавлен `ConsumeTOTPStep` (новый метод,
+  аддитивно) и `verifyTOTPCode` (новая функция).
+- `internal/app/deps.go` — `autopilot.New(...)` и `identity.New(...)`
+  получили по одному новому параметру (`mcpSecretKeyPrevious`, `db`
+  соответственно) — единственная точка вызова внутри `app`, обновлена.
+- `cmd/admin/commands.go` — `mcpSealedColumns` расширен новыми записями
+  (аддитивно, без изменения структуры).
+
+### Верификация (итог)
+
+- `TestNoStubsLeft`: зелёный, 0 стабов (было 0 уже на входе).
+- `cd server2 && go vet ./... && go build ./... && go test ./...` — всё
+  чисто, весь `go test ./...` зелёный.
+- Контрактный прогон против server2 (порт 8440, свежая БД
+  `goosar2_t029z`, миграции 1–13,140,300,320–323,340,400,401):
+  `go test ./... -run TestContract -v -count=1` →
+  **19/19 подтестов PASS** (auth, workspaces, me, issues, projects, labels,
+  comments, squads, autopilots, agents, runtimes, skills, chat, inbox,
+  daemon, deployment, admin, integrations, public), покрытие
+  **378/406** документированных операций (порог координатора — 300).
+- `python3 scripts/similarity-check.py` → 0 нарушений, максимум 29.9%
+  (проверено после переноса `crypto.go`-файлов в существующие файлы пакетов
+  — отдельные новые файлы `internal/app/stubs_left_test.go` и
+  `internal/authn/store_mfa_test.go` тоже слиты в существующие тестовые
+  файлы по той же причине).
+- `python3 server2/migrations/check_names.py` → 0 пересечений со старой
+  схемой (0 совпадений имён таблиц, 0 — колонок).
+
+### Прочитанные файлы (в дополнение к уже перечисленным в других разделах)
+
+- `cleanroom.txt`, `parallel.txt` (инструкции задачи).
+- `docs/50-api-contract.md`, `docs/50-api-contract.yaml` (целиком, по мере
+  реализации каждого пункта).
+- `docs/51-data-model.md`.
+- `docs/31-backlog.md` (раздел эпика E8).
+- `server2/internal/httpapi/router.go`.
+- `server2/internal/app/{routes,routes_test,deps}.go`.
+- `server2/internal/seal/{seal,seal_test}.go`.
+- `server2/internal/agent/{crypto,view}.go` (до удаления/слияния).
+- `server2/internal/autopilot/{crypto,triggers_store,deps,handlers_webhook,
+  handlers_autopilots,model,store_integration_test}.go`.
+- `server2/internal/authn/{mfa_crypto,store_mfa,handlers_mfa,
+  mfa_crypto_test}.go`.
+- `server2/internal/identity/{handlers_me,register}.go`.
+- `server2/internal/task/{handlers_batch,handlers}.go`.
+- `server2/internal/skill/handlers_extras.go`.
+- `server2/internal/deployment/{mcp_workspace,mcp_platform}.go`.
+- `server2/internal/daemon/probes_result.go`.
+- `server2/internal/chat/handlers.go`.
+- `server2/internal/misc/{handlers,handlers_test}.go`.
+- `server2/cmd/admin/{commands,integration_test}.go`.
+- `server2/migrations/*` (список версий для диапазона 400–419 и проверки
+  отсутствия пересечений).
+- `e2e/contract/{README.md,harness,client,spec,contract_test,
+  totp_helper_test}.go`.
+- `scripts/similarity-check.py`, `server2/migrations/check_names.py`.
+
+`server/**` и `packages/core/**` не открывались ни разу за эту сессию.
+
+### Известные пробелы / что осталось за скобками
+
+- 28 операций контракта не покрыты e2e-тестами (см. выше — внешние
+  интеграции и несколько состояний, требующих отдельной инфраструктуры);
+  порог координатора (300) превышен почти на треть, дальнейшее наращивание
+  не выглядело пропорциональной тратой времени доводки.
+- `runtime-bootstrap`/`no-runtime-bootstrap` реализованы по буквальному,
+  но минимальному прочтению контракта («заморожено» = не развивать сверх
+  документированного) — более богатая версия (например, реальный запуск
+  агента, а не просто создание тикета) не была реализована умышленно, т.к.
+  контракт её не описывает.

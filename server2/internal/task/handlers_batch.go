@@ -93,6 +93,19 @@ type quickCreateRequest struct {
 // Заголовок задачи — начало prompt (контракт не уточняет алгоритм извлечения
 // заголовка из промпта дальше "из текстового промпта"; решение
 // зафиксировано в server2/docs/decisions.md).
+//
+// T-029 доводка: контракт документирует эту ручку как асинхронную (202,
+// `{task_id}`, Issue создаётся отдельной фоновой "quick-create задачей", а
+// не в теле ответа) — до доводки обработчик отвечал 201 с готовым Issue
+// синхронно, что не соответствовало ни коду, ни форме ответа контракта.
+// Полноценная асинхронная очередь "quick-create задач" (отдельный воркер,
+// который сам интерпретирует prompt) — заметно больший объём для доводки;
+// решение — оставить фактическое создание Issue+постановку агента в очередь
+// синхронным (как и было, событие issue:created уже публикуется в реальном
+// времени), но изменить только форму ответа на документированную (202,
+// task_id = id только что созданной записи dispatch_jobs — тот же
+// идентификатор, что и AgentTask.id в остальном контракте, "задача" в
+// одном и том же смысле слова).
 func (d *Deps) handleQuickCreate(w http.ResponseWriter, r *http.Request) {
 	ws, role, actor, ok := d.resolveWorkspace(w, r)
 	if !ok {
@@ -150,10 +163,15 @@ func (d *Deps) handleQuickCreate(w http.ResponseWriter, r *http.Request) {
 		TicketID: issue.ID, Kind: dispatch.KindQuickCreate, IsLeader: isSquad,
 		QuickCreatePrompt: req.Prompt, QuickCreatePriority: priority,
 	}
-	if _, err := d.Dispatch.Enqueue(r.Context(), d.Store.pool(), spec); err != nil && d.Logger != nil {
-		d.Logger.Error("task: постановка агента в очередь при quick-create", "err", err, "issue_id", issue.ID)
+	jobID, err := d.Dispatch.Enqueue(r.Context(), d.Store.pool(), spec)
+	if err != nil {
+		if d.Logger != nil {
+			d.Logger.Error("task: постановка агента в очередь при quick-create", "err", err, "issue_id", issue.ID)
+		}
+		httpapi.WriteError(w, http.StatusInternalServerError, "internal error", "internal_error")
+		return
 	}
-	httpapi.WriteJSON(w, http.StatusCreated, issue)
+	httpapi.WriteJSON(w, http.StatusAccepted, map[string]any{"task_id": jobID})
 }
 
 // ---------------------------------------------------------------------------

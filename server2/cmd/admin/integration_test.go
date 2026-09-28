@@ -358,3 +358,104 @@ func insertWorkspace(t *testing.T, db *store.Store, slug string) string {
 	}
 	return id
 }
+
+// TestIntegration_RotateSecretsCoversAgentAutopilotAndMfa — T-029 доводка:
+// до неё rotate-secrets --mcp касался только четырёх таблиц domain deployment
+// (platform_mcp_servers/space_mcp_servers/space_mcp_credentials/space_config)
+// — operatives.op_*_sealed (agent) и sentinel_triggers.strig_signing_secret_sealed
+// (autopilot) были запечатаны собственными копиями AES-256-GCM тех пакетов,
+// не internal/seal, и оставались вне охвата команды (см.
+// server2/docs/decisions.md, раздел T-029, «rotate-secrets --mcp»). Доводка
+// T-029 перевела agent/autopilot на internal/seal — этот тест проверяет, что
+// rotate-secrets теперь и правда перешифровывает их значения новым ключом (и
+// что --mfa делает то же для mfa_factors), а данные остаются читаемыми.
+func TestIntegration_RotateSecretsCoversAgentAutopilotAndMfa(t *testing.T) {
+	db := setupTestDB(t)
+	ctx := context.Background()
+	oldKey := "old-mcp-secret-key-0123456789ab"
+	newKey := "new-mcp-secret-key-fedcba987654"
+	cfg := config.Config{McpSecretKey: newKey, McpSecretKeyPrevious: oldKey}
+
+	wsID := insertWorkspace(t, db, "rotate-agent-ws")
+	var executorID string
+	if err := db.Pool.QueryRow(ctx, `
+		INSERT INTO executors (workspace_id, ex_title, ex_mode, ex_provider)
+		VALUES ($1, 'Rotate test runtime', 'local', 'claude') RETURNING id`, wsID).Scan(&executorID); err != nil {
+		t.Fatalf("insert executor: %v", err)
+	}
+
+	runtimeSealed, err := seal.Seal(oldKey, []byte(`{"a":1}`))
+	if err != nil {
+		t.Fatalf("seal.Seal(runtime): %v", err)
+	}
+	mcpSealed, err := seal.Seal(oldKey, []byte(`{"mcp":true}`))
+	if err != nil {
+		t.Fatalf("seal.Seal(mcp): %v", err)
+	}
+	envSealed, err := seal.Seal(oldKey, []byte(`{"K":"v"}`))
+	if err != nil {
+		t.Fatalf("seal.Seal(env): %v", err)
+	}
+	var agentID string
+	if err := db.Pool.QueryRow(ctx, `
+		INSERT INTO operatives (workspace_id, executor_id, op_title, op_runtime_mode,
+			op_runtime_config_sealed, op_mcp_config_sealed, op_custom_env_sealed)
+		VALUES ($1, $2, 'Rotate test agent', 'local', $3, $4, $5) RETURNING id`,
+		wsID, executorID, runtimeSealed, mcpSealed, envSealed).Scan(&agentID); err != nil {
+		t.Fatalf("insert operative: %v", err)
+	}
+
+	var sentinelID string
+	if err := db.Pool.QueryRow(ctx, `
+		INSERT INTO sentinels (workspace_id, sen_title, sen_assignee_type, sen_assignee_id,
+			sen_execution_mode, sen_created_by_type, sen_created_by_id)
+		VALUES ($1, 'Rotate test autopilot', 'agent', $2, 'run_only', 'member', $2) RETURNING id`,
+		wsID, agentID).Scan(&sentinelID); err != nil {
+		t.Fatalf("insert sentinel: %v", err)
+	}
+	signingSealed, err := seal.Seal(oldKey, []byte("webhook-signing-secret"))
+	if err != nil {
+		t.Fatalf("seal.Seal(signing): %v", err)
+	}
+	var triggerID string
+	if err := db.Pool.QueryRow(ctx, `
+		INSERT INTO sentinel_triggers (sentinel_id, strig_kind, strig_signing_secret_sealed)
+		VALUES ($1, 'webhook', $2) RETURNING id`, sentinelID, signingSealed).Scan(&triggerID); err != nil {
+		t.Fatalf("insert sentinel_trigger: %v", err)
+	}
+
+	accountID := insertAccount(t, db, "rotate-mfa@example.test")
+	mfaSealed, err := seal.Seal(oldKey, []byte("totp-secret-bytes"))
+	if err != nil {
+		t.Fatalf("seal.Seal(mfa): %v", err)
+	}
+	if _, err := db.Pool.Exec(ctx, `
+		INSERT INTO mfa_factors (account_id, mfa_secret_sealed) VALUES ($1, $2)`,
+		accountID, mfaSealed); err != nil {
+		t.Fatalf("insert mfa_factors: %v", err)
+	}
+
+	var out testBuf
+	if err := runRotateSecrets(ctx, &out, db, cfg, rotateSecretsOptions{mcp: true, mfa: true}); err != nil {
+		t.Fatalf("runRotateSecrets: %v", err)
+	}
+
+	assertRotated := func(table, idCol, sealedCol, id string, want string) {
+		t.Helper()
+		var got []byte
+		if err := db.Pool.QueryRow(ctx,
+			"SELECT "+sealedCol+" FROM "+table+" WHERE "+idCol+" = $1", id).Scan(&got); err != nil {
+			t.Fatalf("read back %s.%s: %v", table, sealedCol, err)
+		}
+		// перешифровано новым ключом — открывается без обращения к prevKey.
+		plain, ok := seal.Open(newKey, "", got)
+		if !ok || string(plain) != want {
+			t.Errorf("%s.%s: содержимое после ротации = %q, want %q", table, sealedCol, plain, want)
+		}
+	}
+	assertRotated("operatives", "id", "op_runtime_config_sealed", agentID, `{"a":1}`)
+	assertRotated("operatives", "id", "op_mcp_config_sealed", agentID, `{"mcp":true}`)
+	assertRotated("operatives", "id", "op_custom_env_sealed", agentID, `{"K":"v"}`)
+	assertRotated("sentinel_triggers", "id", "strig_signing_secret_sealed", triggerID, "webhook-signing-secret")
+	assertRotated("mfa_factors", "account_id", "mfa_secret_sealed", accountID, "totp-secret-bytes")
+}

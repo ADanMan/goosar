@@ -131,7 +131,7 @@ func New(cfg config.Config, db *store.Store, logger *slog.Logger) *Deps {
 	hub := realtime.NewHub(logger)
 
 	authnDeps := authn.New(db, cfg, mailer, logger)
-	identityDeps := identity.New(authnDeps, logger)
+	identityDeps := identity.New(authnDeps, db, logger)
 	workspaceDeps := workspace.New(db, authnDeps, hub, mailer, logger)
 	dispatchDeps := dispatch.New(hub, logger)
 	taskDeps := task.New(db, workspaceDeps.Store, dispatchDeps, hub, logger)

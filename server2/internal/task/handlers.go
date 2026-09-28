@@ -374,7 +374,7 @@ func (d *Deps) handleDeleteIssue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d.publishWorkspace(ws.ID, "issue:deleted", map[string]any{"issue_id": id})
-	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"deleted": true})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // ---------------------------------------------------------------------------

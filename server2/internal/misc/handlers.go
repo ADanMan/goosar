@@ -156,16 +156,19 @@ func (d *Deps) handleClientUsage(w http.ResponseWriter, r *http.Request) {
 		httpapi.BadRequest(w, "install_id is required")
 		return
 	}
-	platform := r.Header.Get("X-Client-Platform")
-	if platform != "web" && platform != "desktop" {
-		httpapi.BadRequest(w, "invalid client platform")
-		return
-	}
+	// T-029 доводка: контракт (docs/50-api-contract.yaml,
+	// meUpsertClientUsage) не заводит заголовок/поле для платформы вовсе —
+	// только требует install_id и описывает runtime как "desktop-only;
+	// rejected for web clients". Раньше здесь читался несуществующий по
+	// контракту заголовок X-Client-Platform, из-за чего запрос,
+	// соответствующий контракту буквально, всегда получал 400 (заголовок
+	// отсутствует → "invalid client platform"). Платформа теперь выводится
+	// из самого признака, который контракт и называет решающим: наличие
+	// поля runtime — desktop, отсутствие — web; "web клиент с runtime"
+	// поэтому больше не отдельная проверка, а просто недостижимая ветка.
+	platform := "web"
 	if req.Runtime != nil {
-		if platform != "desktop" {
-			httpapi.BadRequest(w, "runtime data sent by a non-desktop client")
-			return
-		}
+		platform = "desktop"
 		if req.Runtime.ProbeResult != "success" && req.Runtime.ProbeResult != "error" {
 			httpapi.BadRequest(w, "invalid runtime.probe_result")
 			return

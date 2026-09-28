@@ -41,6 +41,22 @@ type fixture struct {
 
 	chatSessionID string
 	skillID       string
+
+	// second/third — независимые залогиненные пользователи (T-029 доводка),
+	// нужны сценариям, которым требуется второй актор: приглашения в
+	// воркспейс (accept/decline), обновление/удаление участника, unauthorized
+	// as-someone-else проверки.
+	second       *apiClient
+	secondEmail  string
+	secondUserID string
+	third        *apiClient
+	thirdEmail   string
+	thirdUserID  string
+
+	// uploadedAttachmentID — set by testMe's POST /api/upload-file call, if it
+	// succeeds; reused by the Attachments-tag calls in testIssues to exercise
+	// a real attachment rather than only the 404-for-unknown-id path.
+	uploadedAttachmentID string
 }
 
 var (
@@ -77,6 +93,15 @@ func (f *fixture) call(t *testing.T, method, pathTemplate, concretePath string, 
 	t.Helper()
 	status, raw, _ := f.client.raw(t, method, concretePath, body)
 	validateResponse(t, f.doc, method, pathTemplate, status, raw)
+	return status, raw
+}
+
+// callMultipart is like call but for the one multipart/form-data endpoint
+// this suite exercises (POST /api/upload-file).
+func (f *fixture) callMultipart(t *testing.T, pathTemplate, concretePath string, fields map[string]string, fileFieldName, fileName string, fileContent []byte) (int, []byte) {
+	t.Helper()
+	status, raw := f.client.rawMultipart(t, concretePath, fields, fileFieldName, fileName, fileContent)
+	validateResponse(t, f.doc, http.MethodPost, pathTemplate, status, raw)
 	return status, raw
 }
 
@@ -130,6 +155,54 @@ func (f *fixture) ensureAuth(t *testing.T) {
 	f.client.token = token
 	f.email = email
 	f.userID = mustStr(t, user, "id")
+}
+
+// loginFreshUser logs a brand-new user in (email code, dev verification
+// code), independent of the shared fixture's own client — for scenarios that
+// need a second/third actor (invitations, cross-user visibility checks).
+func loginFreshUser(t *testing.T, f *fixture) (client *apiClient, email, userID string) {
+	t.Helper()
+	if f.devCode == "" {
+		t.Fatalf("GOOSAR_DEV_VERIFICATION_CODE is not set; needed to log a second user in")
+	}
+	email = fmt.Sprintf("contract-2nd-%s@example.test", uniqueSuffix())
+	c := newAPIClient(f.baseURL)
+	status, _ := f.callAs(t, c, http.MethodPost, "/auth/send-code", "/auth/send-code", map[string]any{"email": email})
+	if status != 200 {
+		t.Fatalf("POST /auth/send-code (second user): expected 200, got %d", status)
+	}
+	status, body := f.callAs(t, c, http.MethodPost, "/auth/verify-code", "/auth/verify-code", map[string]any{
+		"email": email, "code": f.devCode,
+	})
+	if status != 200 {
+		t.Fatalf("POST /auth/verify-code (second user): expected 200, got %d, body=%s", status, truncate(body))
+	}
+	login := decodeJSON(t, body)
+	c.token = mustStr(t, login, "token")
+	user, _ := login["user"].(map[string]any)
+	userID = mustStr(t, user, "id")
+	return c, email, userID
+}
+
+// ensureSecondUser/ensureThirdUser — idempotent, memoized second/third actors.
+func (f *fixture) ensureSecondUser(t *testing.T) (*apiClient, string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.second != nil {
+		return f.second, f.secondEmail
+	}
+	f.second, f.secondEmail, f.secondUserID = loginFreshUser(t, f)
+	return f.second, f.secondEmail
+}
+
+func (f *fixture) ensureThirdUser(t *testing.T) (*apiClient, string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.third != nil {
+		return f.third, f.thirdEmail
+	}
+	f.third, f.thirdEmail, f.thirdUserID = loginFreshUser(t, f)
+	return f.third, f.thirdEmail
 }
 
 func (f *fixture) ensureWorkspace(t *testing.T) {

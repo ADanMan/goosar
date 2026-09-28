@@ -112,38 +112,23 @@ func TestContactSalesEmailRateLimit(t *testing.T) {
 func TestClientUsageValidation(t *testing.T) {
 	d, accountID, _ := newTestDeps(t)
 
-	// missing X-Client-Platform
+	// T-029 доводка: docs/50-api-contract.yaml (meUpsertClientUsage) не
+	// заводит заголовок платформы вовсе — только install_id обязателен,
+	// платформа выводится из наличия runtime (см. server2/docs/decisions.md,
+	// раздел «T-029 доводка»). Буквальный по контракту запрос без каких-либо
+	// заголовков теперь и правда проходит.
 	req := withActor(httptest.NewRequest(http.MethodPost, "/api/client-usage", strings.NewReader(`{"install_id":"11111111-1111-1111-1111-111111111111"}`)), accountID, true)
 	rec := httptest.NewRecorder()
 	d.handleClientUsage(rec, req)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 without X-Client-Platform, got %d", rec.Code)
-	}
-
-	// web platform, no runtime — ok
-	req = withActor(httptest.NewRequest(http.MethodPost, "/api/client-usage", strings.NewReader(`{"install_id":"11111111-1111-1111-1111-111111111111"}`)), accountID, true)
-	req.Header.Set("X-Client-Platform", "web")
-	rec = httptest.NewRecorder()
-	d.handleClientUsage(rec, req)
 	if rec.Code != http.StatusNoContent {
-		t.Fatalf("expected 204, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("expected 204 for a contract-literal request (no platform header), got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// web platform with runtime data — rejected
-	req = withActor(httptest.NewRequest(http.MethodPost, "/api/client-usage", strings.NewReader(
-		`{"install_id":"11111111-1111-1111-1111-111111111111","runtime":{"probe_result":"success"}}`)), accountID, true)
-	req.Header.Set("X-Client-Platform", "web")
-	rec = httptest.NewRecorder()
-	d.handleClientUsage(rec, req)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for runtime data from web client, got %d", rec.Code)
-	}
-
-	// desktop with consistent runtime counts — ok, upsert idempotent
+	// desktop (signalled only by the presence of runtime) with consistent
+	// counts — ok, upsert idempotent.
 	desktopBody := `{"install_id":"11111111-1111-1111-1111-111111111111","runtime":{"probe_result":"success","runtime_count":3,"online_count":2,"offline_count":1}}`
 	for i := 0; i < 2; i++ {
 		req = withActor(httptest.NewRequest(http.MethodPost, "/api/client-usage", strings.NewReader(desktopBody)), accountID, true)
-		req.Header.Set("X-Client-Platform", "desktop")
 		rec = httptest.NewRecorder()
 		d.handleClientUsage(rec, req)
 		if rec.Code != http.StatusNoContent {
@@ -151,10 +136,18 @@ func TestClientUsageValidation(t *testing.T) {
 		}
 	}
 
+	// runtime with an invalid probe_result — rejected regardless of platform.
+	req = withActor(httptest.NewRequest(http.MethodPost, "/api/client-usage", strings.NewReader(
+		`{"install_id":"11111111-1111-1111-1111-111111111111","runtime":{"probe_result":"bogus"}}`)), accountID, true)
+	rec = httptest.NewRecorder()
+	d.handleClientUsage(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid runtime.probe_result, got %d", rec.Code)
+	}
+
 	// desktop with inconsistent counts — rejected
 	req = withActor(httptest.NewRequest(http.MethodPost, "/api/client-usage", strings.NewReader(
 		`{"install_id":"11111111-1111-1111-1111-111111111111","runtime":{"probe_result":"success","runtime_count":3,"online_count":1,"offline_count":1}}`)), accountID, true)
-	req.Header.Set("X-Client-Platform", "desktop")
 	rec = httptest.NewRecorder()
 	d.handleClientUsage(rec, req)
 	if rec.Code != http.StatusBadRequest {

@@ -127,6 +127,15 @@ func validateResponse(t testing.TB, doc *openapi3.T, method, pathTemplate string
 		// No JSON body documented for this status (e.g. 204, or a redirect).
 		return
 	}
+	// Content.Get falls back to a "*/*" entry when there is no
+	// "application/json" one at all (e.g. attachmentsDownloadById's 200,
+	// documented as raw bytes under '*/*') — that fallback is meant for a
+	// real client picking a handler by the response's actual Content-Type,
+	// not for asserting every such response is JSON. A binary/opaque schema
+	// here is exactly that fallback, so there is nothing to decode.
+	if mt.Schema.Value.Type != nil && mt.Schema.Value.Type.Includes("string") && mt.Schema.Value.Format == "binary" {
+		return
+	}
 
 	if len(body) == 0 {
 		// Some documented-JSON responses are legitimately empty in edge

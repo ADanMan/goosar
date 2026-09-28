@@ -22,8 +22,11 @@ func Register(router *httpapi.Router, deps *Deps) {
 	// (modeClaim) означало бы панику "маршрут уже зарегистрирован" при
 	// сборке router'а. Правка T-029: удалена одна строка, ничего другого в
 	// этом домене не менялось.
-	router.Handle(http.MethodPost, "/api/me/onboarding/runtime-bootstrap", deps.notImplemented)
-	router.Handle(http.MethodPost, "/api/me/onboarding/no-runtime-bootstrap", deps.notImplemented)
+	// runtime-bootstrap/no-runtime-bootstrap — были 501 здесь по той же
+	// причине (T-026); доводка T-029 реализует их (handlers_onboarding_bootstrap.go),
+	// теперь когда agent/task существуют.
+	router.Handle(http.MethodPost, "/api/me/onboarding/runtime-bootstrap", deps.handleBootstrapOnboardingWithRuntime)
+	router.Handle(http.MethodPost, "/api/me/onboarding/no-runtime-bootstrap", deps.handleBootstrapOnboardingWithoutRuntime)
 
 	router.Handle(http.MethodPost, "/api/cli-token", deps.handleIssueCliToken)
 

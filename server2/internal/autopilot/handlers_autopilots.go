@@ -287,9 +287,15 @@ func (d *Deps) handleUpdateAutopilot(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// T-029 доводка: httpapi.ReadBody(r) выше уже полностью вычитал r.Body —
+	// httpapi.DecodeJSON(r, &req) здесь читал бы из уже опустошённого r.Body
+	// (io.EOF на первом же ключе), из-за чего PATCH /api/autopilots/{id} с
+	// любым непустым телом всегда отвечал 400 "invalid JSON body", даже для
+	// буквально контрактного запроса. Разбор — из уже прочитанных байт body,
+	// тем же приёмом, что fields чуть выше.
 	var req updateAutopilotRequest
 	if len(body) > 0 {
-		if err := httpapi.DecodeJSON(r, &req); err != nil {
+		if err := json.Unmarshal(body, &req); err != nil {
 			httpapi.BadRequest(w, "invalid JSON body")
 			return
 		}

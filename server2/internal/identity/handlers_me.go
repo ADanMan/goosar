@@ -13,6 +13,7 @@ import (
 
 	"github.com/adanman/goosar/server2/internal/authn"
 	"github.com/adanman/goosar/server2/internal/httpapi"
+	"github.com/adanman/goosar/server2/internal/store"
 )
 
 // Deps держит всё, что нужно обработчикам тега Me. Authn не embed'ится
@@ -21,11 +22,18 @@ import (
 type Deps struct {
 	Authn  *authn.Deps
 	Logger *slog.Logger
+
+	// DB — T-029 доводка: прямой доступ к пулу для двух "legacy, поведение
+	// заморожено" ручек онбординга (runtime-bootstrap/no-runtime-bootstrap,
+	// см. handlers_onboarding_bootstrap.go), которым нужны operatives/tickets
+	// чужих доменов — тот же приём прямого SQL по чужой схеме, что уже
+	// применяют dashboard/misc/export (см. server2/docs/decisions.md).
+	DB *store.Store
 }
 
 // New строит Deps домена identity вокруг уже готового authn.Deps.
-func New(authnDeps *authn.Deps, logger *slog.Logger) *Deps {
-	return &Deps{Authn: authnDeps, Logger: logger}
+func New(authnDeps *authn.Deps, db *store.Store, logger *slog.Logger) *Deps {
+	return &Deps{Authn: authnDeps, DB: db, Logger: logger}
 }
 
 func (d *Deps) handleGetProfile(w http.ResponseWriter, r *http.Request) {

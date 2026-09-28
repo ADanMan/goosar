@@ -27,11 +27,26 @@ func scanWorkspaceServer(row pgx.Row) (WorkspaceMcpServer, error) {
 		&schemaRaw, &s.CreatedAt, &s.UpdatedAt); err != nil {
 		return WorkspaceMcpServer{}, err
 	}
-	_ = json.Unmarshal(schemaRaw, &s.CredentialSchema)
+	s.CredentialSchema = unmarshalCredentialSchema(schemaRaw)
 	if s.Source == "deployment" {
 		s.Enabled = &enabled
 	}
 	return s, nil
+}
+
+// unmarshalCredentialSchema — contract: credential_schema никогда не
+// nullable (пустой массив, если схема не задавалась, не null); колонка
+// *_credential_schema может хранить SQL NULL/JSON null для серверов,
+// созданных без схемы — этот хелпер убирает разницу в одном месте (T-029
+// доводка), вместо трёх копий одного и того же "если nil — []" после
+// каждого json.Unmarshal в этом файле.
+func unmarshalCredentialSchema(raw []byte) []McpCredentialField {
+	var out []McpCredentialField
+	_ = json.Unmarshal(raw, &out)
+	if out == nil {
+		out = []McpCredentialField{}
+	}
+	return out
 }
 
 func getWorkspaceServer(ctx context.Context, db *store.Store, workspaceID, id string) (WorkspaceMcpServer, error) {
@@ -194,7 +209,7 @@ func (d *Deps) handleCreateWorkspaceMcpServer(w http.ResponseWriter, r *http.Req
 	if checkErr(w, err) {
 		return
 	}
-	_ = json.Unmarshal(outSchema, &s.CredentialSchema)
+	s.CredentialSchema = unmarshalCredentialSchema(outSchema)
 	s.ProvidedCredentials, s.MissingCredentials = []string{}, []string{}
 	for _, f := range s.CredentialSchema {
 		if f.Required {
@@ -276,7 +291,7 @@ func (d *Deps) handleUpdateWorkspaceMcpServer(w http.ResponseWriter, r *http.Req
 	if checkErr(w, err) {
 		return
 	}
-	_ = json.Unmarshal(outSchema, &s.CredentialSchema)
+	s.CredentialSchema = unmarshalCredentialSchema(outSchema)
 	if err := d.fillCredentials(r.Context(), &s, actorUserIDFromRequest(r)); err != nil {
 		internalError(w)
 		return

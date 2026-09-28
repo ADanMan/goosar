@@ -95,7 +95,7 @@ func (d *Deps) handleReportModelListResult(w http.ResponseWriter, r *http.Reques
 			Supported *bool `json:"supported"`
 		}
 		_ = json.Unmarshal(body.Raw, &payload)
-		return map[string]any{"models": payload.Models, "supported": boolOr(payload.Supported, true)}
+		return map[string]any{"models": arrayOrEmpty(payload.Models), "supported": boolOr(payload.Supported, true)}
 	}, nil)
 }
 
@@ -109,10 +109,23 @@ func (d *Deps) handleReportLocalSkillsResult(w http.ResponseWriter, r *http.Requ
 		}
 		_ = json.Unmarshal(body.Raw, &payload)
 		return map[string]any{
-			"skills": payload.Skills, "supported": boolOr(payload.Supported, false),
-			"mcp_servers": payload.McpServers, "mcp_supported": boolOr(payload.McpSupported, false),
+			"skills": arrayOrEmpty(payload.Skills), "supported": boolOr(payload.Supported, false),
+			"mcp_servers": arrayOrEmpty(payload.McpServers), "mcp_supported": boolOr(payload.McpSupported, false),
 		}
 	}, nil)
+}
+
+// arrayOrEmpty — contract: skills/models/mcp_servers в
+// RuntimeLocalSkillListRequest/RuntimeModelListRequest не nullable (всегда
+// массив); daemon вправе не прислать ключ вовсе (например при
+// status=failed), а декодирование отсутствующего JSON-ключа в `any` даёт Go
+// nil, который json.Marshal превращает в literal null, а не "[]" — T-029
+// доводка.
+func arrayOrEmpty(v any) any {
+	if v == nil {
+		return []any{}
+	}
+	return v
 }
 
 func (d *Deps) handleReportLocalSkillImportResult(w http.ResponseWriter, r *http.Request) {

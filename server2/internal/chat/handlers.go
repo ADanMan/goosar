@@ -131,8 +131,21 @@ func (d *Deps) handleUpdateSession(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// T-029 доводка: тело разбирается дважды (сперва как map, чтобы отличить
+	// "поле не передано" от "поле передано как null", затем в строгий DTO) —
+	// оба раза из уже прочитанных байт body, не из r.Body повторно: второй
+	// httpapi.DecodeJSON(r, ...) читал бы уже опустошённый первым вызовом
+	// r.Body (io.EOF), из-за чего PATCH с любым непустым телом всегда отвечал
+	// 400 "invalid JSON body", даже для буквально контрактного запроса
+	// {"title": "..."}. Тот же приём, что internal/task/patch.go и
+	// internal/autopilot (см. server2/docs/decisions.md, «T-029 доводка»).
+	body, err := httpapi.ReadBody(r)
+	if err != nil {
+		httpapi.BadRequest(w, "invalid JSON body")
+		return
+	}
 	var raw map[string]json.RawMessage
-	if err := httpapi.DecodeJSON(r, &raw); err != nil {
+	if err := json.Unmarshal(body, &raw); err != nil {
 		httpapi.BadRequest(w, "invalid JSON body")
 		return
 	}
@@ -143,7 +156,7 @@ func (d *Deps) handleUpdateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req updateSessionRequest
-	if err := httpapi.DecodeJSON(r, &req); err != nil {
+	if err := json.Unmarshal(body, &req); err != nil {
 		httpapi.BadRequest(w, "invalid JSON body")
 		return
 	}

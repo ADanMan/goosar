@@ -2,9 +2,11 @@ package contract
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"sync/atomic"
 	"testing"
@@ -25,7 +27,15 @@ type apiClient struct {
 func newAPIClient(baseURL string) *apiClient {
 	return &apiClient{
 		baseURL: baseURL,
-		hc:      &http.Client{Timeout: 30 * time.Second},
+		hc: &http.Client{
+			Timeout: 30 * time.Second,
+			// A few operations (OAuth/App-install callbacks) answer with a
+			// 302 to FRONTEND_ORIGIN as their documented response — this
+			// suite asserts on that redirect itself, not on whatever (if
+			// anything) is actually listening at that origin in this
+			// environment, so redirects are never followed.
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+		},
 	}
 }
 
@@ -130,4 +140,63 @@ var suffixCounter int64
 func uniqueSuffix() string {
 	n := atomic.AddInt64(&suffixCounter, 1)
 	return fmt.Sprintf("%x%02x", time.Now().Unix()%0xfffff, n%0xff)
+}
+
+// randomUUID generates an RFC 4122 v4 UUID — for request fields the contract
+// documents as `format: uuid` but that no fixture resource naturally supplies
+// (e.g. a client install id).
+func randomUUID() string {
+	var b [16]byte
+	_, _ = rand.Read(b[:])
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+// rawMultipart performs a multipart/form-data POST (currently the only shape
+// this suite needs it for: POST /api/upload-file's `file` field, plus a few
+// optional plain-text fields), returning status and raw body like raw does.
+func (c *apiClient) rawMultipart(t testing.TB, path string, fields map[string]string, fileFieldName, fileName string, fileContent []byte) (int, []byte) {
+	t.Helper()
+
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	for k, v := range fields {
+		if err := w.WriteField(k, v); err != nil {
+			t.Fatalf("multipart WriteField(%s): %v", k, err)
+		}
+	}
+	fw, err := w.CreateFormFile(fileFieldName, fileName)
+	if err != nil {
+		t.Fatalf("multipart CreateFormFile: %v", err)
+	}
+	if _, err := fw.Write(fileContent); err != nil {
+		t.Fatalf("multipart write file content: %v", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("multipart Close: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+path, &buf)
+	if err != nil {
+		t.Fatalf("build multipart request %s: %v", path, err)
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+	if c.workspaceID != "" {
+		req.Header.Set("X-Workspace-ID", c.workspaceID)
+	}
+
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		t.Fatalf("multipart request %s: %v", path, err)
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read multipart response body for %s: %v", path, err)
+	}
+	return resp.StatusCode, data
 }

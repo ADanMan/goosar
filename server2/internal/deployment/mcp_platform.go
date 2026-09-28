@@ -39,7 +39,7 @@ func listPlatformMcpServersAdmin(ctx context.Context, db *store.Store) ([]Platfo
 		if err := rows.Scan(&s.ID, &s.Name, &s.Transport, &schemaRaw, &s.CreatedAt, &s.UpdatedAt, &count); err != nil {
 			return nil, err
 		}
-		_ = json.Unmarshal(schemaRaw, &s.CredentialSchema)
+		s.CredentialSchema = unmarshalCredentialSchema(schemaRaw)
 		s.EnabledWorkspaces = &count
 		out = append(out, s)
 	}
@@ -57,7 +57,7 @@ func getPlatformServer(ctx context.Context, db *store.Store, id string) (Platfor
 	if err != nil {
 		return PlatformMcpServer{}, fmt.Errorf("deployment: чтение MCP-сервера деплоя: %w", err)
 	}
-	_ = json.Unmarshal(schemaRaw, &s.CredentialSchema)
+	s.CredentialSchema = unmarshalCredentialSchema(schemaRaw)
 	return s, nil
 }
 
@@ -118,7 +118,7 @@ func (d *Deps) handleCreatePlatformMcpServer(w http.ResponseWriter, r *http.Requ
 	if checkErr(w, err) {
 		return
 	}
-	_ = json.Unmarshal(outSchema, &s.CredentialSchema)
+	s.CredentialSchema = unmarshalCredentialSchema(outSchema)
 	audit := httpAudit(r, actor, "deployment_mcp_server.create")
 	audit.TargetType, audit.TargetID = ptr("platform_mcp_server"), ptr(s.ID)
 	audit.AfterHash = ptr(seal.HashJSON(req.Config))
@@ -199,7 +199,7 @@ func (d *Deps) handleUpdatePlatformMcpServer(w http.ResponseWriter, r *http.Requ
 	if checkErr(w, err) {
 		return
 	}
-	_ = json.Unmarshal(outSchema, &s.CredentialSchema)
+	s.CredentialSchema = unmarshalCredentialSchema(outSchema)
 	audit := httpAudit(r, actor, "deployment_mcp_server.update")
 	audit.TargetType, audit.TargetID = ptr("platform_mcp_server"), ptr(id)
 	if afterHash != "" {
@@ -269,7 +269,7 @@ func (d *Deps) handleListWorkspaceDeploymentMcpServers(w http.ResponseWriter, r 
 			internalError(w)
 			return
 		}
-		_ = json.Unmarshal(schemaRaw, &s.CredentialSchema)
+		s.CredentialSchema = unmarshalCredentialSchema(schemaRaw)
 		s.Enabled = &enabled
 		out = append(out, s)
 	}

@@ -1,8 +1,12 @@
 package authn
 
 import (
+	"context"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/adanman/goosar/server2/internal/config"
 )
 
 func TestSealUnsealSecret(t *testing.T) {
@@ -59,5 +63,72 @@ func TestNewRecoveryCodesAreUniqueAndFormatted(t *testing.T) {
 		if normalizeRecoveryCode(strings.ToLower(c)) != c {
 			t.Errorf("normalizeRecoveryCode(%q) должен вернуть исходный код в верхнем регистре", c)
 		}
+	}
+}
+
+// TestConsumeTOTPStep_rejectsReplayWithinWindow — T-029 доводка: один и тот
+// же принятый TOTP-шаг (или более ранний) отклоняется второй раз, даже если
+// математически код всё ещё валиден в пределах окна ±1 (RFC 6238).
+func TestConsumeTOTPStep_rejectsReplayWithinWindow(t *testing.T) {
+	db := newTestDB(t)
+	s := &Store{db: db}
+	ctx := context.Background()
+	accountID := seedAccount(t, db)
+	if err := s.UpsertPendingFactor(ctx, accountID, []byte("sealed-secret")); err != nil {
+		t.Fatalf("UpsertPendingFactor: %v", err)
+	}
+
+	ok, err := s.ConsumeTOTPStep(ctx, accountID, 1000)
+	if err != nil || !ok {
+		t.Fatalf("первое предъявление шага 1000 должно приняться: ok=%v err=%v", ok, err)
+	}
+	// Тот же шаг повторно — отклонён (replay).
+	ok, err = s.ConsumeTOTPStep(ctx, accountID, 1000)
+	if err != nil || ok {
+		t.Fatalf("повторное предъявление шага 1000 должно отклоняться: ok=%v err=%v", ok, err)
+	}
+	// Более ранний шаг (в пределах окна ±1, но уже "в прошлом" относительно
+	// принятого) — тоже отклонён.
+	ok, err = s.ConsumeTOTPStep(ctx, accountID, 999)
+	if err != nil || ok {
+		t.Fatalf("более ранний шаг должен отклоняться: ok=%v err=%v", ok, err)
+	}
+	// Более новый шаг — принимается.
+	ok, err = s.ConsumeTOTPStep(ctx, accountID, 1001)
+	if err != nil || !ok {
+		t.Fatalf("более новый шаг должен приниматься: ok=%v err=%v", ok, err)
+	}
+}
+
+// TestVerifyTOTPCode_rejectsReplay — сквозной сценарий через тот же путь, что
+// authn/handlers_mfa.go: одинаковый код (валидный весь TOTP-период ±1 шаг)
+// принимается один раз, повторное предъявление отклоняется.
+func TestVerifyTOTPCode_rejectsReplay(t *testing.T) {
+	db := newTestDB(t)
+	s := &Store{db: db}
+	d := &Deps{Store: s, Config: config.Config{McpSecretKey: "test-mcp-secret-key-0123456789"}}
+	ctx := context.Background()
+	accountID := seedAccount(t, db)
+
+	secret, err := newTOTPSecret()
+	if err != nil {
+		t.Fatalf("newTOTPSecret: %v", err)
+	}
+	sealed, err := sealSecret(d.Config.McpSecretKey, secret)
+	if err != nil {
+		t.Fatalf("sealSecret: %v", err)
+	}
+	if err := s.UpsertPendingFactor(ctx, accountID, sealed); err != nil {
+		t.Fatalf("UpsertPendingFactor: %v", err)
+	}
+
+	code := hotp(secret, uint64(totpCounter(time.Now())))
+	ok, err := d.verifyTOTPCode(ctx, accountID, sealed, code)
+	if err != nil || !ok {
+		t.Fatalf("первая проверка кода должна пройти: ok=%v err=%v", ok, err)
+	}
+	ok, err = d.verifyTOTPCode(ctx, accountID, sealed, code)
+	if err != nil || ok {
+		t.Fatalf("повторная проверка того же кода должна отклоняться (anti-replay): ok=%v err=%v", ok, err)
 	}
 }

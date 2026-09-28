@@ -249,11 +249,29 @@ type sealedColumn struct {
 	sealed string
 }
 
+// mcpSealedColumns — T-029 доводка: до неё agent (operatives.op_*_sealed) и
+// autopilot (sentinel_triggers.strig_signing_secret_sealed) шифровали своими
+// независимыми копиями AES-256-GCM, не internal/seal — rotate-secrets не мог
+// их коснуться (см. server2/docs/decisions.md, раздел T-029, «rotate-secrets
+// --mcp: переносит только таблицы, запечатанные через internal/seal этой
+// сессии»). Доводка T-029 перевела оба пакета на internal/seal (тот же
+// формат, с чтением их исторических данных), поэтому rotateColumn теперь
+// работает и для них — contract §«CLI администратора деплоя»: "перешифровывает
+// **все** значения, запечатанные ключом GOOSAR_MCP_SECRET_KEY".
+// operatives хранит три *_sealed-колонки, каждая из которых может быть
+// незашифрованным plaintext (contract: "без ключа — сохраняется как есть") —
+// rotateColumn использует seal.Open (не Optional-вариант), который для
+// такого значения корректно возвращает ok=false и считает строку "пропущено"
+// (нечего перешифровывать), не ошибку.
 var mcpSealedColumns = []sealedColumn{
 	{"platform_mcp_servers", "id", "pmcp_config_sealed"},
 	{"space_mcp_servers", "id", "wmcp_config_sealed"},
 	{"space_mcp_credentials", "id", "wmcpc_value_sealed"},
 	{"space_config", "workspace_id", "cfg_llm_api_key_sealed"},
+	{"operatives", "id", "op_runtime_config_sealed"},
+	{"operatives", "id", "op_mcp_config_sealed"},
+	{"operatives", "id", "op_custom_env_sealed"},
+	{"sentinel_triggers", "id", "strig_signing_secret_sealed"},
 }
 
 func rotateColumn(ctx context.Context, db *store.Store, c sealedColumn, cfg config.Config, dryRun bool) (touched, skipped int, err error) {
@@ -345,12 +363,15 @@ func rotateConfigOverrides(ctx context.Context, db *store.Store, cfg config.Conf
 	return touched, skipped, nil
 }
 
-// rotateMFAFactors — best-effort: internal/authn может запечатывать
-// mfa_secret_sealed в собственном формате (T-029 в этом дереве частично
-// принадлежит соседней сессии, см. server2/docs/decisions.md, раздел T-029,
-// «Пробелы спецификации» — «rotate-secrets --mfa»). Строка, которую не
-// удаётся открыть текущим/предыдущим ключом через internal/seal, тихо
-// пропускается (skipped), а не считается ошибкой всей команды.
+// rotateMFAFactors — T-029 доводка перевела internal/authn (mfa_secret_sealed)
+// на internal/seal тоже (тот же формат, что и остальные таблицы этого файла),
+// так что это больше не best-effort по формату — остаётся best-effort только
+// в обычном смысле rotateColumn: строка, которую не удаётся открыть ни
+// текущим, ни предыдущим ключом (например ключ сменился без ротации ещё
+// давнее значение), тихо пропускается (skipped), а не считается ошибкой всей
+// команды. Отдельный флаг --mfa (не часть основного списка mcpSealedColumns)
+// — прямое требование contract §«CLI администратора деплоя»: "--mfa
+// дополнительно покрывает TOTP-секреты".
 func rotateMFAFactors(ctx context.Context, db *store.Store, cfg config.Config, dryRun bool) (touched, skipped int, err error) {
 	return rotateColumn(ctx, db, sealedColumn{"mfa_factors", "id", "mfa_secret_sealed"}, cfg, dryRun)
 }
