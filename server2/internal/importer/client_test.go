@@ -129,8 +129,8 @@ func TestListAllChatMessages_ordersOldestFirstAcrossPages(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Query().Get("before_id") == "" {
 			_ = json.NewEncoder(w).Encode(sourceChatMessagesPage{
-				Messages: []sourceChatMessage{{ID: "newest-1"}, {ID: "newest"}},
-				HasMore:  true,
+				Messages:   []sourceChatMessage{{ID: "newest-1"}, {ID: "newest"}},
+				HasMore:    true,
 				NextCursor: map[string]any{"created_at": "2024-01-01T00:00:00Z", "id": "newest-1"},
 			})
 			return

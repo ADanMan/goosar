@@ -2,38 +2,48 @@ package httpapi
 
 import "net/http"
 
-// ResolveWorkspaceRef возвращает "сырой" селектор воркспейса из заголовков/
-// query запроса — либо slug, либо id, в порядке приоритета, документированном
-// в components/parameters/WorkspaceSlugHeader:
-//
-//  1. actor с Source=task_token → его TaskWorkspaceID (заголовки клиента игнорируются);
-//  2. заголовок X-Workspace-Slug;
-//  3. query-параметр workspace_slug;
-//  4. заголовок X-Workspace-ID;
-//  5. query-параметр workspace_id.
-//
-// Домен получает пару (значение, isSlug) и сам резолвит его в workspace_id
-// через свой store (внутри пакета workspace) — httpapi не знает о таблице spaces.
+// wsSource — одно место, откуda можно взять ссылку на воркспейс (заголовок
+// или query-параметр), и признак того, что значение — slug, а не id.
+type wsSource struct {
+	fromHeader string
+	fromQuery  string
+	isSlug     bool
+}
+
+// wsSourceOrder — порядок приоритета из components/parameters/WorkspaceSlugHeader:
+// сначала оба варианта slug (заголовок, затем query), потом оба варианта id.
+// Приоритет task-token'а (см. ResolveWorkspaceRef) обрабатывается отдельно,
+// до этого списка — он вообще не смотрит на заголовки/query.
+var wsSourceOrder = []wsSource{
+	{fromHeader: "X-Workspace-Slug", isSlug: true},
+	{fromQuery: "workspace_slug", isSlug: true},
+	{fromHeader: "X-Workspace-ID", isSlug: false},
+	{fromQuery: "workspace_id", isSlug: false},
+}
+
+// ResolveWorkspaceRef возвращает "сырой" селектор воркспейса запроса: либо
+// slug, либо id, по приоритету контракта. Домен получает пару (значение,
+// isSlug) и сам резолвит её в workspace_id через свой store — httpapi не
+// знает о таблице spaces.
 func ResolveWorkspaceRef(r *http.Request, actor *Actor) (value string, isSlug bool, ok bool) {
 	if actor != nil && actor.Source == SourceTaskToken && actor.TaskWorkspaceID != "" {
 		return actor.TaskWorkspaceID, false, true
 	}
-	if v := r.Header.Get("X-Workspace-Slug"); v != "" {
-		return v, true, true
-	}
-	if v := r.URL.Query().Get("workspace_slug"); v != "" {
-		return v, true, true
-	}
-	if v := r.Header.Get("X-Workspace-ID"); v != "" {
-		return v, false, true
-	}
-	if v := r.URL.Query().Get("workspace_id"); v != "" {
-		return v, false, true
+	for _, src := range wsSourceOrder {
+		var v string
+		if src.fromHeader != "" {
+			v = r.Header.Get(src.fromHeader)
+		} else {
+			v = r.URL.Query().Get(src.fromQuery)
+		}
+		if v != "" {
+			return v, src.isSlug, true
+		}
 	}
 	return "", false, false
 }
 
-// Role — роль участника в пространстве.
+// Role — роль участника пространства (schemas.Member.role).
 type Role string
 
 const (
@@ -42,12 +52,13 @@ const (
 	RoleMember Role = "member"
 )
 
-// RoleAtLeast — true, если role входит в allowed (точное совпадение с одной
-// из ролей; в контракте роли не образуют линейную иерархию сами по себе,
-// каждый эндпоинт явно перечисляет x-roles).
+// RoleAtLeast сообщает, входит ли role в allowed. Названо "AtLeast" по
+// сложившейся в контракте формулировке x-roles, но по сути — точное
+// членство в множестве: ролей в Goosar всего три, и контракт нигде не
+// подразумевает, что owner автоматически проходит проверку "admin".
 func RoleAtLeast(role Role, allowed ...Role) bool {
-	for _, a := range allowed {
-		if role == a {
+	for _, candidate := range allowed {
+		if role == candidate {
 			return true
 		}
 	}

@@ -183,12 +183,12 @@ func (d *Deps) handleGetMfaStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpapi.WriteJSON(w, http.StatusOK, map[string]any{
-		"enabled":                   st.Enabled,
-		"pending_enrollment":        st.PendingEnrollment,
-		"enabled_at":                st.EnabledAt,
-		"recovery_codes_remaining":  st.RecoveryCodesRemaining,
-		"required":                  false,
-		"available":                 d.Config.McpSecretKey != "",
+		"enabled":                  st.Enabled,
+		"pending_enrollment":       st.PendingEnrollment,
+		"enabled_at":               st.EnabledAt,
+		"recovery_codes_remaining": st.RecoveryCodesRemaining,
+		"required":                 false,
+		"available":                d.Config.McpSecretKey != "",
 	})
 }
 
@@ -272,4 +272,3 @@ func displayNameFromEmail(email string) string {
 	}
 	return strings.ToUpper(local[:1]) + local[1:]
 }
-

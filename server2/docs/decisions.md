@@ -87,10 +87,98 @@ docs/51-data-model.md) не хватает, реализатор принима�
    печатаются в JSON-отчёте (`assets_attachments`). Задокументировано как
    осознанная потеря, а не тихий пропуск.
 
-## Прочитанные файлы (кроме docs/50-api-contract.yaml, docs/51-data-model.md)
+## T-026: пробелы спецификации в `server2/cmd/server`
 
+1. **Регистрация доменов не через `app.Deps` напрямую.** Текст тикета
+   предлагал сигнатуру `func Register(mux *httpapi.Router, deps *app.Deps)`
+   для каждого домена. Буквально так домены пришлось бы импортировать пакет
+   `app`, а `app/routes.go` импортирует все домены — цикл `app <-> домен` в Go
+   не компилируется. Решение: у каждого домена свой `Deps` (например
+   `authn.Deps`, `workspace.Deps`), содержащий только то, что домену нужно;
+   `internal/app/deps.go` строит их все и передаёт в `Register`, а
+   `internal/app/routes.go` остаётся тем самым «одна строка на домен».
+   Параллельным реализаторам T-027+ это даже удобнее: не нужно тянуть
+   определение `app.Deps`, чтобы понять свои зависимости.
+
+2. **`GOOSAR_MCP_SECRET_KEY` есть в конфиге, но шифрование им не реализовано.**
+   MFA/секретные конфиги воркспейса требуют этого ключа по контракту
+   (`MFAStatusResponse.available`), но сам механизм шифрования — за пределами
+   T-026 (TOTP enroll/confirm/disable оставлены 501, см. ниже). `available`
+   честно отражает `GOOSAR_MCP_SECRET_KEY != ""`, не притворяясь, что запись
+   секретов уже работает.
+
+3. **`acct_token_epoch` — новая колонка `accounts` (миграция 013).**
+   `authRevokeAllSessions` по контракту обязан немедленно инвалидировать
+   каждый JWT, выпущенный раньше ("token version check"), а `001_identity`
+   такого счётчика на аккаунте не заводит. Добавлена узкая миграция
+   `013_authn_token_epoch.up/down.sql` (одна колонка, `DEFAULT 0`) — с
+   отчётливым, непохожим на `server/` именем колонки, как и остальные
+   в этой схеме.
+
+4. **`/ws` — только транспорт (комнаты + upgrade), без протокола подписок.**
+   Контракт прямо отсылает за деталями к `A.md` («Протокол /ws»), которого
+   нет в списке разрешённых для чтения файлов этой сессии. Реализованы
+   handshake (резолв `workspace_id`/`workspace_slug`, проверка членства,
+   коды 400/401/403/404/101), таймаут первого фрейма для
+   неаутентифицированного апгрейда, и общий интерфейс `realtime.Publisher`,
+   которым будущие домены (T-027+) будут публиковать события. Разбор
+   конкретных типов подписок/событий — за рамками T-026, реализуется вместе
+   с доменом, который их производит (issues/chat/...).
+
+5. **`workspaceTemplatesList` и `WorkspaceCapabilities.template_key` — пустой
+   каталог.** Ни контракт, ни data-model не перечисляют реальный набор
+   шаблонов ролей пространства (только форму `WorkspaceTemplateSummary`).
+   `GET /api/workspace-templates` возвращает `[]` (валидно по схеме),
+   `template_key` в `CreateWorkspaceRequest` принимается, но ни на что не
+   влияет; `GET /api/workspaces/{id}/capabilities` всегда отдаёт пустые
+   `capabilities`/`sample_tasks` — контракт сам оговаривает это как
+   допустимый ответ 200 для пространства без привязанного шаблона.
+
+6. **Список зарезервированных slug — придуман, не выведен из контракта.**
+   `workspace_slug_reserved` в контракте объявлен как код ошибки, но сам
+   список зарезервированных слов нигде не перечислен. Взят минимальный набор
+   путей верхнего уровня, с которыми конфликт slug реально сломал бы
+   маршрутизацию (`api`, `admin`, `www`, `app`, `auth`, `health`, `ws`) —
+   `internal/workspace/handlers.go`, `reservedSlugs`.
+
+7. **`DELETE .../runtime-profiles/{id}` не проверяет «активных агентов».**
+   Контракт требует 409, если у профиля есть активные агенты или отряды с
+   архивным лидером — оба понятия (`operatives`, `crews`) принадлежат
+   доменам T-027/T-028, которых ещё нет. `HasActiveAgentsOnProfile` — явная
+   заглушка, всегда `false`, с комментарием в коде; когда появится домен
+   agents, здесь нужно будет подключить настоящую проверку.
+
+8. **MFA (кроме статуса), OIDC, LDAP, magic-link (`/auth/verify-link`) — 501.**
+   `GET /api/auth/mfa` (статус) и `GET /api/auth/methods` реализованы
+   полностью; enroll/confirm/disable/recovery-codes, `/api/auth/oidc/*`,
+   `/api/auth/ldap/login`, `/auth/verify-link` возвращают
+   `{"error":"not implemented"}` (501) — ни один контрактный тест раздела
+   auth/workspaces/me их не вызывает (см. `e2e/contract/contract_test.go`,
+   `testAuth`), а реализация TOTP-хранилища/OIDC-редиректов/LDAP-клиента
+   ощутимо увеличила бы объём T-026 без необходимости для критерия приёмки.
+
+9. **`/api/me/export`, `.../onboarding/runtime-bootstrap`,
+   `.../onboarding/no-runtime-bootstrap` — 501.** Требуют вложений/агентов/задач
+   (`assets`, `operatives`, `tickets` — домены T-027+), которых ещё нет.
+
+10. **Приглашение по email отправляется, но письмо не проверяется тестами.**
+    `inviteWorkspaceMember` шлёт письмо через `mail.Sender` в горутине
+    (контракт: «ошибка отправки только логируется, ответ API не меняется»);
+    dev-реализация просто пишет его в лог (T-029 подключит Resend/SMTP).
+
+## Прочитанные файлы (кроме docs/50-api-contract.{md,yaml}, docs/51-data-model.md)
+
+Session T-025:
 - `server2/migrations/*.up.sql` (001…012) — точные имена/типы колонок для SQL-слоя.
 - `server2/migrations/check_names.py` — не читался напрямую (уже описан в data-model.md).
 - `scripts/similarity-check.py` — правила проверки схожести с `server/**`.
+
+Session T-026 (дополнительно к списку выше):
+- `docs/31-backlog.md` — только раздел эпика E8 / тикета T-026.
+- `server2/go.mod`, `server2/README.md`.
+- `server2/internal/migrate/migrate.go` (переиспользован без изменений).
+- `server2/migrations/001_identity.up.sql`, `002_workspace.up.sql`.
+- `e2e/contract/README.md`, `client.go`, `harness.go`, `contract_test.go`
+  (только код разделов auth/workspaces/me и общие `call`/`ensureX` хелперы).
 
 `server/**` и `packages/core/**` не открывались.

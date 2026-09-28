@@ -7,11 +7,11 @@ import "sort"
 // явно перечисляет каждую из категорий [не перенесённого] с количеством
 // пропущенных объектов»).
 type Report struct {
-	Workspace      WorkspaceRef      `json:"workspace"`
-	DryRun         bool              `json:"dry_run"`
-	MigrationsRun  []int             `json:"migrations_applied,omitempty"`
-	Counts         map[string]int    `json:"transferred"`
-	Skipped        []SkippedCategory `json:"skipped_by_design"`
+	Workspace     WorkspaceRef      `json:"workspace"`
+	DryRun        bool              `json:"dry_run"`
+	MigrationsRun []int             `json:"migrations_applied,omitempty"`
+	Counts        map[string]int    `json:"transferred"`
+	Skipped       []SkippedCategory `json:"skipped_by_design"`
 }
 
 // WorkspaceRef идентифицирует перенесённый воркспейс в отчёте.

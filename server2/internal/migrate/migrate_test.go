@@ -12,10 +12,10 @@ import (
 
 func TestLoadFS_ordersByVersionAndIgnoresOtherFiles(t *testing.T) {
 	fsys := fstest.MapFS{
-		"migrations/002_workspace.up.sql": &fstest.MapFile{Data: []byte("-- two")},
-		"migrations/001_identity.up.sql":  &fstest.MapFile{Data: []byte("-- one")},
-		"migrations/001_identity.down.sql": &fstest.MapFile{Data: []byte("-- down, must be ignored")},
-		"migrations/check_names.py":       &fstest.MapFile{Data: []byte("# not a migration")},
+		"migrations/002_workspace.up.sql":    &fstest.MapFile{Data: []byte("-- two")},
+		"migrations/001_identity.up.sql":     &fstest.MapFile{Data: []byte("-- one")},
+		"migrations/001_identity.down.sql":   &fstest.MapFile{Data: []byte("-- down, must be ignored")},
+		"migrations/check_names.py":          &fstest.MapFile{Data: []byte("# not a migration")},
 		"migrations/010_integrations.up.sql": &fstest.MapFile{Data: []byte("-- ten")},
 	}
 	files, err := LoadFS(fsys, "migrations")
@@ -40,12 +40,14 @@ func TestLoadFS_ordersByVersionAndIgnoresOtherFiles(t *testing.T) {
 }
 
 func TestLoad_realMigrationsDirParsesAllTwelve(t *testing.T) {
+	// Название теста сохранено (историческое из T-025); T-026 добавил
+	// 013_authn_token_epoch (см. server2/docs/decisions.md), отсюда 13.
 	files, err := Load("../../migrations")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if len(files) != 12 {
-		t.Fatalf("expected 12 migration files in server2/migrations, got %d", len(files))
+	if len(files) != 13 {
+		t.Fatalf("expected 13 migration files in server2/migrations, got %d", len(files))
 	}
 	for i, f := range files {
 		if f.Version != i+1 {
@@ -104,8 +106,8 @@ func TestApply_isIdempotentAndSequential(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Apply (1st run): %v", err)
 	}
-	if len(applied) != 12 {
-		t.Fatalf("1st run applied %d migrations, want 12: %v", len(applied), applied)
+	if len(applied) != 13 {
+		t.Fatalf("1st run applied %d migrations, want 13: %v", len(applied), applied)
 	}
 
 	var tickets int

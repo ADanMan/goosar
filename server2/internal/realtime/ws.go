@@ -89,7 +89,7 @@ func handleConnect(hub *Hub, auth Authenticator, wsMembers WorkspaceMembership, 
 			return
 		}
 
-		cn := &conn{ws: c}
+		cn := &socket{ws: c}
 		hub.join(workspaceID, cn)
 		defer hub.leave(workspaceID, cn)
 

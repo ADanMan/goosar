@@ -1,12 +1,32 @@
+// Package identity реализует тег Me контракта: собственный профиль
+// пользователя, онбординг, CLI-токен, personal access tokens (/api/tokens) и
+// статичный список шаблонов пространств. Persistence аккаунта переиспользует
+// authn.Store (см. server2/internal/authn/userview.go) — таблица accounts
+// принадлежит authn (сессии/коды тоже читают/пишут её), identity добавляет
+// только HTTP-слой профиля.
 package identity
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/adanman/goosar/server2/internal/authn"
 	"github.com/adanman/goosar/server2/internal/httpapi"
 )
+
+// Deps держит всё, что нужно обработчикам тега Me. Authn не embed'ится
+// напрямую (хотя мог бы), чтобы вызовы вида d.Authn.Store.* оставались явно
+// видны в обработчиках — откуда на самом деле приходят данные профиля.
+type Deps struct {
+	Authn  *authn.Deps
+	Logger *slog.Logger
+}
+
+// New строит Deps домена identity вокруг уже готового authn.Deps.
+func New(authnDeps *authn.Deps, logger *slog.Logger) *Deps {
+	return &Deps{Authn: authnDeps, Logger: logger}
+}
 
 func (d *Deps) handleGetProfile(w http.ResponseWriter, r *http.Request) {
 	actor, ok := httpapi.RequireActor(w, r)

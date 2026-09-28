@@ -19,10 +19,10 @@ var ErrNotFound = errors.New("authn: не найдено")
 // Схема User целиком собирается доменом identity — authn работает только со
 // столбцами, нужными для входа/сессий.
 type Account struct {
-	ID          string
-	Email       string
-	Name        string
-	TokenEpoch  int
+	ID         string
+	Email      string
+	Name       string
+	TokenEpoch int
 }
 
 // Store — доступ к таблицам identity (001_identity.up.sql).

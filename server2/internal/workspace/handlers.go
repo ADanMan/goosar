@@ -1,14 +1,36 @@
 package workspace
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/adanman/goosar/server2/internal/httpapi"
+	"github.com/adanman/goosar/server2/internal/mail"
 	"github.com/adanman/goosar/server2/internal/realtime"
 )
+
+func nowUTC() time.Time { return time.Now().UTC() }
+
+// sendInviteEmail отправляет письмо-приглашение асинхронно; ошибка отправки
+// только логируется и не меняет уже отданный HTTP-ответ (см. контракт
+// inviteWorkspaceMember).
+func (d *Deps) sendInviteEmail(inv Invitation) {
+	if d.Mailer == nil {
+		return
+	}
+	err := d.Mailer.Send(context.Background(), mail.Message{
+		To:      inv.InviteeEmail,
+		Subject: "Приглашение в пространство " + inv.WorkspaceName,
+		Body:    inv.InviterName + " приглашает вас в пространство " + inv.WorkspaceName,
+	})
+	if err != nil {
+		d.Logger.Error("workspace: отправка письма-приглашения", "err", err, "invitation_id", inv.ID)
+	}
+}
 
 var slugRe = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 

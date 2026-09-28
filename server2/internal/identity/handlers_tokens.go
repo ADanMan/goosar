@@ -137,12 +137,12 @@ func (d *Deps) handleRenewCurrentPAT(w http.ResponseWriter, r *http.Request) {
 
 func patJSON(p authn.PAT) map[string]any {
 	return map[string]any{
-		"id":            p.ID,
-		"name":          p.Name,
-		"token_prefix":  p.Prefix,
-		"expires_at":    p.ExpiresAt,
-		"last_used_at":  p.LastUsedAt,
-		"created_at":    p.CreatedAt,
+		"id":           p.ID,
+		"name":         p.Name,
+		"token_prefix": p.Prefix,
+		"expires_at":   p.ExpiresAt,
+		"last_used_at": p.LastUsedAt,
+		"created_at":   p.CreatedAt,
 	}
 }
 

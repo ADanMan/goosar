@@ -18,8 +18,8 @@ type fetched struct {
 
 	skills []sourceSkillWithFiles
 
-	squads        []sourceSquad
-	squadMembers  map[string][]sourceSquadMember // squad id -> members
+	squads       []sourceSquad
+	squadMembers map[string][]sourceSquadMember // squad id -> members
 
 	labelsByResource map[string][]sourceLabel // "issue"|"agent"|"skill" -> labels
 	properties       []sourceProperty
@@ -27,12 +27,12 @@ type fetched struct {
 	projects         []sourceProject
 	projectResources map[string][]sourceProjectResource // project id -> resources
 
-	issues       []sourceIssue
-	comments     map[string][]sourceIssueComment           // issue id -> comments
-	subscribers  map[string][]sourceIssueSubscriber        // issue id -> subscribers
-	prLinks      map[string][]sourceIssuePullRequestLink   // issue id -> pr links
+	issues      []sourceIssue
+	comments    map[string][]sourceIssueComment         // issue id -> comments
+	subscribers map[string][]sourceIssueSubscriber      // issue id -> subscribers
+	prLinks     map[string][]sourceIssuePullRequestLink // issue id -> pr links
 
-	autopilots       []sourceAutopilot
+	autopilots        []sourceAutopilot
 	autopilotTriggers map[string][]sourceAutopilotTrigger // autopilot id -> triggers
 
 	chatSessions []sourceChatSession

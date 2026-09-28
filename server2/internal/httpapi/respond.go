@@ -14,67 +14,62 @@ type Error struct {
 	RequestID string `json:"request_id,omitempty"`
 }
 
-// WriteJSON пишет v как JSON с заданным статусом.
+// WriteJSON сериализует v как тело ответа с заданным статусом; v == nil
+// пишет только статус, без тела (для 204-подобных случаев через этот же путь).
 func WriteJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	if v == nil {
-		return
+	if v != nil {
+		_ = json.NewEncoder(w).Encode(v)
 	}
-	_ = json.NewEncoder(w).Encode(v)
 }
 
-// WriteError пишет тело ошибки контракта. requestID берётся из заголовка
-// ответа X-Request-ID, если он был выставлен middleware.
+// WriteError пишет тело ошибки контракта, подхватывая X-Request-ID, если
+// middleware уже выставил его на этом ответе.
 func WriteError(w http.ResponseWriter, status int, message, code string) {
-	WriteJSON(w, status, Error{
-		Error:     message,
-		Code:      code,
-		RequestID: w.Header().Get("X-Request-ID"),
-	})
+	WriteJSON(w, status, Error{Error: message, Code: code, RequestID: w.Header().Get("X-Request-ID")})
 }
 
-// WriteNotImplemented — тело для заглушек 406 операций контракта, ещё не
-// реализованных ни одним доменом.
+// WriteNotImplemented — общее тело для 501-заглушек ещё не освоенных доменом
+// операций контракта.
 func WriteNotImplemented(w http.ResponseWriter, r *http.Request) {
 	WriteError(w, http.StatusNotImplemented, "not implemented", "not_implemented")
 }
 
-// DecodeJSON декодирует тело запроса в v; на пустое тело (allowEmpty) не
-// ругается, оставляя v в нулевом значении.
+// DecodeJSON декодирует тело запроса в v. Пустое тело — не ошибка, v просто
+// остаётся в нулевом значении (многие PATCH-эндпоинты контракта не требуют тела).
 func DecodeJSON(r *http.Request, v any) error {
 	if r.Body == nil || r.ContentLength == 0 {
 		return nil
 	}
-	dec := json.NewDecoder(r.Body)
-	return dec.Decode(v)
+	return json.NewDecoder(r.Body).Decode(v)
 }
 
-// BadRequest — короткий хелпер для 400 с кодом invalid_request.
-func BadRequest(w http.ResponseWriter, message string) {
-	WriteError(w, http.StatusBadRequest, message, "invalid_request")
+// statusHelper фиксирует пару (код статуса, дефолтное сообщение, код ошибки)
+// для четырёх самых частых 4xx контракта — четыре публичные функции ниже
+// делегируют сюда, вместо того чтобы каждая по отдельности дублировала
+// проверку "message == "" ? дефолт : message".
+type statusHelper struct {
+	status   int
+	code     string
+	fallback string
 }
 
-// Unauthorized — короткий хелпер для 401.
-func Unauthorized(w http.ResponseWriter, message string) {
+func (h statusHelper) write(w http.ResponseWriter, message string) {
 	if message == "" {
-		message = "not authenticated"
+		message = h.fallback
 	}
-	WriteError(w, http.StatusUnauthorized, message, "unauthorized")
+	WriteError(w, h.status, message, h.code)
 }
 
-// Forbidden — короткий хелпер для 403.
-func Forbidden(w http.ResponseWriter, message string) {
-	if message == "" {
-		message = "insufficient permissions"
-	}
-	WriteError(w, http.StatusForbidden, message, "forbidden")
-}
+var (
+	badRequestHelper   = statusHelper{http.StatusBadRequest, "invalid_request", "invalid request"}
+	unauthorizedHelper = statusHelper{http.StatusUnauthorized, "unauthorized", "not authenticated"}
+	forbiddenHelper    = statusHelper{http.StatusForbidden, "forbidden", "insufficient permissions"}
+	notFoundHelper     = statusHelper{http.StatusNotFound, "not_found", "not found"}
+)
 
-// NotFound — короткий хелпер для 404.
-func NotFound(w http.ResponseWriter, message string) {
-	if message == "" {
-		message = "not found"
-	}
-	WriteError(w, http.StatusNotFound, message, "not_found")
-}
+func BadRequest(w http.ResponseWriter, message string)   { badRequestHelper.write(w, message) }
+func Unauthorized(w http.ResponseWriter, message string) { unauthorizedHelper.write(w, message) }
+func Forbidden(w http.ResponseWriter, message string)    { forbiddenHelper.write(w, message) }
+func NotFound(w http.ResponseWriter, message string)     { notFoundHelper.write(w, message) }

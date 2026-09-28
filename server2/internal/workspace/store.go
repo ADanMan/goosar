@@ -37,6 +37,11 @@ type Workspace struct {
 const workspaceColumns = `id, ws_title, ws_slug, ws_summary, ws_operating_context, ws_settings,
 	ws_repo_refs, ws_ticket_prefix, ws_avatar_uri, created_at, updated_at`
 
+// workspaceColumnsQualified — тот же список, квалифицированный алиасом s.,
+// для запросов с JOIN (иначе "id" неоднозначен между spaces и space_members).
+const workspaceColumnsQualified = `s.id, s.ws_title, s.ws_slug, s.ws_summary, s.ws_operating_context, s.ws_settings,
+	s.ws_repo_refs, s.ws_ticket_prefix, s.ws_avatar_uri, s.created_at, s.updated_at`
+
 func scanWorkspace(row pgx.Row) (Workspace, error) {
 	var w Workspace
 	var settings, repos []byte
@@ -137,7 +142,7 @@ func (s *Store) SlugTaken(ctx context.Context, slug string) (bool, error) {
 // ListForUser — пространства, где accountID состоит участником.
 func (s *Store) ListForUser(ctx context.Context, accountID string) ([]Workspace, error) {
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT `+workspaceColumns+` FROM spaces s
+		SELECT `+workspaceColumnsQualified+` FROM spaces s
 		JOIN space_members m ON m.workspace_id = s.id
 		WHERE m.account_id = $1
 		ORDER BY s.created_at`, accountID)
@@ -275,6 +280,23 @@ func (s *Store) GetMemberByUser(ctx context.Context, workspaceID, accountID stri
 	return m, nil
 }
 
+// GetMemberByUserEmail — членство по email пользователя (для проверки
+// "приглашаемый уже участник" до создания приглашения).
+func (s *Store) GetMemberByUserEmail(ctx context.Context, workspaceID, email string) (MemberWithUser, error) {
+	row := s.db.Pool.QueryRow(ctx, `
+		SELECT `+memberColumns+`
+		FROM space_members m JOIN accounts a ON a.id = m.account_id
+		WHERE m.workspace_id = $1 AND lower(a.acct_email) = lower($2)`, workspaceID, email)
+	m, err := scanMember(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return MemberWithUser{}, ErrNotFound
+	}
+	if err != nil {
+		return MemberWithUser{}, fmt.Errorf("workspace: чтение членства по email: %w", err)
+	}
+	return m, nil
+}
+
 // GetMemberByID — членство по id строки space_members.
 func (s *Store) GetMemberByID(ctx context.Context, workspaceID, memberID string) (MemberWithUser, error) {
 	row := s.db.Pool.QueryRow(ctx, `
@@ -344,19 +366,19 @@ func (s *Store) RemoveMember(ctx context.Context, workspaceID, memberID string) 
 // --- invitations ---------------------------------------------------------------
 
 type Invitation struct {
-	ID             string     `json:"id"`
-	WorkspaceID    string     `json:"workspace_id"`
-	InviterID      string     `json:"inviter_id"`
-	InviteeEmail   string     `json:"invitee_email"`
-	InviteeUserID  *string    `json:"invitee_user_id"`
-	Role           string     `json:"role"`
-	Status         string     `json:"status"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-	ExpiresAt      time.Time  `json:"expires_at"`
-	InviterName    string     `json:"inviter_name"`
-	InviterEmail   string     `json:"inviter_email"`
-	WorkspaceName  string     `json:"workspace_name"`
+	ID            string    `json:"id"`
+	WorkspaceID   string    `json:"workspace_id"`
+	InviterID     string    `json:"inviter_id"`
+	InviteeEmail  string    `json:"invitee_email"`
+	InviteeUserID *string   `json:"invitee_user_id"`
+	Role          string    `json:"role"`
+	Status        string    `json:"status"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	InviterName   string    `json:"inviter_name"`
+	InviterEmail  string    `json:"inviter_email"`
+	WorkspaceName string    `json:"workspace_name"`
 }
 
 const invitationColumns = `i.id, i.workspace_id, i.inv_inviter_account_id, i.inv_invitee_email,

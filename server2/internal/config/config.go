@@ -15,14 +15,14 @@ import (
 
 // Config — снимок окружения процесса, прочитанный один раз при старте.
 type Config struct {
-	Port          string // PORT
-	DatabaseURL   string // DATABASE_URL
-	JWTSecret     string // JWT_SECRET
-	AppEnv        string // APP_ENV (production | иначе dev)
-	AllowSignup   bool   // ALLOW_SIGNUP
-	DevVerifyCode string // GOOSAR_DEV_VERIFICATION_CODE — фиксированный код в dev-режиме
-	FrontendOrigin string // FRONTEND_ORIGIN — для CORS и AppConfig
-	McpSecretKey  string // GOOSAR_MCP_SECRET_KEY — наличие включает MFA/секреты
+	Port                 string // PORT
+	DatabaseURL          string // DATABASE_URL
+	JWTSecret            string // JWT_SECRET
+	AppEnv               string // APP_ENV (production | иначе dev)
+	AllowSignup          bool   // ALLOW_SIGNUP
+	DevVerifyCode        string // GOOSAR_DEV_VERIFICATION_CODE — фиксированный код в dev-режиме
+	FrontendOrigin       string // FRONTEND_ORIGIN — для CORS и AppConfig
+	McpSecretKey         string // GOOSAR_MCP_SECRET_KEY — наличие включает MFA/секреты
 	RealtimeMetricsToken string // REALTIME_METRICS_TOKEN
 
 	MigrateOnStart bool // MIGRATE=true — применить миграции при старте

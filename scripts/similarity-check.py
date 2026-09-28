@@ -9,6 +9,11 @@
 расширением. Код выхода 1, если хотя бы один файл >= порога (по умолчанию 0.30).
 
 Запуск: python3 scripts/similarity-check.py [--threshold 0.30] [--top 20]
+
+--ignore-trivial: дополнительно отбрасывает шаблонные строки (короче 12
+символов: скобки, `return err`, `if err != nil {` и т.п.). Это справочный
+режим: на коротких Go-файлах такие строки дают фон 25–30% даже против
+файлов с другим назначением. Порог приёмки считается в основном режиме.
 """
 import argparse
 import difflib
@@ -21,6 +26,10 @@ EXTS = {".go", ".sql", ".yaml", ".yml", ".sh", ".toml", ".json", ".md"}
 SKIP_DIRS = {"node_modules", ".git", "vendor", "testdata"}
 NAME_RE = re.compile(r"goosar|multica", re.IGNORECASE)
 BLOCK_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
+
+
+IGNORE_TRIVIAL = False
+TRIVIAL = {"if err != nil {", "return nil, err", "return err", "return nil"}
 
 
 def normalize(path):
@@ -45,6 +54,8 @@ def normalize(path):
             s = s.split("//", 1)[0].rstrip()
         if not s:
             continue
+        if IGNORE_TRIVIAL and (len(s) < 12 or s in TRIVIAL):
+            continue
         out.append(NAME_RE.sub("X", s))
     return out
 
@@ -65,7 +76,10 @@ def main():
     ap.add_argument("--top", type=int, default=15)
     ap.add_argument("--new", default=os.path.join(ROOT, "server2"))
     ap.add_argument("--old", default=os.path.join(ROOT, "server"))
+    ap.add_argument("--ignore-trivial", action="store_true")
     args = ap.parse_args()
+    global IGNORE_TRIVIAL
+    IGNORE_TRIVIAL = args.ignore_trivial
 
     old = {}
     for p in collect(args.old):

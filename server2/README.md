@@ -17,6 +17,93 @@ go test ./...
 Модуль: `github.com/adanman/goosar/server2`, `go 1.24`. Postgres-драйвер —
 `github.com/jackc/pgx/v5`.
 
+## Сервер (`cmd/server`, T-026)
+
+`server2/cmd/server` — HTTP-сервер с тем же внешним контрактом, что и
+`server/cmd/server` (`docs/50-api-contract.{md,yaml}`), реализованный
+clean-room (см. `server2/docs/adr/0001-stack.md` за выбор стека и
+`server2/docs/decisions.md` за решения по пробелам спецификации).
+
+### Запуск
+
+```sh
+createdb goosar2_dev   # или: psql -c 'CREATE DATABASE goosar2_dev'
+
+cd server2
+DATABASE_URL="postgres://postgres@localhost:5432/goosar2_dev?sslmode=disable" \
+JWT_SECRET="dev-secret" \
+ALLOW_SIGNUP=true \
+GOOSAR_DEV_VERIFICATION_CODE=424242 \
+FRONTEND_ORIGIN="http://localhost:3199" \
+PORT=8080 \
+  go run ./cmd/server -migrate
+```
+
+`-migrate` (или `MIGRATE=true`) применяет `server2/migrations` перед стартом;
+без него сервер ожидает уже мигрированную БД (тот же раннер, что и
+`cmd/import --migrate`, — `internal/migrate`).
+
+### Переменные окружения
+
+Имена совпадают с тем, что документирует `docs/50-api-contract.yaml` и
+`e2e/contract/README.md` — это тот же контракт, поэтому те же имена:
+
+| Переменная | Обязательна | Смысл |
+|---|---|---|
+| `DATABASE_URL` | да | DSN Postgres |
+| `PORT` | нет (`8080`) | порт HTTP-сервера |
+| `JWT_SECRET` | нет (небезопасный dev-дефолт) | ключ HMAC для сессионных JWT |
+| `APP_ENV` | нет (`development`) | `production` отключает `GOOSAR_DEV_VERIFICATION_CODE` |
+| `ALLOW_SIGNUP` | нет (`true`) | создавать ли аккаунт при первом входе по коду |
+| `GOOSAR_DEV_VERIFICATION_CODE` | нет | фиксированный 6-значный код входа вне production |
+| `FRONTEND_ORIGIN` | нет (`http://localhost:3199`) | origin для CORS |
+| `GOOSAR_MCP_SECRET_KEY` | нет | наличие включает `MFAStatusResponse.available` |
+| `REALTIME_METRICS_TOKEN` | нет | Bearer-токен для `/health/realtime` не с loopback |
+| `MIGRATE` | нет (`false`) | применить миграции при старте (то же, что флаг `-migrate`) |
+| `MIGRATIONS_DIR` | нет (`server2/migrations`) | откуда брать `NNN_*.up.sql` |
+
+### Раскладка (`internal/`)
+
+- `config` — чтение переменных окружения выше.
+- `store` — пул pgx/v5, транзакции, общие SQL-хелперы (`WithTx`, `RowExists`, ...).
+- `httpapi` — маршрутизатор поверх `net/http.ServeMux` (Go 1.22+ шаблоны
+  путей), формат JSON-ответов/ошибок контракта, `httpapi.Actor` в контексте
+  запроса, резолв воркспейса по `X-Workspace-Slug`/`X-Workspace-ID`, роли,
+  простой rate limit.
+- `authn` — коды входа по email, сессии, cookie+CSRF, JWT, PAT, daemon-токены
+  (заготовка), статус MFA.
+- `mail` — интерфейс отправки писем + dev-реализация (лог).
+- `realtime` — хаб `/ws`, интерфейс `Publisher` для доменов.
+- `identity` — `/api/me`, онбординг, `/api/cli-token`, `/api/tokens`.
+- `workspace` — `/api/workspaces/**`, `/api/invitations/**`, runtime-profiles.
+- `contractspec` — разбор `docs/50-api-contract.yaml` (операции контракта).
+- `app` — сборка всех доменных `Deps`, регистрация маршрутов (`routes.go`),
+  health/readiness/`/api/config`, генерируемые заглушки (`stubs_gen.go`).
+- `migrate`, `importer` — без изменений, T-024/T-025.
+
+### Добавить новый домен
+
+1. `internal/<domain>/deps.go` — свой `Deps` (не `app.Deps`: см.
+   `server2/docs/decisions.md`, пункт 1 раздела T-026, за причину).
+2. `internal/<domain>/register.go` — `func Register(router *httpapi.Router,
+   deps *Deps)`, регистрирует маршруты через `router.Handle`.
+3. `internal/app/deps.go` — завести поле и собрать домен в `app.New`.
+4. `internal/app/routes.go` — одна строка `<domain>.Register(router,
+   d.<Domain>)`, **до** `RegisterStubs(router)`.
+5. Если контракт обновился — перегенерировать заглушки:
+   `cd server2 && go run ./tools/genstubs -spec ../docs/50-api-contract.yaml -out internal/app/stubs_gen.go`.
+   `RegisterStubs` сам пропускает пути, которые уже занял домен
+   (`router.HandleStub`), так что регенерация безопасна в любой момент.
+
+### Проверка контракта
+
+```sh
+# сервер поднят на :8299 (см. "Запуск" выше, PORT=8299)
+cd e2e/contract
+BASE_URL=http://localhost:8299 GOOSAR_DEV_VERIFICATION_CODE=424242 \
+  go test ./... -run 'Contract/(auth|workspaces|me)$' -v
+```
+
 ## Импорт
 
 `server2/cmd/import` переносит один воркспейс с работающего старого сервера

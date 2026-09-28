@@ -38,51 +38,55 @@ func isUnsafeMethod(m string) bool {
 	}
 }
 
-// resolveActor разбирает токен по его форме (см. securitySchemes/bearerAuth):
-// gsl_ = PAT, gsln_/mdt_/mat_ = облачный PAT/daemon-токен/task-токен (вне
-// объёма T-026 — см. decisions.md), иначе — сессионный HS256 JWT.
+// resolveActor разбирает токен по его форме (см. securitySchemes/bearerAuth
+// и classifyToken в crypto.go): gsln_/mdt_/mat_ вне объёма T-026 (см.
+// decisions.md) и всегда отклоняются.
 func (d *Deps) resolveActor(ctx context.Context, token string) (*httpapi.Actor, bool) {
 	if token == "" {
 		return nil, false
 	}
-	switch {
-	case strings.HasPrefix(token, patPrefix):
-		pat, err := d.Store.FindPATByToken(ctx, token)
-		if err != nil {
-			return nil, false
-		}
-		acct, err := d.Store.FindAccountByID(ctx, pat.AccountID)
-		if err != nil {
-			return nil, false
-		}
-		return &httpapi.Actor{
-			UserID: acct.ID, Email: acct.Email, Name: acct.Name,
-			IsHuman: true, Source: httpapi.SourcePAT,
-		}, true
-	case strings.HasPrefix(token, "gsln_"), strings.HasPrefix(token, "mdt_"), strings.HasPrefix(token, "mat_"):
-		// облачный PAT / daemon-токен / task-токен — не реализовано в T-026.
+	switch classifyToken(token) {
+	case kindPAT:
+		return d.actorFromPAT(ctx, token)
+	case kindSessionJWT:
+		return d.actorFromSession(ctx, token)
+	default: // kindCloudPAT, kindDaemonToken, kindTaskToken
 		return nil, false
-	default:
-		claims, err := d.Signer.Verify(token)
-		if err != nil {
-			return nil, false
-		}
-		acct, err := d.Store.FindAccountByID(ctx, claims.Sub)
-		if err != nil {
-			return nil, false
-		}
-		if acct.TokenEpoch != claims.TV {
-			return nil, false
-		}
-		valid, err := d.Store.IsSessionValid(ctx, claims.SID, acct.ID)
-		if err != nil || !valid {
-			return nil, false
-		}
-		return &httpapi.Actor{
-			UserID: acct.ID, Email: acct.Email, Name: acct.Name,
-			IsHuman: true, Source: httpapi.SourceSession, SessionID: claims.SID,
-		}, true
 	}
+}
+
+func (d *Deps) actorFromPAT(ctx context.Context, token string) (*httpapi.Actor, bool) {
+	pat, err := d.Store.FindPATByToken(ctx, token)
+	if err != nil {
+		return nil, false
+	}
+	acct, err := d.Store.FindAccountByID(ctx, pat.AccountID)
+	if err != nil {
+		return nil, false
+	}
+	return &httpapi.Actor{
+		UserID: acct.ID, Email: acct.Email, Name: acct.Name,
+		IsHuman: true, Source: httpapi.SourcePAT,
+	}, true
+}
+
+func (d *Deps) actorFromSession(ctx context.Context, token string) (*httpapi.Actor, bool) {
+	claims, err := d.Signer.Verify(token)
+	if err != nil {
+		return nil, false
+	}
+	acct, err := d.Store.FindAccountByID(ctx, claims.Sub)
+	if err != nil || acct.TokenEpoch != claims.TV {
+		return nil, false
+	}
+	valid, err := d.Store.IsSessionValid(ctx, claims.SID, acct.ID)
+	if err != nil || !valid {
+		return nil, false
+	}
+	return &httpapi.Actor{
+		UserID: acct.ID, Email: acct.Email, Name: acct.Name,
+		IsHuman: true, Source: httpapi.SourceSession, SessionID: claims.SID,
+	}, true
 }
 
 // Middleware — глобальный слой аутентификации: если запрос несёт валидный

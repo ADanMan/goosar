@@ -17,12 +17,12 @@ import (
 // Options — параметры одного запуска импорта (соответствуют флагам
 // server2/cmd/import).
 type Options struct {
-	SourceURL   string // базовый URL исходного сервера, например http://localhost:8199
-	Token       string // Bearer PAT/JWT с ролью owner в исходном воркспейсе
-	Workspace   string // slug или id исходного воркспейса
-	DatabaseURL string // DSN целевой базы server2
-	Migrate     bool   // применить server2/migrations перед импортом
-	DryRun      bool   // только прочитать источник и посчитать, не писать в БД
+	SourceURL     string // базовый URL исходного сервера, например http://localhost:8199
+	Token         string // Bearer PAT/JWT с ролью owner в исходном воркспейсе
+	Workspace     string // slug или id исходного воркспейса
+	DatabaseURL   string // DSN целевой базы server2
+	Migrate       bool   // применить server2/migrations перед импортом
+	DryRun        bool   // только прочитать источник и посчитать, не писать в БД
 	MigrationsDir string // каталог с NNN_*.up.sql; по умолчанию "server2/migrations" относительно cwd
 }
 
