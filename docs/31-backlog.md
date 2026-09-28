@@ -468,3 +468,37 @@ Acceptance criteria:
 
 Затрагивает: `server/`, `server2/`, `packages/core/types/**`, `Dockerfile`, `docker-compose.selfhost*.yml`, `docs/21-adr/ADR-0004-backend-unchanged.md`
 Риск: L2
+
+## Эпик E9. Удобство: комплексное ревью (после 1.2.0, ADR-0006)
+
+### T-031 · Комплексное UX-ревью всех экранов
+Эпик: E9
+Оценка: 1 день
+Зависит от: T-023
+Статус: выполнен 28.09.2026
+
+Задача: проверить все экраны приложения, публичный сайт, десктоп и потоки входа по эталону ADR-0006 четырьмя независимыми аудиторами по одному брифу; свести находки с серьёзностью и адресом в коде.
+
+Acceptance criteria:
+- [x] `docs/33-ux-review.md`: 75 находок (4 Critical, 15 High, 29 Medium, 27 Low), у каждой эталон, предложение и путь:строка;
+- [x] находки из `docs/32-test-plan.md` §7 не повторяются;
+- [ ] тёмная тема экранов приложения и окно 1024px — досъёмка после T-032.
+
+Затрагивает: `docs/33-ux-review.md`
+Риск: L0
+
+### T-032 · Фиксы Critical и High из ревью
+Эпик: E9
+Оценка: 4 дня
+Зависит от: T-031
+
+Задача: закрыть 19 находок Critical и High из `docs/33-ux-review.md` §3, начиная со сквозных: подтверждение перед деинсталляцией в десктопе (typed-confirm как у удаления воркспейса), ⌘W/Ctrl+W и средняя кнопка для вкладок, тестовая страница «Оплата» за флагом окружения, единый текст ошибок через `describeServerFailure` во всех местах с сырым `err.message`, локализация английских хардкодов (`task-failure.ts`, `daily-cost-chart.tsx`, `tab-bar.tsx`, `uninstall-section.tsx`, `route-error-page.tsx`, `list-row.tsx`), aria-label кнопок чат-виджета, архивирование в ленте в таб-порядке, тихий фолбэк вкладки «Деплой», иконка архивации у агента, версии навыков при импорте, заголовки колонок в средах, мёртвые якоря футера, размеры и SHA256 на /download, хлебная крошка «Отряды».
+
+Acceptance criteria:
+- [ ] Каждая строка Critical/High в `docs/33-ux-review.md` помечена «исправлено» с номером коммита или «отложено» с причиной;
+- [ ] `pnpm typecheck`, `pnpm --filter @goosar/views test`, `pnpm --filter @goosar/ui test`, `node scripts/check-ui-strings.mjs` зелёные; `LEGACY_FILES` в `scripts/check-ui-strings.mjs` уменьшен на три файла;
+- [ ] ни одного нового хардкод-текста вне локалей ru/en/zh-Hans/ja/ko;
+- [ ] ветка `ux/review-fixes`, коммит на находку или группу, PR не создаётся.
+
+Затрагивает: `packages/views/**`, `apps/desktop/src/renderer/src/components/**`, `apps/web/features/landing/**`, `apps/web/app/**`, `packages/views/locales/**`
+Риск: L1
