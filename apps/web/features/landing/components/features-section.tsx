@@ -157,11 +157,11 @@ function InstallSection() {
 
 export function FeaturesSection() {
   return (
-    <>
+    <div id="features">
       <AgentExecutorSection />
       <SelfHostedSection />
       <HermesSection />
       <InstallSection />
-    </>
+    </div>
   );
 }

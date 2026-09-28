@@ -255,8 +255,8 @@ export function createEnDict(allowSignup: boolean): LandingDict {
         product: {
           label: 'Product',
           links: [
-            { label: 'Features', href: '#features' },
-            { label: 'How it Works', href: '#how-it-works' },
+            { label: 'Features', href: '/#features' },
+            { label: 'How it Works', href: '/#how-it-works' },
             { label: 'Download', href: '/download' },
           ],
         },
@@ -268,7 +268,7 @@ export function createEnDict(allowSignup: boolean): LandingDict {
           label: 'Company',
           links: [
             { label: 'About', href: '/about' },
-            { label: 'Open Source', href: '#open-source' },
+            { label: 'Open Source', href: '/#open-source' },
             { label: 'GitHub', href: githubUrl },
           ],
         },

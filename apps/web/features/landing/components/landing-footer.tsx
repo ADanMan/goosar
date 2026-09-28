@@ -21,7 +21,7 @@ export function LandingFooter() {
         <div className="flex flex-col gap-12 border-b border-white/10 py-16 sm:py-20 lg:flex-row lg:gap-20">
           {/* Left — newsletter / CTA */}
           <div className="lg:w-[340px] lg:shrink-0">
-            <Link href="#product" className="flex items-center gap-3">
+            <Link href="/" className="flex items-center gap-3">
               <GoosarIcon className="size-10 text-white" noSpin />
               <span className="text-[18px] font-semibold tracking-[0.04em] lowercase">goosar</span>
             </Link>

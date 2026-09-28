@@ -259,8 +259,8 @@ export function createRuDict(allowSignup: boolean): LandingDict {
         product: {
           label: 'Продукт',
           links: [
-            { label: 'Возможности', href: '#features' },
-            { label: 'Как это работает', href: '#how-it-works' },
+            { label: 'Возможности', href: '/#features' },
+            { label: 'Как это работает', href: '/#how-it-works' },
             { label: 'Скачать', href: '/download' },
           ],
         },
@@ -272,7 +272,7 @@ export function createRuDict(allowSignup: boolean): LandingDict {
           label: 'Компания',
           links: [
             { label: 'О проекте', href: '/about' },
-            { label: 'Открытый код', href: '#open-source' },
+            { label: 'Открытый код', href: '/#open-source' },
             { label: 'GitHub', href: githubUrl },
           ],
         },
