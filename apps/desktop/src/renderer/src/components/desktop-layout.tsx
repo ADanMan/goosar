@@ -12,6 +12,7 @@ import {
   GlobalShortcuts,
   RealtimeStatusIndicator,
   navSectionForPath,
+  useContextPanelState,
 } from '@goosar/views/layout';
 import { SearchCommand } from '@goosar/views/search';
 import { FloatingChat } from '@goosar/views/chat';
@@ -196,6 +197,11 @@ export function DesktopShell() {
   useNativeNavigationGestures();
 
   const slug = useSyncExternalStore(subscribeToCurrentSlug, getCurrentSlug, () => null);
+  // T-020: WindowToolbar's SidebarTrigger must toggle the context panel, not
+  // an independent sidebar flag — controlling SidebarProvider with the same
+  // collapsed state ContextPanel reads/writes keeps both in lockstep without
+  // NavRail (`collapsible="none"`, always visible) knowing about either.
+  const { collapsed, setCollapsed } = useContextPanelState();
 
   return (
     <DesktopNavigationProvider>
@@ -210,7 +216,11 @@ export function DesktopShell() {
       <WorkspaceSlugProvider slug={slug}>
         <DesktopInboxBridge />
         <div className="flex h-screen bg-app-shell">
-          <SidebarProvider className="flex-1 bg-app-shell">
+          <SidebarProvider
+            className="flex-1 bg-app-shell"
+            open={!collapsed}
+            onOpenChange={(open) => setCollapsed(!open)}
+          >
             {slug && <GlobalShortcuts />}
             {/* Realtime state (#257) — the desktop half of the shared mount.
                 It cannot live in the sidebar footer next to NetworkStatus:

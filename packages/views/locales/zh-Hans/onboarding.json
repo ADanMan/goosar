@@ -244,6 +244,8 @@
     "preview": {
       "inbox_label": "动态",
       "inbox_meta": "你的通知",
+      "chat_label": "聊天",
+      "chat_meta": "和执行者对话",
       "issues_label": "任务",
       "issues_meta": "共享任务面板",
       "agents_label": "执行者",

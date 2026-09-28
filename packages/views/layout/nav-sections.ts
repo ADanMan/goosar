@@ -1,11 +1,19 @@
 import type { WorkspacePaths } from '@goosar/core/paths';
 
-// Шесть разделов рельсы (ADR-0002, docs/20-architecture.md §4.2). Порядок
-// здесь = порядок кнопок в NavRail и порядок вкладок в ContextPanel.
-export type NavSection = 'feed' | 'tasks' | 'projects' | 'crew' | 'autopilot' | 'settings';
+// Семь разделов рельсы (ADR-0002, T-019, docs/20-architecture.md §4.2).
+// Порядок здесь = порядок кнопок в NavRail и порядок вкладок в ContextPanel.
+export type NavSection =
+  | 'feed'
+  | 'chat'
+  | 'tasks'
+  | 'projects'
+  | 'crew'
+  | 'autopilot'
+  | 'settings';
 
 export const NAV_SECTIONS: readonly NavSection[] = [
   'feed',
+  'chat',
   'tasks',
   'projects',
   'crew',
@@ -18,6 +26,8 @@ export function navSectionHref(p: WorkspacePaths, section: NavSection): string {
   switch (section) {
     case 'feed':
       return p.inbox();
+    case 'chat':
+      return p.chat();
     case 'tasks':
       return p.issues();
     case 'projects':
@@ -37,7 +47,8 @@ export function navSectionHref(p: WorkspacePaths, section: NavSection): string {
 export function navSectionForPath(p: WorkspacePaths, pathname: string): NavSection | null {
   const isUnder = (href: string) => pathname === href || pathname.startsWith(href + '/');
 
-  if (isUnder(p.inbox()) || isUnder(p.chat())) return 'feed';
+  if (isUnder(p.inbox())) return 'feed';
+  if (isUnder(p.chat())) return 'chat';
   if (isUnder(p.issues()) || isUnder(p.myIssues())) return 'tasks';
   if (isUnder(p.projects())) return 'projects';
   if (isUnder(p.agents()) || isUnder(p.squads())) return 'crew';
@@ -48,12 +59,13 @@ export function navSectionForPath(p: WorkspacePaths, pathname: string): NavSecti
 }
 
 // Раздел -> ключ nav.* для подписи в рельсе, вкладке ContextPanel и крошке
-// CommandBar. Общий словарь для всех трёх потребителей.
+// CommandBar. Общий словарь для всех потребителей.
 export const NAV_LABEL_KEYS_FOR_BREADCRUMB: Record<
   NavSection,
-  'inbox' | 'issues' | 'projects' | 'agents' | 'autopilots' | 'settings'
+  'inbox' | 'chat' | 'issues' | 'projects' | 'agents' | 'autopilots' | 'settings'
 > = {
   feed: 'inbox',
+  chat: 'chat',
   tasks: 'issues',
   projects: 'projects',
   crew: 'agents',

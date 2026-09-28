@@ -9,6 +9,7 @@ import {
   Inbox,
   ListTodo,
   Lock,
+  MessageSquare,
   Monitor,
   Plus,
   Zap,
@@ -494,6 +495,11 @@ function WorkspacePreviewCard({ name, slug }: { name: string; slug: string }) {
           icon={<Inbox className="h-4 w-4" />}
           label={t(($) => $.step_workspace.preview.inbox_label)}
           meta={t(($) => $.step_workspace.preview.inbox_meta)}
+        />
+        <EntityRow
+          icon={<MessageSquare className="h-4 w-4" />}
+          label={t(($) => $.step_workspace.preview.chat_label)}
+          meta={t(($) => $.step_workspace.preview.chat_meta)}
         />
         <EntityRow
           icon={<ListTodo className="h-4 w-4" />}

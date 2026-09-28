@@ -63,7 +63,9 @@
     "pinned_label": "고정됨",
     "workspace_group": "워크스페이스",
     "configure_group": "설정",
-    "unread_overflow": "99+"
+    "unread_overflow": "99+",
+    "panel_collapse": "패널 접기",
+    "panel_expand": "패널 펼치기"
   },
   "issue_window": {
     "unavailable_title": "작업을 사용할 수 없습니다",

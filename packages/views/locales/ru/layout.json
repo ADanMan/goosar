@@ -63,7 +63,9 @@
     "pinned_label": "Закреплённое",
     "workspace_group": "Рабочее пространство",
     "configure_group": "Управление",
-    "unread_overflow": "99+"
+    "unread_overflow": "99+",
+    "panel_collapse": "Свернуть панель",
+    "panel_expand": "Развернуть панель"
   },
   "issue_window": {
     "unavailable_title": "Задача недоступен",

@@ -244,6 +244,8 @@
     "preview": {
       "inbox_label": "フィード",
       "inbox_meta": "あなたの通知",
+      "chat_label": "チャット",
+      "chat_meta": "エージェントとの会話",
       "issues_label": "タスク",
       "issues_meta": "共有のタスクボード",
       "agents_label": "実行者",

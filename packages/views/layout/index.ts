@@ -1,5 +1,6 @@
 export { NavRail, navSectionForPath } from './nav-rail';
 export { ContextPanel } from './context-panel';
+export { useContextPanelState } from './use-context-panel-state';
 export { CommandBar } from './command-bar';
 export type { NavSection } from './nav-sections';
 export {

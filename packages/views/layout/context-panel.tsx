@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { AppLink, useNavigation } from '../navigation';
@@ -25,24 +25,9 @@ import {
 } from '@goosar/ui/components/ui/sidebar';
 import { useT } from '../i18n';
 import type { NavSection } from './nav-sections';
+import { useContextPanelState } from './use-context-panel-state';
 
-const COLLAPSE_STORAGE_KEY = 'goosar.contextPanel.collapsed';
 const EMPTY_PINS: PinnedItem[] = [];
-
-// ponytail: locales/** is locked to another agent this session (T-005 scope
-// note), so these two labels are hardcoded ru strings instead of new i18n
-// keys. Fold into layout.json's `sidebar.*` once that lock lifts.
-const EXPAND_PANEL_LABEL = 'Развернуть панель';
-const COLLAPSE_PANEL_LABEL = 'Свернуть панель';
-
-function readStoredCollapsed(): boolean {
-  if (typeof window === 'undefined') return false;
-  try {
-    return window.localStorage.getItem(COLLAPSE_STORAGE_KEY) === 'true';
-  } catch {
-    return false;
-  }
-}
 
 function PanelLink({ href, isActive, children }: { href: string; isActive: boolean; children: React.ReactNode }) {
   return (
@@ -186,11 +171,21 @@ function FeedSection() {
           <PanelLink href={p.inbox()} isActive={pathname === p.inbox()}>
             <span>{t(($) => $.nav.inbox)}</span>
           </PanelLink>
-          <PanelLink href={p.chat()} isActive={pathname === p.chat()}>
-            <span>{t(($) => $.nav.chat)}</span>
-          </PanelLink>
         </SidebarMenu>
       </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
+// Чат теперь собственный пункт рельсы (T-019), а не подпункт «Ленты»; сам
+// пункт уже открывает `/chat` одним кликом из NavRail, так что панели для
+// него достаточно заголовка раздела — без списка (в отличие от «Задач» и
+// «Исполнителей», у чата нет вложенных подстраниц).
+function ChatSection() {
+  const { t } = useT('layout');
+  return (
+    <SidebarGroup>
+      <SidebarGroupLabel>{t(($) => $.nav.chat)}</SidebarGroupLabel>
     </SidebarGroup>
   );
 }
@@ -210,18 +205,15 @@ interface ContextPanelProps {
 }
 
 // Контекстная панель (ADR-0002): содержимое зависит от активного раздела
-// рельсы. Сворачивается кнопкой и клавишей `[`, состояние переживает
-// перезагрузку через localStorage (T-005).
+// рельсы. Сворачивается кнопкой (всегда видна на границе панели) и клавишей
+// `[`, состояние переживает перезагрузку через localStorage и общий хук
+// `useContextPanelState` (T-005, T-020) — тот же хук использует десктопный
+// `WindowToolbar`, чтобы его `SidebarTrigger` переключал именно эту панель.
 export function ContextPanel({ activeSection, onCollapsedChange }: ContextPanelProps) {
-  const [collapsed, setCollapsed] = useState(readStoredCollapsed);
+  const { t } = useT('layout');
+  const { collapsed, setCollapsed, toggle } = useContextPanelState();
 
   useEffect(() => {
-    try {
-      window.localStorage.setItem(COLLAPSE_STORAGE_KEY, String(collapsed));
-    } catch {
-      // ponytail: localStorage can throw in private mode; collapse state
-      // just won't persist, no need to surface an error for that.
-    }
     onCollapsedChange?.(collapsed);
   }, [collapsed, onCollapsedChange]);
 
@@ -230,11 +222,11 @@ export function ContextPanel({ activeSection, onCollapsedChange }: ContextPanelP
       if (e.key !== '[') return;
       const target = e.target as HTMLElement | null;
       if (target && ['INPUT', 'TEXTAREA'].includes(target.tagName)) return;
-      setCollapsed((c) => !c);
+      toggle();
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [toggle]);
 
   if (collapsed) {
     return (
@@ -242,7 +234,7 @@ export function ContextPanel({ activeSection, onCollapsedChange }: ContextPanelP
         <button
           type="button"
           onClick={() => setCollapsed(false)}
-          aria-label={EXPAND_PANEL_LABEL}
+          aria-label={t(($) => $.sidebar.panel_expand)}
           className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
         >
           <ChevronsRight className="size-3.5" />
@@ -259,7 +251,7 @@ export function ContextPanel({ activeSection, onCollapsedChange }: ContextPanelP
             <button
               type="button"
               onClick={() => setCollapsed(true)}
-              aria-label={COLLAPSE_PANEL_LABEL}
+              aria-label={t(($) => $.sidebar.panel_collapse)}
               className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             >
               <ChevronsLeft className="size-3.5" />
@@ -267,6 +259,7 @@ export function ContextPanel({ activeSection, onCollapsedChange }: ContextPanelP
           </div>
         </SidebarGroup>
         {activeSection === 'feed' && <FeedSection />}
+        {activeSection === 'chat' && <ChatSection />}
         {activeSection === 'tasks' && <TasksSection />}
         {activeSection === 'crew' && <CrewSection />}
         {activeSection === 'settings' && <SettingsSection />}

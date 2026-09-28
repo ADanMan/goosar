@@ -1,6 +1,17 @@
 'use client';
 
-import { Inbox, ListTodo, FolderKanban, Bot, Zap, Settings, LogOut, Plus, Check } from 'lucide-react';
+import {
+  Inbox,
+  MessageSquare,
+  ListTodo,
+  FolderKanban,
+  Bot,
+  Zap,
+  Settings,
+  LogOut,
+  Plus,
+  Check,
+} from 'lucide-react';
 import { AppLink } from '../navigation';
 import { ActorAvatar } from '@goosar/ui/components/common/actor-avatar';
 import { WorkspaceAvatar } from '../workspace/workspace-avatar';
@@ -44,6 +55,7 @@ import {
 
 const NAV_ICONS: Record<NavSection, typeof Inbox> = {
   feed: Inbox,
+  chat: MessageSquare,
   tasks: ListTodo,
   projects: FolderKanban,
   crew: Bot,
@@ -60,7 +72,7 @@ interface NavRailProps {
   footerExtra?: React.ReactNode;
 }
 
-// Рельса навигации (ADR-0002): шесть разделов приложения. 56px, иконки, тёмный
+// Рельса навигации (ADR-0002): семь разделов приложения. 56px, иконки, тёмный
 // фон `--rail`. Переключатель воркспейса сверху и профиль снизу переносят
 // логику прежнего `app-sidebar.tsx` без списков (избранное/приглашения теперь
 // в ContextPanel).

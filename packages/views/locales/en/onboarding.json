@@ -245,6 +245,8 @@
     "preview": {
       "inbox_label": "Feed",
       "inbox_meta": "your notifications",
+      "chat_label": "Chat",
+      "chat_meta": "talk to an agent",
       "issues_label": "Tasks",
       "issues_meta": "shared task board",
       "agents_label": "Crew",

@@ -82,6 +82,7 @@ vi.mock('@goosar/core/paths', () => ({
   useCurrentWorkspace: () => ({ id: 'ws-1', name: 'Acme', avatar_url: null }),
   useWorkspacePaths: () => ({
     inbox: () => '/acme/inbox',
+    chat: () => '/acme/chat',
     issues: () => '/acme/issues',
     projects: () => '/acme/projects',
     agents: () => '/acme/agents',
@@ -96,6 +97,7 @@ vi.mock('../i18n', () => ({
       sel({
         nav: {
           inbox: 'Лента',
+          chat: 'Чат',
           issues: 'Задачи',
           projects: 'Проекты',
           agents: 'Исполнители',
@@ -119,9 +121,9 @@ describe('NavRail', () => {
     expect(screen.getByLabelText('Лента')).not.toHaveAttribute('data-active', 'true');
   });
 
-  it('marks nothing active when the path is outside all six sections', () => {
+  it('marks nothing active when the path is outside all seven sections', () => {
     render(<NavRail activeSection={null} />);
-    for (const label of ['Лента', 'Задачи', 'Проекты', 'Исполнители', 'Автопилот', 'Настройки']) {
+    for (const label of ['Лента', 'Чат', 'Задачи', 'Проекты', 'Исполнители', 'Автопилот', 'Настройки']) {
       expect(screen.getByLabelText(label)).not.toHaveAttribute('data-active', 'true');
     }
   });
@@ -140,8 +142,14 @@ describe('NavRail', () => {
 
   it('exposes an aria-label on every rail item', () => {
     render(<NavRail activeSection={null} />);
-    for (const label of ['Лента', 'Задачи', 'Проекты', 'Исполнители', 'Автопилот', 'Настройки']) {
+    for (const label of ['Лента', 'Чат', 'Задачи', 'Проекты', 'Исполнители', 'Автопилот', 'Настройки']) {
       expect(screen.getByLabelText(label)).toBeInTheDocument();
     }
+  });
+
+  it('opens chat as its own rail item between feed and tasks', () => {
+    render(<NavRail activeSection="chat" />);
+    expect(screen.getByLabelText('Чат')).toHaveAttribute('data-active', 'true');
+    expect(screen.getByLabelText('Чат')).toHaveAttribute('data-href', '/acme/chat');
   });
 });

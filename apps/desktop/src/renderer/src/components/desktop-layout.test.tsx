@@ -15,3 +15,16 @@ describe('desktop-layout header', () => {
     expect(source).not.toContain('kerberos-ticket-status');
   });
 });
+
+describe('desktop-layout SidebarTrigger controls the context panel (T-020)', () => {
+  const source = readFileSync(join(__dirname, 'desktop-layout.tsx'), 'utf8');
+
+  it('reads the shared context panel state', () => {
+    expect(source).toContain('useContextPanelState');
+  });
+
+  it('wires SidebarProvider open/onOpenChange to that state, not an independent flag', () => {
+    expect(source).toMatch(/open=\{!collapsed\}/);
+    expect(source).toMatch(/onOpenChange=\{\(open\) => setCollapsed\(!open\)\}/);
+  });
+});

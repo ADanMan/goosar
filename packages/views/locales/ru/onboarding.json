@@ -247,6 +247,8 @@
     "preview": {
       "inbox_label": "Лента",
       "inbox_meta": "ваши уведомления",
+      "chat_label": "Чат",
+      "chat_meta": "разговор с агентом",
       "issues_label": "Задачи",
       "issues_meta": "общая доска задач",
       "agents_label": "Исполнители",
