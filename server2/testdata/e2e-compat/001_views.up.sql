@@ -1,5 +1,6 @@
--- 160_e2e_test_compat: T-027 доводка. НЕ часть контракта (docs/50-api-contract.yaml)
--- и не описано в docs/51-data-model.md — это узкая, явно обособленная
+-- 001_views: T-027 доводка. НЕ применяется автоматически и НЕ входит в
+-- server2/migrations (не часть продовой схемы, не проверяется
+-- server2/migrations/check_names.py) — это узкая, явно обособленная
 -- совместимость с e2e/fixtures.ts (репозитория верхнего уровня), который
 -- обращается к БД напрямую SQL-запросами по именам таблиц/колонок исходного
 -- сервера ("user", workspace.issue_counter, issue.*, verification_code) для
@@ -8,6 +9,25 @@
 -- вместо этого здесь заведены представления (views), транслирующие эти имена
 -- в реальную схему server2 (accounts/spaces/tickets/login_codes). Ничего из
 -- этого не участвует в HTTP API контракта — только в e2e-тестовом прогоне.
+--
+-- Применяется ТОЛЬКО явно, отдельным раннером (см. server2/README.md, раздел
+-- "e2e фронтенда"), никогда автоматически при обычном старте сервера или
+-- при обычном --migrate: cmd/server подхватывает этот каталог только если
+-- явно задана переменная окружения E2E_COMPAT_SQL_DIR (пусто по умолчанию) и
+-- сервер не в production (APP_ENV=production отключает это независимо от
+-- переменной, тот же принцип, что и у GOOSAR_DEV_VERIFICATION_CODE).
+--
+-- Идемпотентно (DROP ... IF EXISTS перед CREATE): раннер этого каталога не
+-- ведёт таблицу учёта примененных версий (в отличие от server2/migrations) и
+-- может исполнить этот файл повторно при каждом перезапуске сервера с
+-- заданным E2E_COMPAT_SQL_DIR.
+
+DROP TRIGGER IF EXISTS e2e_compat_issue_insert_trg ON issue;
+DROP FUNCTION IF EXISTS e2e_compat_issue_insert();
+DROP VIEW IF EXISTS issue;
+DROP VIEW IF EXISTS workspace;
+DROP VIEW IF EXISTS "user";
+DROP VIEW IF EXISTS verification_code;
 
 -- verification_code: код подтверждения входа по email (см. login_codes,
 -- 001_identity.up.sql). login_codes хранит только дайджест кода

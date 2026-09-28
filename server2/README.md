@@ -61,6 +61,7 @@ PORT=8080 \
 | `REALTIME_METRICS_TOKEN` | нет | Bearer-токен для `/health/realtime` не с loopback |
 | `MIGRATE` | нет (`false`) | применить миграции при старте (то же, что флаг `-migrate`) |
 | `MIGRATIONS_DIR` | нет (`server2/migrations`) | откуда брать `NNN_*.up.sql` |
+| `E2E_COMPAT_SQL_DIR` | нет | см. «e2e фронтенда» ниже — не для обычного запуска |
 
 ### Раскладка (`internal/`)
 
@@ -116,6 +117,37 @@ cd e2e/contract
 BASE_URL=http://localhost:8299 GOOSAR_DEV_VERIFICATION_CODE=424242 \
   go test ./... -run 'Contract/(auth|workspaces|me)$' -v
 ```
+
+### e2e фронтенда
+
+`e2e/{fixtures.ts,helpers.ts,*.spec.ts}` (репозиторий верхнего уровня, вне
+server2) резолвят тестового пользователя/воркспейс/задачи частью прямых SQL
+по именам таблиц исходного сервера (`verification_code`, `"user"`,
+`workspace.issue_counter`, `issue`) — так и задумано (эти файлы не входят в
+эту сессию переписи, их менять нельзя). Модель данных server2 — с другими
+именами по всей схеме, поэтому для такого прогона нужен необязательный
+переводной слой: `server2/testdata/e2e-compat/*.up.sql` — представления,
+транслирующие эти имена в реальную схему server2. Это **не миграция**: файлы
+не лежат в `server2/migrations` (не должны совпадать с прод-схемой ни по
+таблицам, ни по проверке `server2/migrations/check_names.py`) и не
+применяются автоматически ни при обычном старте, ни при `--migrate`/`MIGRATE=true`.
+
+Включить явно — переменная `E2E_COMPAT_SQL_DIR` (пусто по умолчанию),
+применяется идемпотентно при каждом старте (`DROP ... IF EXISTS` перед
+`CREATE`, без отдельной таблицы учёта версий) и только вне production
+(`APP_ENV=production` пропускает её с предупреждением в логе — тот же
+принцип, что и `GOOSAR_DEV_VERIFICATION_CODE`):
+
+```sh
+DATABASE_URL=... MIGRATE=true \
+E2E_COMPAT_SQL_DIR=server2/testdata/e2e-compat \
+GOOSAR_DEV_VERIFICATION_CODE=424242 PORT=8410 \
+  go run ./cmd/server -migrate
+```
+
+Подробности и обоснование каждого представления — в самом
+`server2/testdata/e2e-compat/001_views.up.sql` и в
+`server2/docs/decisions.md` (раздел «T-027 доводка»).
 
 ## Импорт
 

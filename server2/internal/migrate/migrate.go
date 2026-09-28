@@ -156,6 +156,37 @@ func Apply(ctx context.Context, pool *pgxpool.Pool, dir string) ([]int, error) {
 	return applyFiles(ctx, pool, files)
 }
 
+// ApplyIdempotent исполняет по порядку номеров все NNN_*.up.sql в dir,
+// каждый файл — в своей транзакции, но, в отличие от Apply, НЕ ведёт таблицу
+// учёта (LedgerTable) и поэтому применяет каждый файл заново при каждом
+// вызове. Предназначена для необязательных, не входящих в основную схему
+// наборов SQL (например server2/testdata/e2e-compat — представления для
+// e2e-тестовой инфраструктуры фронтенда, см. server2/README.md), которые
+// сами обязаны быть идемпотентными (DROP ... IF EXISTS перед CREATE) именно
+// потому, что раннер не помнит, что уже применял их раньше.
+func ApplyIdempotent(ctx context.Context, pool *pgxpool.Pool, dir string) ([]string, error) {
+	files, err := Load(dir)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, f := range files {
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			return names, fmt.Errorf("migrate: начало транзакции для %s: %w", f.Name, err)
+		}
+		if _, err := tx.Exec(ctx, f.SQL); err != nil {
+			_ = tx.Rollback(ctx)
+			return names, fmt.Errorf("migrate: применение %s: %w", f.Name, err)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return names, fmt.Errorf("migrate: коммит %s: %w", f.Name, err)
+		}
+		names = append(names, f.Name)
+	}
+	return names, nil
+}
+
 func applyFiles(ctx context.Context, pool *pgxpool.Pool, files []File) ([]int, error) {
 	if err := EnsureLedger(ctx, pool); err != nil {
 		return nil, err

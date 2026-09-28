@@ -56,6 +56,26 @@ func main() {
 		logger.Info("миграции применены", "versions", applied)
 	}
 
+	// E2E_COMPAT_SQL_DIR — T-027 доводка: необязательный, отдельный от
+	// server2/migrations набор SQL (представления для e2e-тестовой
+	// инфраструктуры фронтенда, см. server2/testdata/e2e-compat,
+	// server2/README.md). Пусто по умолчанию — не применяется никогда;
+	// даже если задано, применяется только вне production (та же защита,
+	// что и config.DevCodeEnabled(), тем же принципом: тестовые удобства не
+	// должны быть достижимы простой опечаткой на проде).
+	if cfg.E2ECompatSQLDir != "" {
+		if cfg.IsProduction() {
+			logger.Warn("E2E_COMPAT_SQL_DIR задан, но APP_ENV=production — пропущено")
+		} else {
+			applied, err := migrate.ApplyIdempotent(ctx, db.Pool, cfg.E2ECompatSQLDir)
+			if err != nil {
+				logger.Error("применение e2e-совместимых SQL провалилось", "err", err)
+				os.Exit(1)
+			}
+			logger.Info("e2e-совместимые представления применены", "files", applied)
+		}
+	}
+
 	deps := app.New(cfg, db, logger)
 	router := app.NewRouter(deps)
 	handler := deps.BuildHandler(router)

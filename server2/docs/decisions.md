@@ -660,22 +660,60 @@ NotificationPreferences/Chat, подключить `feed.Notify` там, где 
      `workspace.issue_counter`, `issue`), а не через HTTP API. Модель данных
      server2 — с другими именами по всей схеме (`login_codes`, `accounts`,
      `spaces.ws_next_ticket_seq`, `tickets`) — так и задумано clean-room
-     переписью. Решение: узкая, явно обособленная миграция
-     `server2/migrations/160_e2e_test_compat.{up,down}.sql` — представления
-     (views) `verification_code`/`"user"`/`workspace`/`issue`, транслирующие
-     эти имена в реальную схему (`login_codes`/`accounts`/`spaces`/`tickets`),
-     плюс `INSTEAD OF INSERT`-триггер на `issue` (вычисляет обязательный
+     переписью. Решение: представления (views) `verification_code`/`"user"`/
+     `workspace`/`issue`, транслирующие эти имена в реальную схему
+     (`login_codes`/`accounts`/`spaces`/`tickets`), плюс `INSTEAD OF INSERT`-
+     триггер на `issue` (вычисляет обязательный
      `tk_display_key = ws_ticket_prefix || '-' || number`, которого
-     SQL-фикстура не знает и не задаёт). **Не часть контракта** — только
-     совместимость с e2e-тестовой инфраструктурой верхнего уровня, которую
-     нельзя менять в этой сессии; задокументировано прямо в самом файле
-     миграции. `verification_code.code` — фиктивное значение (`login_codes`
-     хранит только `lc_code_digest`, не открытый текст); в тестовом прогоне
+     SQL-фикстура не знает и не задаёт).
+
+     **Правка по ревью координатора:** первая версия этого решения клала эти
+     представления в `server2/migrations/160_e2e_test_compat.{up,down}.sql`
+     — то есть в обычный, автоматически применяемый при `--migrate`/
+     `MIGRATE=true` набор миграций, что не годится: объекты с именами
+     `user`/`workspace`/`issue`/`verification_code` попали бы в прод-схему и
+     нарушили бы критерий T-025 "имена не совпадают со старой схемой"
+     (`server2/migrations/check_names.py` не проверяет `CREATE VIEW`, только
+     `CREATE TABLE`, поэтому формально проходил бы, но по духу правила это
+     тот же конфликт имён). Исправлено: файлы перенесены в
+     `server2/testdata/e2e-compat/001_views.{up,down}.sql` — вне
+     `server2/migrations`, никогда не участвуют ни в `migrate.Apply`, ни в
+     `check_names.py`, ни в `TestLoad_realMigrationsDirParsesAll`/
+     `TestApply_isIdempotentAndSequential` (`server2_migration_ledger`
+     проверено вручную: после исправления в нём нет строки для этого
+     каталога). Применяются **только явно**, отдельным механизмом:
+     `migrate.ApplyIdempotent` (`internal/migrate/migrate.go`, новая функция
+     — без таблицы учёта версий, в отличие от `Apply`; поэтому исполняет
+     файлы заново при каждом вызове, и сами файлы обязаны быть идемпотентны,
+     `DROP ... IF EXISTS` перед `CREATE`), запускаемая из `cmd/server/main.go`
+     только когда задана переменная `E2E_COMPAT_SQL_DIR` (пусто по
+     умолчанию — при обычном запуске сервера и в контрактном прогоне этой же
+     сессии ничего не создаётся) **и** сервер не в production
+     (`cfg.IsProduction()` — тот же флаг, что и `DevCodeEnabled()`; при
+     `APP_ENV=production` с заданной `E2E_COMPAT_SQL_DIR` в лог пишется
+     предупреждение и каталог не применяется, без ошибки старта). См.
+     `server2/README.md`, раздел «e2e фронтенда», за инструкцией запуска.
+     `verification_code.code` — фиктивное значение (`login_codes` хранит
+     только `lc_code_digest`, не открытый текст); в тестовом прогоне
      `GOOSAR_DEV_VERIFICATION_CODE` всегда задан, поэтому фикстура его не
-     читает. Проверено вручную: `DELETE`/`SELECT` по `verification_code`,
-     `SELECT`/`UPDATE` по `"user"`, `UPDATE ... RETURNING` по `workspace`,
-     многострочный `INSERT ... SELECT ... FROM unnest(...)` и `DELETE ... = ANY(...)`
-     по `issue` — все возвращают корректные данные, и созданные так задачи
+     читает.
+
+     Проверено после переноса: чистая БД + `MIGRATE=true` (только 14 файлов
+     `server2/migrations`, версии 1–13,140) + `E2E_COMPAT_SQL_DIR` — в логе
+     `"e2e-совместимые представления применены"`, `\dv` показывает ровно 4
+     представления, `server2_migration_ledger` содержит только 14 обычных
+     строк (без записи про `e2e-compat`); перезапуск сервера с теми же
+     переменными переприменяет `001_views` без ошибки (идемпотентность);
+     `APP_ENV=production` с заданной `E2E_COMPAT_SQL_DIR` — предупреждение в
+     логе, представления не создаются, `/auth/send-code` в этом режиме идёт
+     обычным (не dev-) путём и пишет реальный код в `login_codes`.
+     `python3 server2/migrations/check_names.py` — 0 пересечений (75 таблиц
+     server2 / 14 файлов миграций, старый файл сервера сам не открывался,
+     только результат скрипта). Функционально (до переноса, тем же SQL):
+     `DELETE`/`SELECT` по `verification_code`, `SELECT`/`UPDATE` по `"user"`,
+     `UPDATE ... RETURNING` по `workspace`, многострочный
+     `INSERT ... SELECT ... FROM unnest(...)` и `DELETE ... = ANY(...)` по
+     `issue` — все возвращают корректные данные, и созданные так задачи
      видны и редактируются через настоящий `GET/PUT /api/issues` (сквозная
      проверка).
    - `handleSendCode` (dev-режим, `GOOSAR_DEV_VERIFICATION_CODE` задан) не
@@ -849,10 +887,11 @@ Session T-027 доводка (дополнительно к спискам вы�
 - `server2/internal/migrate/{migrate.go,migrate_test.go}`,
   `server2/migrations/*.up.sql` (все, включая `140_chat_read_state`) —
   точные имена таблиц/колонок для `internal/task/table.go` и для
-  совместимых представлений `160_e2e_test_compat.up.sql`.
-- `server2/migrations/check_names.py` — не запускался (не входит в список
-  обязательных проверок этой сессии; сверка имён вручную по regex-правилам
-  файла, без чтения `server/migrations/001_init.up.sql`).
+  совместимых представлений `server2/testdata/e2e-compat/001_views.up.sql`.
+- `server2/migrations/check_names.py` — запускался (по прямому указанию
+  координатора при ревью, только его stdout, без открытия
+  `server/migrations/001_init.up.sql`): `0` пересечений после переноса
+  `160_e2e_test_compat` из `server2/migrations` в `server2/testdata/e2e-compat`.
 - `e2e/contract/{README.md,client.go,harness.go,contract_test.go,spec.go,main_test.go}`
   — весь пакет (дописаны разделы issues: IssueTable/`/api/issues/children`).
 - `e2e/{helpers.ts,fixtures.ts,env.ts,base-url.ts}`, `playwright.config.ts`,

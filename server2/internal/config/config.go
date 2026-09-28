@@ -28,6 +28,13 @@ type Config struct {
 	MigrateOnStart bool // MIGRATE=true — применить миграции при старте
 	MigrationsDir  string
 
+	// E2ECompatSQLDir — T-027 доводка: каталог необязательных, не входящих в
+	// server2/migrations SQL-файлов только для e2e-тестовой инфраструктуры
+	// фронтенда (см. server2/testdata/e2e-compat/, server2/README.md, раздел
+	// "e2e фронтенда"). Пусто по умолчанию (ничего не применяется); даже
+	// если задано, применяется только вне production — см. ApplyE2ECompat().
+	E2ECompatSQLDir string // E2E_COMPAT_SQL_DIR
+
 	ServerVersion string // GOOSAR_SERVER_VERSION, иначе "dev"
 
 	// Вложения (T-027, internal/asset) — имена совпадают с
@@ -55,6 +62,7 @@ func Load() Config {
 		RealtimeMetricsToken: os.Getenv("REALTIME_METRICS_TOKEN"),
 		MigrateOnStart:       getBool("MIGRATE", false),
 		MigrationsDir:        getenv("MIGRATIONS_DIR", "server2/migrations"),
+		E2ECompatSQLDir:      os.Getenv("E2E_COMPAT_SQL_DIR"),
 		ServerVersion:        getenv("GOOSAR_SERVER_VERSION", "dev"),
 
 		LocalUploadDir:         os.Getenv("LOCAL_UPLOAD_DIR"),
