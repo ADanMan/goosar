@@ -39,8 +39,10 @@ func isUnsafeMethod(m string) bool {
 }
 
 // resolveActor разбирает токен по его форме (см. securitySchemes/bearerAuth
-// и classifyToken в crypto.go): gsln_/mdt_/mat_ вне объёма T-026 (см.
-// decisions.md) и всегда отклоняются.
+// и classifyToken в crypto.go). kindCloudPAT (gsln_, облачный fleet-сервис,
+// вне рамок этой clean-room реализации) по-прежнему отклоняется — см.
+// decisions.md; kindTaskToken/kindDaemonToken реализованы правкой T-028
+// (agent_actor.go/daemon_token.go).
 func (d *Deps) resolveActor(ctx context.Context, token string) (*httpapi.Actor, bool) {
 	if token == "" {
 		return nil, false
@@ -50,7 +52,11 @@ func (d *Deps) resolveActor(ctx context.Context, token string) (*httpapi.Actor, 
 		return d.actorFromPAT(ctx, token)
 	case kindSessionJWT:
 		return d.actorFromSession(ctx, token)
-	default: // kindCloudPAT, kindDaemonToken, kindTaskToken
+	case kindTaskToken:
+		return d.actorFromTaskToken(ctx, token)
+	case kindDaemonToken:
+		return d.actorFromDaemonToken(token)
+	default: // kindCloudPAT
 		return nil, false
 	}
 }

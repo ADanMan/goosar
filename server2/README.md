@@ -62,6 +62,9 @@ PORT=8080 \
 | `MIGRATE` | нет (`false`) | применить миграции при старте (то же, что флаг `-migrate`) |
 | `MIGRATIONS_DIR` | нет (`server2/migrations`) | откуда брать `NNN_*.up.sql` |
 | `E2E_COMPAT_SQL_DIR` | нет | см. «e2e фронтенда» ниже — не для обычного запуска |
+| `GOOSAR_PUBLIC_URL` | нет | базовый публичный адрес сервера (T-028: `webhook_url` автопилотов); без него строится из заголовков запроса |
+| `GOOSAR_CLOUDRUNTIME_BASE_URL` | нет | адрес облачного fleet-сервиса (T-028, `internal/cloudruntime`); пусто — вся группа `/api/cloud-runtime/**` отвечает `503` |
+| `GOOSAR_CLOUDRUNTIME_API_KEY` | нет | `Authorization: Bearer` к fleet-сервису, если он его требует |
 
 ### Раскладка (`internal/`)
 
@@ -94,6 +97,16 @@ PORT=8080 \
   `/api/issues/{id}/attachments`, `GET /uploads/{key}` при локальном
   хранилище); интерфейс `Storage` с реализациями на диск и заглушкой S3.
 - `pin` — личные закладки на задачи/проекты (`/api/pins/**`).
+- `autopilot` — автопилоты (`/api/autopilots/**`): CRUD, триггеры
+  (расписание/вебхук/api), ручной запуск, прогоны (runs), вебхук-доставки
+  (deliveries), коллабораторы; публичный `POST /api/webhooks/autopilots/{token}`.
+  Свой разбор cron (`cron.go`, без внешней библиотеки) и фоновый планировщик
+  (`Deps.Scheduler`, запускается `cmd/server` отдельной горутиной), с
+  защитой от двойного запуска несколькими инстансами через
+  `pg_try_advisory_lock`.
+- `cloudruntime` — `/api/cloud-runtime/**`: прозрачный HTTP-прокси во внешний
+  облачный fleet-сервис (`GOOSAR_CLOUDRUNTIME_BASE_URL`/`_API_KEY`); без
+  них — `503` на все маршруты группы.
 
 ### Добавить новый домен
 

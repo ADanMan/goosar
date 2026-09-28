@@ -80,6 +80,13 @@ func main() {
 	router := app.NewRouter(deps)
 	handler := deps.BuildHandler(router)
 
+	// Планировщик автопилотов (T-028, internal/autopilot) — фоновый цикл
+	// опроса schedule-триггеров; свою защиту от двойного запуска при
+	// нескольких инстансах сервера несёт сам (advisory lock Postgres, см.
+	// autopilot.Store.TryAdvisoryLock), поэтому здесь просто запускается
+	// безусловно.
+	go deps.Autopilot.Scheduler.Run(ctx)
+
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           handler,

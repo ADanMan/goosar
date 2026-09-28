@@ -3,9 +3,16 @@ package app
 import (
 	"net/http"
 
+	"github.com/adanman/goosar/server2/internal/agent"
+	"github.com/adanman/goosar/server2/internal/agentbuilder"
+	"github.com/adanman/goosar/server2/internal/agenttemplate"
 	"github.com/adanman/goosar/server2/internal/asset"
 	"github.com/adanman/goosar/server2/internal/authn"
+	"github.com/adanman/goosar/server2/internal/autopilot"
 	"github.com/adanman/goosar/server2/internal/chat"
+	"github.com/adanman/goosar/server2/internal/cloudruntime"
+	"github.com/adanman/goosar/server2/internal/daemon"
+	"github.com/adanman/goosar/server2/internal/dashboard"
 	"github.com/adanman/goosar/server2/internal/feed"
 	"github.com/adanman/goosar/server2/internal/httpapi"
 	"github.com/adanman/goosar/server2/internal/identity"
@@ -13,6 +20,9 @@ import (
 	"github.com/adanman/goosar/server2/internal/pin"
 	"github.com/adanman/goosar/server2/internal/project"
 	"github.com/adanman/goosar/server2/internal/realtime"
+	"github.com/adanman/goosar/server2/internal/runtime"
+	"github.com/adanman/goosar/server2/internal/skill"
+	"github.com/adanman/goosar/server2/internal/squad"
 	"github.com/adanman/goosar/server2/internal/tagging"
 	"github.com/adanman/goosar/server2/internal/task"
 	"github.com/adanman/goosar/server2/internal/workspace"
@@ -44,6 +54,16 @@ func NewRouter(d *Deps) *httpapi.Router {
 	asset.Register(router, d.Asset)
 	note.Register(router, d.Note)
 	pin.Register(router, d.Pin)
+	autopilot.Register(router, d.Autopilot)
+	cloudruntime.Register(router, d.CloudRuntime)
+	runtime.Register(router, d.Runtime)
+	daemon.Register(router, d.Daemon)
+	agent.Register(router, d.Agent)
+	squad.Register(router, d.Squad)
+	skill.Register(router, d.Skill)
+	agenttemplate.Register(router, d.AgentTemplate)
+	agentbuilder.Register(router, d.AgentBuilder)
+	dashboard.Register(router, d.Dashboard)
 	realtime.Register(router, d.Hub, d.Authn, d.Workspace.Store.RealtimeMembership(), d.Task.RealtimeTaskAccess(), chat.NewChatAccessBridge(d.Chat.Store), d.Logger)
 
 	RegisterStubs(router)

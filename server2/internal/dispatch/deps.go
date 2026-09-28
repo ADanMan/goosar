@@ -84,6 +84,14 @@ func (d *Deps) CancelActiveForConvo(ctx context.Context, q Querier, workspaceID,
 	return jobs, d.notifyCancelled(workspaceID, jobs, err)
 }
 
+// CancelActiveForOperative — то же самое (dj_status -> cancelled), но по
+// конкретному агенту, по всем его задачам: используется доменом agent
+// (T-028) при archiveAgent/cancelAgentTasks.
+func (d *Deps) CancelActiveForOperative(ctx context.Context, q Querier, workspaceID, operativeID string) ([]Job, error) {
+	jobs, err := d.Store.CancelActiveForOperative(ctx, q, operativeID)
+	return jobs, d.notifyCancelled(workspaceID, jobs, err)
+}
+
 // CancelJob отменяет один конкретный запуск (cancelIssueTask). found=false —
 // запуска нет либо он уже терминален.
 func (d *Deps) CancelJob(ctx context.Context, q Querier, workspaceID, jobID string) (job Job, found bool, err error) {

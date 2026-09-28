@@ -8,10 +8,17 @@ package app
 import (
 	"log/slog"
 
+	"github.com/adanman/goosar/server2/internal/agent"
+	"github.com/adanman/goosar/server2/internal/agentbuilder"
+	"github.com/adanman/goosar/server2/internal/agenttemplate"
 	"github.com/adanman/goosar/server2/internal/asset"
 	"github.com/adanman/goosar/server2/internal/authn"
+	"github.com/adanman/goosar/server2/internal/autopilot"
 	"github.com/adanman/goosar/server2/internal/chat"
+	"github.com/adanman/goosar/server2/internal/cloudruntime"
 	"github.com/adanman/goosar/server2/internal/config"
+	"github.com/adanman/goosar/server2/internal/daemon"
+	"github.com/adanman/goosar/server2/internal/dashboard"
 	"github.com/adanman/goosar/server2/internal/dispatch"
 	"github.com/adanman/goosar/server2/internal/feed"
 	"github.com/adanman/goosar/server2/internal/identity"
@@ -20,6 +27,9 @@ import (
 	"github.com/adanman/goosar/server2/internal/pin"
 	"github.com/adanman/goosar/server2/internal/project"
 	"github.com/adanman/goosar/server2/internal/realtime"
+	"github.com/adanman/goosar/server2/internal/runtime"
+	"github.com/adanman/goosar/server2/internal/skill"
+	"github.com/adanman/goosar/server2/internal/squad"
 	"github.com/adanman/goosar/server2/internal/store"
 	"github.com/adanman/goosar/server2/internal/tagging"
 	"github.com/adanman/goosar/server2/internal/task"
@@ -56,6 +66,31 @@ type Deps struct {
 	Tagging *tagging.Deps
 	Asset   *asset.Deps
 	Pin     *pin.Deps
+
+	// Autopilot/CloudRuntime — T-028, автопилот (расписание/вебхук/ручной
+	// запуск, свой планировщик — server2/internal/autopilot) и прозрачный
+	// прокси в облачный fleet-сервис (server2/internal/cloudruntime).
+	Autopilot    *autopilot.Deps
+	CloudRuntime *cloudruntime.Deps
+
+	// Runtime/Daemon — T-028, среды выполнения (`/api/runtimes/**` +
+	// агрегаты активности агентов воркспейса, server2/internal/runtime) и
+	// daemon-протокол (`/api/daemon/**`, server2/internal/daemon).
+	Runtime *runtime.Deps
+	Daemon  *daemon.Deps
+
+	// Agent/Squad/Skill/AgentTemplate/AgentBuilder/Dashboard — T-028, эта
+	// сессия: агенты и их конфигурация (`/api/agents/**`), отряды
+	// (`/api/squads/**` + `/api/issues/{id}/squad-evaluated`), навыки
+	// (`/api/skills/**`), каталог шаблонов агентов (`/api/agent-templates`),
+	// конструктор агента (`/api/agent-builder/**`) и дашборд использования
+	// (`/api/dashboard/**`).
+	Agent         *agent.Deps
+	Squad         *squad.Deps
+	Skill         *skill.Deps
+	AgentTemplate *agenttemplate.Deps
+	AgentBuilder  *agentbuilder.Deps
+	Dashboard     *dashboard.Deps
 }
 
 // New строит все доменные Deps поверх общей инфраструктуры.
@@ -78,6 +113,25 @@ func New(cfg config.Config, db *store.Store, logger *slog.Logger) *Deps {
 	noteDeps := note.New(db, assetDeps.Store, hub, logger)
 	noteDeps.SetDispatcher(note.NewDispatchAdapter(dispatchDeps, db))
 
+	autopilotDeps := autopilot.New(db, workspaceDeps.Store, taskDeps.Store, dispatchDeps, hub,
+		cfg.McpSecretKey, cfg.PublicURL, logger)
+	cloudRuntimeDeps := cloudruntime.New(db, cfg.CloudRuntimeBaseURL, cfg.CloudRuntimeAPIKey, logger)
+
+	runtimeDeps := runtime.New(db, dispatchDeps, hub, logger)
+	daemonDeps := daemon.New(db, runtimeDeps, dispatchDeps, workspaceDeps.Store, hub, cfg, logger)
+	// Правка T-028 (internal/authn): подключает проверку mat_-токенов
+	// агента-исполнителя задачи, которую до этой сессии authn всегда
+	// отклонял (см. decisions.md, T-027 «Пробелы спецификации», п. 5) —
+	// тот же приём, что noteDeps.SetDispatcher чуть выше.
+	authnDeps.SetTaskActorLookup(daemonDeps)
+
+	agentDeps := agent.New(db, workspaceDeps.Store, dispatchDeps, cfg, hub, logger)
+	squadDeps := squad.New(db, agentDeps.Store, workspaceDeps.Store, hub, logger)
+	skillDeps := skill.New(db, hub, logger)
+	agentTemplateDeps := agenttemplate.New(workspaceDeps.Store.HTTPAPIMembership())
+	agentBuilderDeps := agentbuilder.New(db, agentDeps.Store, chatDeps.Store, workspaceDeps.Store, logger)
+	dashboardDeps := dashboard.New(db, workspaceDeps.Store, logger)
+
 	return &Deps{
 		Config:    cfg,
 		Store:     db,
@@ -97,5 +151,18 @@ func New(cfg config.Config, db *store.Store, logger *slog.Logger) *Deps {
 		Tagging: taggingDeps,
 		Asset:   assetDeps,
 		Pin:     pinDeps,
+
+		Autopilot:    autopilotDeps,
+		CloudRuntime: cloudRuntimeDeps,
+
+		Runtime: runtimeDeps,
+		Daemon:  daemonDeps,
+
+		Agent:         agentDeps,
+		Squad:         squadDeps,
+		Skill:         skillDeps,
+		AgentTemplate: agentTemplateDeps,
+		AgentBuilder:  agentBuilderDeps,
+		Dashboard:     dashboardDeps,
 	}
 }

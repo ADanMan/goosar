@@ -31,6 +31,10 @@ type Actor struct {
 	// TaskWorkspaceID — воркспейс, к которому жёстко привязан task-token;
 	// если задан, он имеет приоритет над заголовками выбора воркспейса.
 	TaskWorkspaceID string
+
+	// DaemonID — правка T-028: id физического daemon-процесса, зашитый в
+	// mdt_-токен (SourceDaemon); пусто для остальных источников.
+	DaemonID string
 }
 
 type ctxKey int

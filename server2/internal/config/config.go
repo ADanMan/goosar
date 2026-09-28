@@ -23,6 +23,7 @@ type Config struct {
 	DevVerifyCode        string // GOOSAR_DEV_VERIFICATION_CODE — фиксированный код в dev-режиме
 	FrontendOrigin       string // FRONTEND_ORIGIN — для CORS и AppConfig
 	McpSecretKey         string // GOOSAR_MCP_SECRET_KEY — наличие включает MFA/секреты
+	McpSecretKeyPrevious string // GOOSAR_MCP_SECRET_KEY_PREVIOUS — ротация ключа (T-028, internal/agent)
 	RealtimeMetricsToken string // REALTIME_METRICS_TOKEN
 
 	MigrateOnStart bool // MIGRATE=true — применить миграции при старте
@@ -43,6 +44,27 @@ type Config struct {
 	S3Bucket               string // S3_BUCKET — наличие означает выбранный (но не реализованный) S3-backend
 	AttachmentDownloadMode string // ATTACHMENT_DOWNLOAD_MODE: auto/cloudfront/presign/proxy
 	AttachmentDownloadTTL  int    // ATTACHMENT_DOWNLOAD_URL_TTL, минуты, по умолчанию 30
+
+	// PublicURL — GOOSAR_PUBLIC_URL (contract §1.9): базовый публичный адрес
+	// сервера, нужен для построения абсолютных URL, которые сервер сам себе
+	// не может вывести из запроса (webhook_url автопилотов, github/composio
+	// колбэки). Пусто по умолчанию — потребитель тогда строит URL из Host
+	// самого запроса (см. server2/internal/autopilot).
+	PublicURL string // GOOSAR_PUBLIC_URL
+
+	// CloudRuntimeBaseURL/CloudRuntimeAPIKey (T-028, internal/cloudruntime) —
+	// имена переменных не зафиксированы контрактом (docs/50-api-contract.md
+	// §6 "Облачный runtime" описывает поведение прокси, но не имя
+	// переменных конфигурации деплоя) — решение зафиксировано в
+	// server2/docs/decisions.md, раздел T-028.
+	CloudRuntimeBaseURL string // GOOSAR_CLOUDRUNTIME_BASE_URL — пусто = не настроено (503 по контракту)
+	CloudRuntimeAPIKey  string // GOOSAR_CLOUDRUNTIME_API_KEY
+
+	// MinDaemonVersion — правка T-028 (internal/daemon): минимальная версия
+	// CLI-демона, допускаемая на claim-ручках (contract §3.7,
+	// "RequireMinDaemonVersion", иначе 426 Upgrade Required). Пусто —
+	// проверка версии клиента отключена (принимается любой X-Client-Version).
+	MinDaemonVersion string // GOOSAR_MIN_DAEMON_VERSION
 }
 
 // Load собирает Config из os.Environ(). Отсутствующие необязательные значения
@@ -59,6 +81,7 @@ func Load() Config {
 		DevVerifyCode:        os.Getenv("GOOSAR_DEV_VERIFICATION_CODE"),
 		FrontendOrigin:       getenv("FRONTEND_ORIGIN", "http://localhost:3199"),
 		McpSecretKey:         os.Getenv("GOOSAR_MCP_SECRET_KEY"),
+		McpSecretKeyPrevious: os.Getenv("GOOSAR_MCP_SECRET_KEY_PREVIOUS"),
 		RealtimeMetricsToken: os.Getenv("REALTIME_METRICS_TOKEN"),
 		MigrateOnStart:       getBool("MIGRATE", false),
 		MigrationsDir:        getenv("MIGRATIONS_DIR", "server2/migrations"),
@@ -69,6 +92,13 @@ func Load() Config {
 		S3Bucket:               os.Getenv("S3_BUCKET"),
 		AttachmentDownloadMode: getenv("ATTACHMENT_DOWNLOAD_MODE", "auto"),
 		AttachmentDownloadTTL:  getInt("ATTACHMENT_DOWNLOAD_URL_TTL", 30),
+
+		PublicURL: os.Getenv("GOOSAR_PUBLIC_URL"),
+
+		CloudRuntimeBaseURL: os.Getenv("GOOSAR_CLOUDRUNTIME_BASE_URL"),
+		CloudRuntimeAPIKey:  os.Getenv("GOOSAR_CLOUDRUNTIME_API_KEY"),
+
+		MinDaemonVersion: os.Getenv("GOOSAR_MIN_DAEMON_VERSION"),
 	}
 	return c
 }

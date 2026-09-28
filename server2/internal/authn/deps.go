@@ -24,6 +24,12 @@ type Deps struct {
 	SendCodeIPLimiter    *httpapi.Limiter
 	SendCodeEmailLimiter *httpapi.Limiter
 	VerifyIPLimiter      *httpapi.Limiter
+
+	// TaskActors — правка T-028: проверка mat_-токенов агента-исполнителя
+	// задачи (contract §1.3), подключается доменом daemon после New() через
+	// SetTaskActorLookup (см. agent_actor.go). nil, пока домен daemon не
+	// собран — тогда mat_-токены по-прежнему отклоняются, как и раньше.
+	TaskActors TaskActorLookup
 }
 
 // New собирает Deps по общей инфраструктуре.

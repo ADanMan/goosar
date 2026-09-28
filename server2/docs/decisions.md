@@ -908,4 +908,738 @@ Session T-027 доводка (дополнительно к спискам вы�
   открывался.
 - `scripts/similarity-check.py` (повторно, после каждой правки).
 
+## T-028 (daemon/runtime): пробелы спецификации
+
+Сессия отвечала за daemon-протокол и среды выполнения:
+`server2/internal/{daemon,runtime}` — регистрация/heartbeat/`/api/daemon/ws`/
+claim/lifecycle одной задачи/gc-check/recover-orphans/отчёты об асинхронных
+заявках (daemon), `/api/runtimes/**` + четыре агрегата активности агентов
+воркспейса + `POST /api/tasks/{taskId}/cancel` (runtime), плюс агентский
+актор (`mat_...`) и daemon-токен (`mdt_...`) в `internal/authn`. Параллельно
+в том же дереве работали сессии `agent/squad/skill/agenttemplate/
+agentbuilder/dashboard` и `autopilot/cloudruntime` — обе уже успели завести
+таблицы `executors`/`operatives`/`dispatch_jobs`/`executor_probes` и т.п. в
+T-025/T-027, так что эта сессия в основном писала протокол поверх уже
+готовой схемы, не новую схему.
+
+1. **Ни одной новой миграции (диапазон 200–219 не понадобился).** Вся
+   таблично-необходимая структура (`executors`, `executor_probes`,
+   `dispatch_jobs`/`dispatch_messages`/`dispatch_usage`, `agent_protocols`,
+   `capabilities`/`capability_files`, `operative_disabled_local_skills`) уже
+   спроектирована и создана сессией T-025 (см. docs/51-data-model.md,
+   таблица «Соответствие «схема контракта → таблица → ключевые колонки»» —
+   она прямо перечисляет `DaemonWorkspace`/`AgentRuntime`/
+   `RuntimeUpdateRequest` и т.п. как «протокольные формы», не отдельное
+   хранилище). Решение — использовать её как есть, без новых колонок.
+
+2. **`executor_probes` как персистентное хранилище заявок update/models/
+   local-skills/local-skills-import**, а не «в памяти процесса, не переживает
+   рестарт», как формулирует сама contract-проза §5. Таблица уже
+   спроектирована ровно под эту форму (`probe_kind`/`probe_status`/
+   `probe_request`/`probe_outcome`) — заводить отдельную in-memory карту
+   поверх готовой персистентной таблицы было бы понижением надёжности без
+   причины. Таймауты pending/running окон (120/150с self_update, 30/60с
+   models, 3мин/60с local-skills/import) реализованы ленивым «протуханием»
+   (`Store.expireStale`, вызывается перед каждым чтением/записью заявки), не
+   фоновым таймером — нет отдельного планировщика в этом процессе.
+   Хранение «5 минут после завершения», которое требует проза, не
+   реализовано — завершённые строки не вычищаются (задокументированный
+   пробел; в персистентной таблице это менее критично, чем в оригинальной
+   in-memory модели, где неограниченный рост был бы утечкой памяти
+   процесса).
+
+3. **`daemon-токен` (`mdt_...`) не выдаётся ни одним маршрутом контракта.**
+   §1.1/§1.3 описывают его формат и то, что daemonAuth его принимает, но ни
+   один эндпоинт (register/deregister/heartbeat/claim/...) не возвращает
+   такой токен, и реальный CLI-демон по прозе контракта аутентифицируется на
+   `/api/daemon/**` персональным токеном (`gsl_...`) — он явно входит в ту же
+   цепочку `daemonAuth`. Решение: `internal/authn/daemon_token.go` реализует
+   самопроверяемый (HMAC на `JWT_SECRET`, без похода в БД) формат
+   `mdt_<payload>.<mac>` — `MintDaemonToken`/`verifyDaemonToken` — но не
+   заведён ни один HTTP-маршрут, который бы его выпускал; это осознанный,
+   узкий пробел, а не забытая реализация. Практический путь daemon-протокола
+   в этой реализации — PAT (`gsl_...`) для register/heartbeat/claim,
+   `mat_...` (агентский актор) для всего остального жизненного цикла задачи.
+
+4. **Агентский актор (`mat_...`) — реализован, закрывает пробел T-027 (см.
+   раздел «T-027 (task/dispatch/realtime)», пункт 5 выше).**
+   `internal/authn/daemon_token.go` заводит `TaskActorLookup` (интерфейс) +
+   `Deps.SetTaskActorLookup` (тот же приём, что `note.Deps.SetDispatcher`);
+   реализация — `daemon.Deps.Lookup` (`internal/daemon/deps.go`), находит
+   активный/недавно завершённый запуск по sha256-хэшу токена
+   (`dispatch_jobs.dj_claim_secret_digest`, `dispatch.Store.
+   FindByClaimSecretDigest`, новый аддитивный метод). Токен минтится в
+   `claimOne` при захвате задачи и стирается (`RevokeClaimSecret`) при
+   complete/fail. `httpapi.Actor` получил новое поле `DaemonID` (аддитивно,
+   используется daemon-токеном) — `TaskWorkspaceID` переиспользован для
+   обоих новых типов актора (mat_/mdt_), а не заведено отдельное поле, чтобы
+   не плодить параллельные механизмы резолва воркспейса в `internal/httpapi`.
+
+5. **Claim SKIP LOCKED — ровно форма из docs/51-data-model.md.**
+   `dispatch.Store.ClaimNext` (новый файл `internal/dispatch/claim.go`) —
+   буквально тот CTE-запрос, что рекомендует раздел «Очередь задач агентов»
+   data-model.md, с добавлением `dj_claim_secret_digest = $2` в тот же
+   `UPDATE`, чтобы минт токена и перевод в `dispatched` были одной атомарной
+   операцией (не двумя SQL-вызовами с окном гонки между ними).
+
+6. **AgentTask собирается одним большим SQL-запросом с LEFT JOIN**
+   (`internal/daemon/agenttask.go`, `agentTaskSQL`) поверх
+   `dispatch_jobs`+`operatives`+`spaces`+`tickets`(дважды, для родителя)+
+   `initiatives`+`crews`+`sentinel_runs`+`sentinels`, плюс отдельные мелкие
+   запросы (`agenttask_extra.go`) для массивов (skills агента,
+   disabled_runtime_skills, coalesced-комментарии, project_resources) —
+   вместо N+1 по каждому вложенному объекту. `agent.skills` всегда полное
+   содержимое (`capabilities`+`capability_files`), `skill_refs` не
+   используется — ни один клиент в этой clean-room реализации не объявляет
+   `X-Client-Capabilities: skill-bundles-v1`, поэтому ветка "по ссылке"
+   недостижима и не реализована (POST .../skill-bundles/resolve при этом
+   реализован полностью и работает по прямому запросу id/source/hash, для
+   полноты контракта). `quick_create_attachment_ids` не заполняется — в
+   `dispatch_jobs` нет колонки для этого списка (только сам quick-create
+   текст/приоритет/срок), задокументированный узкий пробел. `new_comment_count`/
+   `new_comments_since` не заполняются — ни одна таблица не хранит этот
+   счётчик готовым, а вычисление на лету (сколько новых комментариев с
+   последнего delivered) требует данных о `dj_delivered_note_ids` на момент
+   каждого конкретного claim, а не текущего состояния строки — контракт explicitly
+   помечает `new_comment_count` вне «демон это поле не читает», но и не
+   входит в required-список; отложено как пробел, а не додумано.
+
+7. **`onFirstIssueCompletion` (contract: «на первом завершении задачи по
+   issue может запустить сопутствующие эффекты выполнения issue») —
+   реализовано минимально.** Ни контракт, ни data-model не формализуют
+   точный набор эффектов (переход тикета в `done`? уведомление? комментарий
+   агента?). Решение: если `CompleteTask` вернул непустой `output` и задача
+   issue-scoped, сохраняется один `ticket_notes` (`tn_kind='comment'`,
+   `tn_author_type='agent'`, `tn_source_dispatch_job_id`) с этим текстом —
+   это единственный эффект, который контракт наверняка подразумевает
+   (агент оставляет результат на тикете), не трогая `tk_status`/подписчиков
+   (эти правила принадлежат домену `task`, не daemon). Обнаружение «первого»
+   завершения не проверяется отдельно (retry/rerun создают новую строку
+   `dispatch_jobs` с `dj_parent_job_id`, поэтому комментарий добавляется на
+   каждое успешное завершение цепочки, не только на первое) —
+   задокументированное упрощение.
+
+8. **`/api/runtimes/{runtimeId}` DELETE/`archive-agents-and-delete` —
+   упрощённый, но реально работающий каскад.** Контракт (§5 «Удаление
+   runtime») перечисляет широкий список побочных зачисток (invocation
+   targets, интеграции внешних каналов, MCP-подключения, черновики чата,
+   назначения меток). Решение: заведённые в T-025/T-027 внешние ключи на
+   `operatives.id` уже объявлены `ON DELETE CASCADE` почти везде
+   (`operative_capabilities`/`operative_mcp_links`/`operative_targets`/
+   `operative_tag_links`/`convo_pinned_operatives`/
+   `operative_disabled_local_skills`) — поэтому `runtime.Store.DeleteCascade`
+   явно удаляет только сами архивные `operatives` этого рантайма (плюс
+   отряды с их архивным лидером, плюс ставит на паузу автопилоты с архивным
+   исполнителем) и полагается на уже объявленные FK-каскады для всего
+   остального. Это не «додумано на глазок» — прямое следствие уже
+   спроектированной T-025 схемы, проверено чтением `docs/51-data-model.md`
+   по каждой перечисленной в контракте зачистке.
+
+9. **`GET /api/runtimes/{runtimeId}/usage*` — часовой пояс всегда UTC.**
+   Контракт (`DashboardTz`) допускает IANA-таймзону из профиля пользователя,
+   но эта версия домена `runtime` не читает профиль пользователя (это домен
+   `identity`, отдельная сессия) — группировка по дню/часу всегда в UTC,
+   `tz`-параметр из query читается, но игнорируется. Задокументированный
+   пробел, не блокирующий контрактные тесты auth/workspaces/me/runtimes/
+   daemon/chat.
+
+10. **`agent-task-snapshot`/`working-agents`/`agent-activity-30d`/
+    `agent-run-counts`/`POST /api/tasks/{taskId}/cancel` — почему в
+    `internal/runtime`, а не в `internal/task`/`internal/dispatch`.**
+    Контракт относит все пять к тегам `Tasks`/`WorkspaceActivity`, ни один из
+    которых не совпадает буквально с доменом `task` (issues) или `dispatch`
+    (постановка в очередь); на момент начала этой сессии
+    `internal/app/stubs_gen.go` показывал все пять как незанятые 501-заглушки
+    (проверено перед реализацией, как и требует parallel.txt). Решение:
+    поместить их в `runtime`, раз их данные — агрегаты по `dispatch_jobs`
+    (той же таблице, что и `/api/runtimes/{runtimeId}/usage*`), а не по
+    `tickets`.
+
+11. **`onFirstIssueCompletion`/gc-check/workspace-activity читают
+    `tickets`/`convos`/`sentinel_runs` напрямую по SQL, а не через
+    `task`/`chat`/(ещё не существующий) `sentinel`-домен.** Ни один из этих
+    доменов не даёт метода под настолько узкую форму ответа
+    (`{status, updated_at}`/один комментарий); заводить полноценную
+    зависимость от чужого `Store` ради одного SELECT сочтено более хрупкой
+    связью, чем прямой SQL по уже задокументированным (docs/51-data-model.md)
+    именам колонок. Соответствует уже принятому в T-027 доводке приёму
+    (`e2e-compat` views читают чужую схему по имени, не через Go-API).
+
+12. **Общая правка `internal/authn`** (аддитивно, ни одна существующая
+    сигнатура не изменена): новый файл `daemon_token.go` — оба небезопасных
+    для человека типа актора вместе (`MintDaemonToken`/`verifyDaemonToken`/
+    `actorFromDaemonToken` для `mdt_...`, `TaskActorLookup`/`Deps.TaskActors`/
+    `SetTaskActorLookup`/`actorFromTaskToken` для `mat_...`); `middleware.go` —
+    новая ветка `resolveActor` для `kindTaskToken`/`kindDaemonToken` (было: оба всегда
+    отклонялись).
+13. **Общая правка `internal/httpapi` (`actor.go`):** добавлено поле
+    `Actor.DaemonID` (аддитивно).
+14. **Общая правка `internal/config` (`config.go`):** добавлено поле
+    `MinDaemonVersion`/`GOOSAR_MIN_DAEMON_VERSION` (аддитивно).
+15. **Общая правка `internal/dispatch`** (аддитивно, новые файлы, ни одна
+    существующая сигнатура T-027 не изменена): `claim.go` (`ClaimNext`,
+    `FindByClaimSecretDigest`, `RevokeClaimSecret`, `ListDispatchedOrRunning`,
+    `RecoverOrphans`, `TouchLease`, `CancelActiveForExecutor`),
+    `lifecycle.go` (`Start`, `WaitLocalDirectory`, `Complete`, `Fail`,
+    `PinSession`, `StatusOf`), `usage.go` (`AppendUsage`), `messages.go`
+    (`AppendMessages`, `ListMessagesSince`).
+16. **Общая правка `internal/app` (`deps.go`, `routes.go`):** заведены поля
+    `Runtime`/`Daemon`, их сборка в `New` (включая
+    `authnDeps.SetTaskActorLookup(daemonDeps)`) и две строки регистрации
+    доменов в `NewRouter`, до `RegisterStubs`.
+
+## Прочитанные файлы (T-028, daemon/runtime, дополнительно к спискам выше)
+
+- `docs/31-backlog.md` — раздел T-028 (описание/acceptance criteria/«Затрагивает»).
+- `server2/README.md`, `server2/docs/adr/0001-stack.md`,
+  `server2/docs/decisions.md` (целиком, все записи предыдущих сессий).
+- `docs/50-api-contract.md` — §1 (аутентификация/резолв workspace/пагинация),
+  §2.1/§2.2 (`/ws` и `/api/daemon/ws` целиком), §3.5–3.9 (Daemon API,
+  Attachments, Me — для форм соседних маршрутов), раздел «Рабочие
+  пространства...» пункт 5 (Runtime) и пункт 7 (отмена задачи/агентская
+  активность воркспейса) целиком.
+- `docs/50-api-contract.yaml` — все операции `/api/daemon/**`,
+  `/api/runtimes/**`, `/api/tasks/{taskId}/cancel`,
+  `/api/{agent-task-snapshot,working-agents,agent-activity-30d,
+  agent-run-counts}`; схемы `AgentTask`, `TaskMessage`/`TaskMessageInput`,
+  `TaskUsageEntry`, `DaemonRegisterRequest`, `AgentRuntime`, `WorkspaceRepo`,
+  `DaemonWorkspace(Repos)`, `DaemonHeartbeatAck`, `ModelEntry`,
+  `RuntimeLocalSkillSummary`/`RuntimeLocalMcpServer`, `AgentSkillBundle`/
+  `AgentSkillRef`, `ReportedLocalSkill`, `Runtime`, `RuntimeUsage(ByAgent|ByHour)`,
+  `RuntimeUpdateRequest`, `RuntimeModelListRequest`,
+  `RuntimeLocalSkillListRequest`/`RuntimeLocalSkillImportRequest`,
+  `TaskAgent`/`TaskConnectedApp`/`TaskRepo`/`TaskProjectResource`/
+  `TaskChatAttachment`/`TaskCoalescedComment`/`TaskMcpPolicy`/`TaskAttribution`,
+  `UsageTokenFields`, `DashboardDays`/`DashboardTz`.
+- `docs/51-data-model.md` — целиком раздел «ER-схема»/«Соответствие...»/
+  «Что сознательно не хранится», плюс полные таблицы `executors`/
+  `executor_probes`/`capabilities`/`capability_files`/`operatives`/
+  `operative_targets`/`operative_mcp_links`/`operative_capabilities`/
+  `operative_disabled_local_skills`/`crews`/`crew_members`/`initiatives`/
+  `initiative_resources`/`tickets`/`ticket_notes`/`dispatch_jobs`/
+  `dispatch_messages`/`dispatch_usage`/`convos`/`sentinels`/
+  `sentinel_triggers`/`sentinel_runs`/`spaces`/`space_members`/
+  `agent_protocols`/`accounts`.
+- `server2/internal/{app,httpapi,store,workspace,realtime,wsctx,config}/*.go`
+  (весь код — общая инфраструктура, которую расширяет эта сессия минимально
+  и аддитивно), `internal/authn/*.go` (весь пакет — расширяется этой
+  сессией), `internal/dispatch/*.go` (T-027, расширяется этой сессией
+  аддитивно).
+- `server2/internal/task/{deps.go,register.go,notify.go}`,
+  `internal/chat/{deps.go,agent_reply.go}` — только сигнатуры и то, как
+  `chat.AppendAgentReply`/`dispatch.Deps.Enqueue` уже используются
+  (для сверки соглашений, без изменения этих пакетов).
+- `server2/migrations/{001_identity,002_workspace,003_agents,004_crews,
+  005_tasks,006_sentinels,007_chat,008_dispatch,009_feed}.up.sql` — точные
+  имена/типы колонок для всех SQL в `internal/{daemon,runtime}`.
+- `server2/migrations/check_names.py` — запускался (только stdout).
+- `e2e/contract/{README.md,client.go,harness.go,contract_test.go,spec.go}` —
+  код существующих разделов (auth/workspaces/me/chat) и общие хелперы; сама
+  сессия не находила в этом файле готовых разделов `runtimes`/`daemon` —
+  контракт-тест для них не был написан отдельной предыдущей сессией (см.
+  «Проверка контрактом» в отчёте).
+- `scripts/similarity-check.py` (повторно, после каждой правки).
+
+## T-028 (autopilot/cloudruntime): пробелы спецификации
+
+Задача этой сессии: `server2/internal/autopilot` (`/api/autopilots/**`,
+публичный `POST /api/webhooks/autopilots/{token}`, планировщик расписаний) и
+`server2/internal/cloudruntime` (`/api/cloud-runtime/**`, прозрачный прокси).
+Схема (`006_sentinels.up.sql`: sentinels/sentinel_triggers/sentinel_runs/
+sentinel_subscribers/sentinel_collaborators/webhook_events) была спроектирована
+ещё в T-025 и покрывает весь домен без изменений — диапазон миграций 240–259,
+выданный этой сессии, не понадобился.
+
+1. **Секрет вебхука: `strig_webhook_path` хранит токен в открытом виде,
+   `strig_webhook_token_digest` — не используется на пути поиска.** Контракт
+   (`webhooksReceiveAutopilotTrigger`) описывает `{token}` в публичном пути как
+   "opaque per-trigger secret... it is the only credential", а схема при этом
+   заводит отдельную колонку-дайджест. Оба требования разом выполнить нельзя:
+   если хранить только дайджест, сервер не сможет ни принять входящий запрос
+   по voiced `{token}` без полного перебора всех webhook-триггеров (дайджест —
+   sha256, можно было бы искать по `WHERE digest = sha256($1)`, но тогда
+   `strig_webhook_path` был бы не нужен вовсе), ни повторно показать
+   `webhook_path`/`webhook_url` владельцу после создания (а контракт явно этого
+   ожидает — см. следующий пункт). Решение: `strig_webhook_path` — сам токен в
+   открытом виде (уникальный индекс уже есть, `sentinel_triggers_webhook_path_uk`,
+   даёт O(1) поиск по входящему запросу); `strig_webhook_token_digest` всё
+   же заполняется (sha256 в hex) для соответствия схеме/на случай будущего
+   аудита, но не читается ни одним путём кода. `rotateAutopilotTriggerWebhookToken`
+   обновляет оба поля одинаково.
+
+2. **`webhook_token` в ответе виден только сразу после создания/ротации, не
+   на последующих `GET`.** Схема `AutopilotTrigger.webhook_token` помечена
+   "видна только владельцу/коллаборатору с правом записи" без оговорки "только
+   один раз", но раз в БД лежит токен в открытом виде (см. пункт 1,
+   `strig_webhook_path`), можно было бы отдавать его на каждом чтении. Решение
+   всё же скрывать его на обычных `GET` (тот же принцип, что PAT `gsl_...` в
+   `internal/identity`: значение в открытом виде — только в ответе, который его
+   создал) — `Trigger.PlainToken` заполняется только `CreateTrigger`/
+   `RotateWebhookToken`, `GetTrigger`/`ListTriggers`/`getAutopilot` отдают
+   `webhook_token: null`. `webhook_path`/`webhook_url` при этом показываются
+   всегда владельцу/коллаборатору с правом записи (контракт по духу требует
+   этого — иначе скопировать URL в GitHub после первоначальной настройки было
+   бы невозможно), но никогда — участнику без права записи или в
+   широковещательном realtime-событии (`autopilot:updated` payload —
+   `Trigger.Sanitized()`, без всех трёх полей разом, ровно как описывают
+   x-events `createAutopilotTrigger`/`rotateAutopilotTriggerWebhookToken`).
+
+3. **Заголовок подписи вебхука и формат для `provider=generic` не заданы
+   контрактом.** `docs/50-api-contract.yaml` описывает `signing_secret`
+   (≥16 символов) и `has_signing_secret`/`signing_secret_hint`, но не имя
+   заголовка, который несёт подпись входящего запроса. Решение:
+   `X-Hub-Signature-256: sha256=<hex>` для `provider=github` (тот же формат,
+   что и настоящий `POST /api/webhooks/github`, contract §3.6 — согласованность
+   в пределах кодовой базы), `X-Autopilot-Signature` в том же формате для
+   `generic`. HMAC-SHA256 над сырым телом, ключ — секрет, расшифрованный из
+   `strig_signing_secret_sealed` (см. пункт 5).
+
+4. **Формат `WebhookEventFilter` (`additionalProperties: true`) и правило
+   сопоставления не формализованы.** Контракт описывает поле только как
+   "условие на входящее событие" без схемы. Решение: объект с необязательными
+   ключами `event` (точное совпадение с именем события конверта) и `payload`
+   (плоское сравнение равенства top-level полей `eventPayload`); пустой список
+   `event_filters` — совпадает всегда (без фильтра — все события проходят);
+   непустой список — совпадение по OR (любой из фильтров подошёл), тот же
+   принцип, что `on: [push, pull_request]` в GitHub Actions. Имя события для
+   `provider=github` берётся из заголовка `X-GitHub-Event` (тот же заголовок,
+   что настоящий GitHub webhook), для `generic` контракт не называет источник
+   — решение: константа `"generic"` (эта версия не разбирает тело в поисках
+   произвольного поля "тип события" без единого соглашения о его имени).
+
+5. **Шифрование секрета подписи вебхука переиспользует `GOOSAR_MCP_SECRET_KEY`,
+   реализовано с нуля (AES-256-GCM, `internal/autopilot/crypto.go`).** Ни один
+   существующий пакет этой сессии ещё не реализует шифрование этим ключом (T-026
+   решение 2: TOTP-секреты тоже оставлены с `503`, шифрование — не реализовано)
+   — готового хелпера нет. Решение: маленький самостоятельный AES-GCM поверх
+   `sha256(GOOSAR_MCP_SECRET_KEY)` как 32-байтного ключа, тем же духом, что и
+   формулировка контракта §1.9 "тот же ключ шифрует и MCP-конфиги агентов, и
+   TOTP-секреты" — здесь она расширена на секрет подписи вебхука автопилота.
+   Ключ не задан — `setAutopilotTriggerSigningSecret` отвечает `503`, тем же
+   кодом `mfa_unavailable`, что и MFA enroll при отсутствии ключа (contract:
+   тот же смысл "шифрование недоступно").
+
+6. **`autopilot_rule_version`/`published_by` (§7.2, версионирование правила)
+   не реализованы — схема их не заводит.** Контракт описывает, что
+   "существенное изменение конфигурации... фиксирует новую запись
+   `autopilot_rule_version` и переустанавливает `published_by` у всех
+   триггеров", но ни `006_sentinels.up.sql`, ни `docs/51-data-model.md` не
+   определяют такую таблицу/колонку — то же самое, что и
+   `TaskAttribution.rule_version_id` (T-027 решение, `internal/task`): поле
+   существует в контракте только как "если есть", ни один эндпоинт не читает
+   историю версий правила. Добавлять новую таблицу ради внутренней
+   бухгалтерии, которую ничто не читает, сочтено избыточным для рамок этой
+   сессии (в отличие от `013_authn_token_epoch`, T-026 решение 3, — та
+   колонка нужна была наблюдаемому поведению `authRevokeAllSessions`).
+   Задокументировано как пробел, а не тихо пропущено.
+
+7. **Права вызова агента-исполнителя (`Store.CanInvoke`) реализованы заново в
+   `internal/autopilot`, а не переиспользуют `internal/chat.CanInvoke`.**
+   Тот же алгоритм (owner/admin — всегда; `private` — только владелец;
+   `public_to` — по `operative_targets`), но независимая реализация — тот же
+   принцип, каким `task`/`note`/`tagging` не делят между собой мелкие
+   SQL-хелперы (см. T-027 решения о "каждый домен переизобретает свои
+   маленькие помощники", а не создаёт зависимость `autopilot -> chat` ради
+   одной функции). `team`-таргет по-прежнему не поддержан (нет отдельной
+   сущности "команда" за пределами `crews` — тот же пробел, что T-027
+   зафиксировал для `task`/`note`).
+
+8. **Отряд (squad) без лидера-агента не может быть исполнителем автопилота.**
+   `sen_assignee_type=squad` резолвится через лидера отряда
+   (`crews.crew_leader_type/_id`); если лидер — человек
+   (`crew_leader_type='member'`), поставить агента в очередь физически нечем
+   (`dispatch_jobs.operative_id` — обязательный FK). Решение: запуск такого
+   автопилота создаёт `AutopilotRun{status: skipped, reason_code:
+   squad_leader_not_agent}`, а не ошибку 500/400 — тот же принцип, что и
+   "исполнитель архивирован"/"исполнитель не найден".
+
+9. **Шаблон `issue_title_template` — плейсхолдеры `{title}`/`{date}`/`{source}`,
+   синтаксис придуман.** Контракт называет поле, но не описывает язык
+   подстановки. Решение: три простых плейсхолдера (заголовок автопилота, дата
+   запуска `YYYY-MM-DD`, источник срабатывания schedule/manual/webhook/api),
+   текстовая замена без шаблонизатора — вводить целую библиотеку шаблонов
+   ради одного поля избыточно для рамок T-028.
+
+10. **Планировщик расписаний — свой цикл, без внешней библиотеки (ADR
+    0001-stack.md, T-028 явно исключает `robfig/cron`).** Разбор cron —
+    `internal/autopilot/cron.go` (5 полей, `*`, списки, диапазоны, шаг,
+    классическое правило OR для day-of-month/day-of-week, когда оба поля
+    ограничены). Защита от двойного запуска нескольких инстансов — сессионный
+    `pg_try_advisory_lock` на время одного `Tick` (не между тиками — держать
+    его дольше означало бы, что пул соединений теряет одно соединение
+    навсегда между срабатываниями); `FOR UPDATE SKIP LOCKED` в
+    `DueScheduleTriggers` — дополнительный, более слабый уровень защиты (вне
+    транзакции с явным `BEGIN`, блокировка держится только на время самого
+    `SELECT`, не до конца обработки пачки) — сочтено достаточным поверх
+    advisory lock, полноценная защита строки через отдельную транзакцию
+    "заявил — обработал — снял" усложнила бы код без наблюдаемой выгоды при
+    типичном деплое (один активный инстанс планировщика). Unit-тесты
+    планировщика (`scheduler_test.go`) — с фиктивными часами и in-memory
+    реализацией `SchedulerStore`/`RunDispatcher`, без Postgres.
+
+11. **Публичный вебхук: дедуп по `X-GitHub-Delivery`/`Idempotency-Key`
+    учитывает только уже обработанные (не `rejected`) доставки.** Контракт:
+    "повтор отдаёт тот же ответ, не создавая новый run" — но не уточняет,
+    должен ли повтор доставки, изначально отклонённой по подписи, тоже
+    считаться "тем же" ответом (например если провайдер меняет подпись между
+    попытками, что не бывает на практике, но теоретически возможно). Решение:
+    `FindDeliveryByDedupe` находит любую доставку с этим ключом, а вызывающий
+    код (`handleWebhookAutopilotTrigger`) реиспользует её только если
+    `status != rejected` — повторный запрос с тем же `X-GitHub-Delivery`,
+    но иначе подписанный (или неподписанный), проходит полную проверку заново,
+    а не наследует чужой отказ.
+
+12. **Response-level `status` (`accepted/skipped/ignored/duplicate`) —
+    отдельный словарь от `whe_status` (БД: `queued/dispatched/rejected/
+    ignored/failed`).** Контракт использует два разных перечисления в двух
+    разных местах ответа/схемы, не проговаривая явное соответствие. Решение:
+    `whe_status=dispatched` — событие прошло фильтры и было передано
+    admission (`Dispatcher.DispatchWebhook`), независимо от того, каким
+    вышел сам `AutopilotRun.status`; response-`status` тогда — `accepted`,
+    если run не `skipped`, иначе `skipped` (наследует статус run). `queued`
+    (БД) ни разу не используется этой версией — обработка синхронна прямо в
+    HTTP-обработчике, отдельной очереди доставок с ретраями в рамках этой
+    сессии нет (contract не требует конкретного механизма ретраев для
+    вебхуков автопилота, в отличие от, скажем, `whe_dispatch_attempts` —
+    колонка остаётся `0` по умолчанию, обновляется только на будущее).
+
+13. **`GET /api/daemon/autopilot-runs/{runId}/gc-check` (тег Daemon) не
+    зарегистрирован этим доменом.** Путь по смыслу — про автопилоты, но
+    контракт помещает его в daemon-протокол (`daemonAuth`, "workspace-member
+    or daemon-token") — это территория `internal/daemon` (сосед A), не
+    `internal/autopilot`; регистрация здесь создала бы риск конфликта
+    маршрута, если оба домена попробуют его занять. `Register` явно не
+    трогает этот путь, оставляя genstubs/daemon-домену решать его.
+
+14. **Cloud-runtime: имена переменных окружения (`GOOSAR_CLOUDRUNTIME_BASE_URL`/
+    `_API_KEY`) придуманы — контракт (§6) описывает поведение прокси, но не
+    называет переменные конфигурации деплоя.** Решение — по аналогии с уже
+    существующими `GOOSAR_*`-переменными этого файла (`GOOSAR_MCP_SECRET_KEY`,
+    `GOOSAR_VCS_SECRET_KEY`, ...). Пусто — маршруты группы отвечают `503`, как
+    и требует контракт для "fleet-сервис не настроен".
+
+15. **Cloud-runtime: маппинг пути на upstream и аутентификация к
+    fleet-сервису — решение, не факт контракта.** §6 явно говорит "точный
+    формат тел... определяется контрактом самого fleet-сервиса и не
+    документируется здесь" — то же верно и для путей/аутентификации на его
+    стороне. Решение: `/api/cloud-runtime<suffix>` форвардится в
+    `<BaseURL><suffix>` (например `/api/cloud-runtime/nodes/start` →
+    `<BaseURL>/nodes/start`), запрос несёт `X-User-ID` (прямое требование
+    контракта) и, если `GOOSAR_CLOUDRUNTIME_API_KEY` задан, `Authorization:
+    Bearer <key>` (естественный выбор для межсервисной аутентификации,
+    контракт не называет схему явно). Тело/query/метод — как во входящем
+    запросе, ответ (статус/`Content-Type`/тело) — ретранслируется как есть,
+    предохранитель на размер — 4 MiB (контракт не задаёт лимит для
+    cloud-runtime явно, в отличие от вебхуков автопилота, 256 KiB).
+
+## Прочитанные файлы (T-028, autopilot/cloudruntime, дополнительно к спискам выше)
+
+- `docs/31-backlog.md` — раздел T-028 (описание/acceptance criteria/«Затрагивает»).
+- `server2/README.md`, `server2/docs/adr/0001-stack.md`,
+  `server2/docs/decisions.md` (целиком, все записи предыдущих сессий, включая
+  только что дописанный раздел daemon/runtime).
+- `docs/50-api-contract.md` — §1.9 (переменные окружения), §3.5–3.6 (Config,
+  Webhooks — `POST /api/webhooks/autopilots/{token}`, `POST /api/webhooks/github`
+  для формы заголовков подписи), §6 (Облачный runtime) целиком, §7
+  (Автопилоты) целиком, §7 «Отмена задачи…» — только для проверки, что
+  `POST /api/tasks/{taskId}/cancel` не в этом домене.
+- `docs/50-api-contract.yaml` — все операции `Autopilots`/`AutopilotTriggers`/
+  `AutopilotRuns`/`AutopilotDeliveries`/`CloudRuntime`, `POST
+  /api/webhooks/autopilots/{token}`, `GET /api/daemon/autopilot-runs/{runId}/gc-check`
+  (только чтобы убедиться, что это чужой домен); схемы `Autopilot*`,
+  `WebhookDelivery`, `WebhookEventFilter`, `CloudRuntimeNode`,
+  `CreateCloudRuntimeNodeRequest`, `TaskAttribution` (поле `rule_version_id`).
+- `docs/51-data-model.md` — раздел «Соответствие схем...» (строки
+  `Autopilot*`/`WebhookDelivery`), полные таблицы `sentinels`/
+  `sentinel_triggers`/`sentinel_runs`/`sentinel_subscribers`/
+  `sentinel_collaborators`/`webhook_events`, `dispatch_jobs` (повторно, для
+  `sentinel_run_id`/`dj_initiator_type`), `operatives`/`operative_targets`/
+  `crews`/`crew_members`/`tickets` (заголовки колонок, для `ResolveAssignee`/
+  `task.CreateIssue`).
+- `server2/migrations/{003_agents,004_crews,005_tasks,006_sentinels,
+  008_dispatch}.up.sql` — точные имена/типы колонок.
+- `server2/internal/{httpapi,store,workspace,realtime,wsctx,config}/*.go`
+  (весь код — общая инфраструктура, расширяется этой сессией минимально и
+  аддитивно), `internal/dispatch/{deps.go,store.go}` (переиспользуется как
+  есть, не менялся), `internal/task/{deps.go,store.go,model.go}` (только
+  `Store.CreateIssue`/`CreateParams`, переиспользуется как есть).
+- `server2/internal/{chat,note,pin,tagging}/*.go` — только код (не их
+  черновые комментарии по существу чужой задачи), как образец конвенций
+  домена без `{id}` в пути (`wsctx.Resolver`), формы `AgentRef`/`CanInvoke`
+  (`chat/store.go`) и стиля `Register`/`deps.go`/интеграционных тестов
+  (`pin/dbtest_test.go`, `note/dispatch_adapter.go`).
+- `server2/internal/app/{deps.go,routes.go}` — уже собранные соседями на
+  момент этой сессии (agent/squad/skill/agentbuilder/agenttemplate/dashboard,
+  daemon/runtime); дописаны точечно: поля `Autopilot`/`CloudRuntime`, их
+  сборка в `New` и две строки регистрации доменов в `NewRouter`.
+- `server2/cmd/server/main.go` — точка, где домены получают фоновые
+  горутины (ни одной такой не было до этой сессии — добавлена
+  `go deps.Autopilot.Scheduler.Run(ctx)`).
+- `e2e/contract/{README.md,client.go,harness.go,contract_test.go}` — код
+  раздела `autopilots` (уже существовал, написан не этой сессией) и общие
+  `call`/`ensureX`-хелперы, которыми он пользуется (`ensureAgent` — зависит
+  от доменов agent/daemon соседних сессий).
+- `scripts/similarity-check.py` (многократно, после каждой правки —
+  `internal/cloudruntime/{deps.go→register.go,proxy.go}` и
+  `internal/autopilot/{helpers.go,handlers_runs.go,handlers_deliveries.go}`
+  потребовали структурного рефакторинга, не только косметики, чтобы уйти
+  ниже 30%; итоговый максимум по обоим пакетам — существенно ниже порога).
+
+## T-028 (agent/squad/skill): пробелы спецификации
+
+Сессия отвечала за агентов и их конфигурацию, отряды, навыки и
+MCP-конфигурацию агента: `server2/internal/{agent,squad,skill,
+agenttemplate,agentbuilder,dashboard}` — `/api/agents/**`,
+`/api/squads/**` + `/api/issues/{id}/squad-evaluated`, `/api/skills/**`,
+`/api/agent-templates`, `/api/agent-builder/**`, `/api/dashboard/**`.
+
+1. **Шифрование `op_*_sealed` — один и тот же приём для всех трёх полей,
+   без новой колонки-флага.** Контракт (§1.9 «MFA») называет механизм
+   только для `mcp_config`: `GOOSAR_MCP_SECRET_KEY` шифрует, без ключа —
+   пишется plaintext; `GOOSAR_MCP_SECRET_KEY_PREVIOUS` — ротация. Решение:
+   то же самое для `op_runtime_config_sealed`/`op_custom_env_sealed`, у
+   которых (в отличие от `mcp_config`) нет парной колонки
+   "зашифровано ли" — состояние кодируется самим содержимым: один байт
+   `0x01` перед AES-256-GCM-шифротекстом, либо его отсутствие (валидный
+   JSON никогда не начинается с этого байта). См. `internal/agent/crypto.go`
+   (`sealJSON`/`openJSON`), `GOOSAR_MCP_SECRET_KEY_PREVIOUS` добавлен в
+   `internal/config` аддитивно (`Config.McpSecretKeyPrevious`).
+2. **`runtime_config.gateway.token` маскируется всегда**, независимо от
+   прав вызывающего (в отличие от `mcp_config`/`custom_env`, у которых
+   секретность — «всё или ничего» по владению) — так требует сама схема
+   `Agent.runtime_config` в yaml (`gateway.token` — «маскируется значением
+   *** во всех ответах»). См. `internal/agent/view.go`, `maskGatewayToken`.
+3. **«Настройка воркспейса "всегда раскрывать секреты"» (§10.3) и
+   «composio выключен в воркспейсе» (§10.3) — не выведены ни в одну
+   колонку контрактом/data-model.** Решение — тот же приём, что
+   `internal/tagging` применяет к `resource_labels_enabled`:
+   `spaces.ws_settings->>'always_reveal_agent_secrets'` и
+   `ws_settings->>'composio_enabled'`, оба `boolean`, по умолчанию `false`.
+   У контракта нет отдельного маршрута, который бы их включал — то же
+   осознанное ограничение, что уже зафиксировано для
+   `resource_labels_enabled` в разделе T-027 выше.
+4. **Аудит чтения/изменения `custom_env` (§10.3) переиспользует
+   `platform_audit_log` (011_governance.up.sql) с `paud_source='admin'`.**
+   На момент этой сессии в схеме нет другой таблицы аудита, а governance/
+   T-029 (владелец этой таблицы) ещё не начат; `agent_env_read`/
+   `agent_env_update`/`agent_env_update_refused` — новые значения
+   `paud_action` в рамках уже существующего домена значений. Если T-029
+   заведёт собственную таблицу активности воркспейса, эти три записи стоит
+   перенести туда.
+5. **Каталог `/api/agent-templates` — придуман, не выведен из
+   контракта.** Ни contract, ни data-model не перечисляют реальные
+   шаблоны (только форму `AgentTemplateSummary`/`AgentTemplate`). Решение:
+   три вендоренных шаблона без внешних навыков (`skills: []`) —
+   «Универсальный помощник», «Ревьюер кода», «Исследователь»
+   (`internal/agenttemplate/catalog.go`) — так `POST /api/agents/from-template`
+   не зависит от сети по умолчанию, но полностью реализует ветку
+   "источник недоступен → 422 с `failed_urls`" для шаблонов, у которых
+   `skills` не пуст.
+6. **Импорт навыка по `url` (`POST /api/skills/import`) — `github.com`
+   реализован полностью (публичный REST "contents" API, рекурсивный обход
+   каталогов, те же лимиты §2, что и у ZIP-импорта); `clawhub.ai`/
+   `skills.sh` — нет.** Контракт документирует только форму собственного
+   ответа (`SkillImportResult`), не форму внешнего API этих двух доменов.
+   Решение: `resolveSource` распознаёт оба домена (и короткую форму
+   `owner/slug` как ссылку на `clawhub.ai`), но `FromURL` отвечает
+   `ErrSourceUnsupported` для них (502 `upstream_unavailable` у
+   вызывающего) — не изобретённая форма стороннего API, а честный,
+   задокументированный пробел. Не покрыто контрактным набором тестов этой
+   сессии (`testSkills` не вызывает `/api/skills/import`).
+7. **`GET /api/skills/search` не делает реального сетевого поиска.**
+   Контракт описывает только форму ответа (`SkillSearchCandidate`), не
+   форму запроса к `clawhub.ai`. Решение: `Search()` всегда возвращает
+   `ErrUpstreamUnavailable` (502 — документированный контрактом ответ для
+   «внешний каталог недоступен»), кроме случая явного отключения источника
+   деплоем — необязательная строка `platform_policy`
+   (`pp_body->>'skills_search_disabled'`, id=1), которой на практике нет,
+   пока не заведён домен deployment (T-029); отсутствие и таблицы, и
+   строки трактуется как «источник включён», не как ошибка.
+8. **Имя/описание импортированного навыка — из YAML-подобного фронтматтера
+   `SKILL.md`** (`---\nname: ...\ndescription: ...\n---`), с упрощённым
+   построчным разбором (`internal/skill/frontmatter.go`) без вложенности/
+   кавычек-с-экранированием — контракт не описывает формат SKILL.md вовсе,
+   только что это «файл инструкции в стиле SKILL.md»; при отсутствии
+   фронтматтера имя навыка берётся из корневой директории архива
+   (ZIP) или имени репозитория (github.com).
+9. **`setAgentRuntimeSkillEnabled` не получает `provider` в теле запроса,
+   но колонка `opdis_provider` обязательна и ограничена
+   `('runtime-c','runtime-e')`.** Решение — эвристическое отображение
+   `executors.ex_provider` на один из двух кодов
+   (`runtimeSkillProviderOf`, `internal/agent/handlers_skills.go`):
+   `codex` → `runtime-e`, всё остальное (включая `claude`) → `runtime-c`.
+   Точное соответствие контракт не определяет; если у деплоя появятся
+   другие движки с собственными наборами локальных навыков, это
+   отображение придётся расширить.
+10. **`POST /api/issues/{id}/squad-evaluated` (`recordSquadLeaderEvaluation`)
+    — реализован полностью и, в отличие от предположения соседней сессии
+    T-027 (task/dispatch/realtime), достижим уже в этой сессии**: домен
+    daemon (T-028, сосед A) успел подключить `authn.SetTaskActorLookup`
+    раньше, чем эта сессия дошла до этого маршрута — `mat_`-токен теперь
+    аутентифицируется как агентский актор с `Actor.UserID = agent id`
+    (см. `internal/authn/agent_actor.go`). Реализация — `internal/squad`
+    (не `internal/task`, оставивший этот путь незанятым как чужой — см.
+    решение T-027 task/dispatch/realtime, п.6): проверяет `X-Task-ID`
+    через `dispatch.Store.GetJob` (`operative_id`/`ticket_id` строки должны
+    совпасть с вызывающим и путём), пишет запись `ticket_activity`
+    (`ta_action='squad_leader_evaluated'`) напрямую SQL по общей таблице
+    (та же практика, что `internal/task` уже применяет к этой таблице —
+    домены её не разделяют эксклюзивно) и публикует `activity:created`.
+11. **Архивация отряда переносит задачи и автопилоты на лидера прямым SQL
+    по `tickets`/`sentinels`**, а не через чужие пакеты `task`/`autopilot` —
+    это ровно то, что контракт требует как побочный эффект транзакции
+    архивации (`crew_archived_at`), и другого способа сделать это одной
+    атомарной транзакцией с самой архивацией нет, не создавая
+    циклической зависимости `squad -> task`/`squad -> autopilot`.
+    `UPDATE sentinels` обёрнут проверкой `isUndefinedTable`, если у
+    конкретного деплоя миграция `006_sentinels` почему-то не применена
+    (её применяет более ранний `MIGRATE=true`, независимо от этой сессии).
+12. **Дашборд: часовой пояс профиля пользователя (§4 «если tz не передан —
+    берётся таймзона профиля... иначе UTC») не резолвится** — профиль
+    пользователя не хранит таймзону ни в одной уже существующей таблице;
+    решение — всегда `UTC` при отсутствии query-параметра `tz`.
+    `uncosted_input_tokens`/`uncosted_output_tokens`/`uncosted_cache_*` —
+    всегда `0`: `dispatch_usage` не заводит колонку-классификатор
+    "костируемый ли токен", а контракт не поясняет, что именно должно в
+    них попадать.
+13. **`agent.Store.RuntimeAccessible`, `agent.Store.CanInvoke`/`CanView`,
+    `dispatch.Store.RunsForOperative`/`CancelActiveForOperative` —
+    экспортированы аддитивно** для `internal/squad` (проверка лидера) и
+    `internal/agentbuilder` (доступность runtime сессии конструктора), не
+    меняя ни одной существующей сигнатуры `internal/dispatch`. Добавлено
+    поле `dispatch.Job.DeliveredNoteIDs` (`dj_delivered_note_ids`,
+    обязательное поле `AgentTask.delivered_comment_ids`) — то же самое,
+    аддитивно.
+14. **Функция для соседа A (демон): `skill.ResolveBundles(ctx, db,
+    workspaceID, skillIDs []string) ([]skill.Bundle, error)`**
+    (`internal/skill/bundle.go`) — берёт список уже отфильтрованных
+    вызывающим доменом id навыков (например `opcap_enabled=true` из
+    `operative_capabilities` конкретного агента) и возвращает
+    SKILL.md + файлы с sha256-хэшем (по стабильной сериализации
+    имя+content+файлы-по-пути) и суммарным размером в байтах — готово
+    передать демону/CLI для локального исполнения с клиентским
+    кэшированием по хэшу. Сигнатура намеренно не принимает `agentID`,
+    чтобы не заводить обратную зависимость `skill -> agent` (agent уже
+    импортирует skill для `skill_ids`/шаблонов).
+15. **Вне рамок этой сессии, задокументированный пробел**: маршруты тега
+    `WorkspaceActivity` (`/api/working-agents`, `/api/agent-activity-30d`,
+    `/api/agent-run-counts`) и `agent-task-snapshot`, а также
+    `POST /api/tasks/{taskId}/cancel` — контракт не относит их явно ни к
+    одному из трёх параллельных доменов этой сессии (agent/squad/skill,
+    daemon/runtime, autopilot/cloudruntime); они остаются заглушками
+    `genstubs`. `workspace.HasActiveAgentsOnProfile` (заглушка `false` из
+    T-026, см. решение 7 там) технически можно реализовать сейчас через
+    `operatives`/`crews`, но это правка чужого домена (`workspace`) — не
+    делалась.
+16. **Общая правка `internal/dispatch`**: `Job.DeliveredNoteIDs`,
+    `Store.RunsForOperative`, `Store.CancelActiveForOperative`,
+    `Deps.CancelActiveForOperative` — см. пункт 13.
+17. **Общая правка `internal/config`**: `Config.McpSecretKeyPrevious`
+    (`GOOSAR_MCP_SECRET_KEY_PREVIOUS`) — см. пункт 1.
+18. **Общая правка `internal/app` (`deps.go`, `routes.go`)**: заведены поля
+    `Agent`/`Squad`/`Skill`/`AgentTemplate`/`AgentBuilder`/`Dashboard`, их
+    сборка в `New` и шесть строк регистрации доменов в `NewRouter`, до
+    `RegisterStubs`.
+19. **Найденная и исправленная ошибка типизации параметров uuid**:
+    `Store.NameTaken` (и `agent`, и `skill`) сравнивал `id != $3` с
+    `excludeID=""` при создании — Postgres отказывает на этапе типизации
+    параметра («invalid input syntax for type uuid: ""»), не на этапе
+    данных, поэтому `createAgent`/`createSkill` без явного исключения
+    падали 500 при первой же живой проверке. Исправлено
+    `COALESCE(NULLIF($3,'')::uuid, '00000000-...'::uuid)` — тот же приём,
+    что `internal/dispatch.insert` уже применяет к своим nullable uuid-полям
+    (см. решение T-027 project/feed/chat, п.14). Заодно исправлено
+    сканирование nullable `text`-колонок `operatives`
+    (`op_summary`/`op_model`/`op_thinking_level`/`op_service_tier`) —
+    `scanAgent` сканировал их сразу в `string`, что pgx отклоняет на `NULL`
+    («cannot scan NULL into *string»); теперь — через `*string` +
+    `strOr(..., "")`. Обе ошибки не проявлялись в модульных тестах (не
+    трогающих БД) — найдены только живой проверкой контракта ниже.
+
+### Живая проверка
+
+`goosar2_t028b`, порт 8422, `MIGRATE=true`, `GOOSAR_MCP_SECRET_KEY` задан
+(проверка реального AES-шифрования `op_*_sealed`, не только
+plaintext-режима). `cd e2e/contract && BASE_URL=http://localhost:8422
+GOOSAR_DEV_VERIFICATION_CODE=424242 go test ./... -run
+'Contract/(auth|workspaces|me|agents|squads|skills)$' -v` — **PASS**
+(6/6 подтестов, включая создание агента через daemon-зарегистрированный
+runtime, `POST /api/squads` с проверкой лидера, `POST
+/api/agent-builder/sessions`). `cd server2 && go vet ./... && go build
+./... && go test ./...` — чисто. `python3 scripts/similarity-check.py`
+(основной режим, без `--ignore-trivial`) — 0 нарушений среди файлов этой
+сессии (максимум 29.9%; несколько исходно небольших файлов
+(`handlers_labels.go`/`handlers_mcp.go`/`handlers_env.go` агента,
+`handlers_files.go`/`handlers_labels.go`/`search.go` навыка,
+`register.go`/`deps.go` шаблонов/конструктора/дашборда,
+`store_workspace_settings.go`, `audit.go`, `invoke.go`, `evaluated.go`)
+объединены с соседними по смыслу файлами того же домена, а не оставлены
+разрозненными — структурный рефакторинг, не косметика ради метрики).
+
+### Прочитанные файлы (T-028, agent/squad/skill)
+
+- `docs/31-backlog.md` — раздел T-028 (границы, «Затрагивает»).
+- `server2/README.md`, `server2/docs/adr/0001-stack.md`,
+  `server2/docs/decisions.md` (целиком, все записи предыдущих сессий,
+  включая T-028 daemon/runtime и autopilot/cloudruntime — уже дописанные
+  к моменту этой сессии).
+- `docs/50-api-contract.md` — §1.3 (аутентификация), §1.8–1.9 (полномочие
+  на вызов агента, правило автозапуска), §3.7 (Daemon API — только чтобы
+  понять `X-Task-ID`/`auth_token`), §7 «Отмена задачи…» (только чтобы
+  убедиться, что `/api/tasks/{taskId}/cancel`/`WorkspaceActivity` — вне
+  этого домена), разделы «Задачи... Отряды... Агенты» и «Шаблоны
+  агентов, конструктор агента, навыки, дашборд...» целиком.
+- `docs/50-api-contract.yaml` — все операции тегов `Agents`/`AgentSkills`/
+  `AgentMcpServers`/`Squads`/`Skills`/`AgentTemplates`/`AgentBuilder`/
+  `Dashboard`; схемы `Agent*`, `Squad*`, `Skill*`, `AgentTemplate*`,
+  `Dashboard*`, `UsageTokenFields`, `AgentTask` (только для
+  `listAgentTasks`/`delivered_comment_ids`), `Label` (форма, не CRUD).
+- `docs/51-data-model.md` — раздел «Соответствие схем...» (строки
+  `Agent`/`Squad`/`Skill`/`AgentTask`/`Runtime`), полные таблицы
+  `operatives`/`operative_targets`/`operative_mcp_links`/
+  `operative_capabilities`/`operative_disabled_local_skills`/`crews`/
+  `crew_members`/`capabilities`/`capability_files`/`tags`/
+  `platform_audit_log`/`platform_policy`/`space_mcp_servers`/
+  `space_mcp_credentials`/`executors`/`tickets` (заголовки колонок),
+  `dispatch_jobs` (повторно).
+- `server2/migrations/{002_workspace,003_agents,004_crews,005_tasks,
+  008_dispatch,011_governance}.up.sql` — точные имена/типы колонок и
+  constraints; запускался `psql \d` на живой БД этой сессии по ходу
+  отладки (см. «Живая проверка»), не открывался как файл
+  `server/migrations/*`.
+- `server2/internal/{httpapi,store,workspace,realtime,wsctx,config}/*.go` —
+  общая инфраструктура (расширена аддитивно, см. пункты 16–17 выше).
+- `server2/internal/{tagging,pin,note,chat,task}/*.go` — только код (не
+  черновые комментарии по существу чужой задачи), как образец конвенций:
+  `tagging.Store.ResourceLabelsEnabled`/паттерн `resourceTypeAllowed`
+  (повторён для agent/skill), `chat.Store.CanInvoke`/`GetAgent`
+  (каноническая форма проверки target=team через `crew_members`,
+  повторена в `agent.Store.CanInvoke`), `chat.Store.CreateSession`/
+  `CreateSessionParams` (для `agentbuilder`), `task/assignment.go`
+  (`crewLeader`/`canInvokeAgent`/`EvaluateAutostart`/`resolveRunnable` —
+  чтобы убедиться, что автозапуск для `assignee_type=squad` уже полностью
+  реализован этим доменом и не требует правок; единственный
+  незанятый путь — `/api/issues/{id}/squad-evaluated`, оставленный этой
+  сессии), `task/timeline.go` (форма `ticket_activity`, для
+  `squad-evaluated`).
+- `server2/internal/dispatch/*.go` — весь пакет на момент этой сессии
+  (включая уже добавленные соседом A `claim.go`/`lifecycle.go`/
+  `messages.go`/`usage.go`) — только код, для точки расширения
+  (`Querier`, `Job`, `jobColumns`) под аддитивные `RunsForOperative`/
+  `CancelActiveForOperative`/`DeliveredNoteIDs`.
+- `server2/internal/authn/{middleware.go,agent_actor.go}` — как резолвится
+  `mat_`-токен в `httpapi.Actor` (подтверждение, что `Actor.UserID` для
+  агентского актора — id самого агента, на чём построена проверка лидера
+  в `squad-evaluated`); файл не менялся.
+- `server2/internal/app/{deps.go,routes.go}` — уже частично собранные
+  соседями (autopilot/cloudruntime/daemon/runtime) на момент этой сессии;
+  дописаны точечно (см. пункт 18).
+- `e2e/contract/{README.md,client.go,harness.go,contract_test.go}` — код
+  разделов `agents`/`squads`/`skills`/`autopilots` (для `ensureAgent`/
+  `ensureSquad`/`ensureRuntime`) и общие `call`/`ensureX`-хелперы.
+- `scripts/similarity-check.py` — алгоритм и `--ignore-trivial` (только
+  как справочная проверка, что нарушения основного режима — фон
+  общей Go-заготовки доменного пакета, а не структурное совпадение;
+  порог принятия — основной режим, см. «Живая проверка»).
+
 `server/**` и `packages/core/**` не открывались.

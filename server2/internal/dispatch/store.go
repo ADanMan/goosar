@@ -140,6 +140,11 @@ type Job struct {
 	ParentJobID   *string
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+
+	// DeliveredNoteIDs — dj_delivered_note_ids (schemas.AgentTask.delivered_comment_ids,
+	// обязательное поле контракта). Добавлено аддитивно T-028
+	// (internal/agent.listAgentTasks — единственный текущий потребитель).
+	DeliveredNoteIDs []string
 }
 
 // Store — доступ к dispatch_jobs/dispatch_messages/dispatch_usage. Не держит
@@ -150,7 +155,8 @@ func NewStore() *Store { return &Store{} }
 
 const jobColumns = `id, workspace_id, operative_id, executor_id, ticket_id, initiative_id, crew_id, convo_id,
 	dj_kind, dj_status, dj_priority, dj_thread_title, dj_dispatched_at, dj_started_at, dj_completed_at,
-	dj_result, dj_error, dj_failure_reason, dj_attempt, dj_max_attempts, dj_parent_job_id, created_at, updated_at`
+	dj_result, dj_error, dj_failure_reason, dj_attempt, dj_max_attempts, dj_parent_job_id, created_at, updated_at,
+	dj_delivered_note_ids`
 
 func scanJob(row pgx.Row) (Job, error) {
 	var j Job
@@ -159,7 +165,7 @@ func scanJob(row pgx.Row) (Job, error) {
 	if err := row.Scan(&j.ID, &j.WorkspaceID, &j.OperativeID, &j.ExecutorID, &j.TicketID, &j.InitiativeID,
 		&j.CrewID, &j.ConvoID, &kind, &status, &j.Priority, &j.ThreadTitle, &j.DispatchedAt, &j.StartedAt,
 		&j.CompletedAt, &result, &j.Error, &j.FailureReason, &j.Attempt, &j.MaxAttempts, &j.ParentJobID,
-		&j.CreatedAt, &j.UpdatedAt); err != nil {
+		&j.CreatedAt, &j.UpdatedAt, &j.DeliveredNoteIDs); err != nil {
 		return Job{}, err
 	}
 	j.Kind = Kind(kind)
@@ -281,6 +287,32 @@ func (s *Store) RunsForTicket(ctx context.Context, q Querier, ticketID string) (
 	rows, err := q.Query(ctx, `SELECT `+jobColumns+` FROM dispatch_jobs WHERE ticket_id = $1 ORDER BY created_at DESC`, ticketID)
 	if err != nil {
 		return nil, fmt.Errorf("dispatch: история запусков задачи: %w", err)
+	}
+	return collectJobs(rows)
+}
+
+// RunsForOperative — вся история запусков конкретного агента, по всем
+// задачам/каналам (listAgentTasks, T-028, contract §10.7 "GET
+// /api/agents/{id}/tasks": "вся история запусков"). Аддитивно к пакету
+// T-027, тот же приём, что RunsForTicket.
+func (s *Store) RunsForOperative(ctx context.Context, q Querier, operativeID string) ([]Job, error) {
+	rows, err := q.Query(ctx, `SELECT `+jobColumns+` FROM dispatch_jobs WHERE operative_id = $1 ORDER BY created_at DESC`, operativeID)
+	if err != nil {
+		return nil, fmt.Errorf("dispatch: история запусков агента: %w", err)
+	}
+	return collectJobs(rows)
+}
+
+// CancelActiveForOperative отменяет все ещё не завершённые запуски
+// конкретного агента, по всем задачам (cancelAgentTasks/archiveAgent,
+// T-028). Аддитивно, тот же приём, что CancelActiveForTicket/Convo.
+func (s *Store) CancelActiveForOperative(ctx context.Context, q Querier, operativeID string) ([]Job, error) {
+	rows, err := q.Query(ctx, `
+		UPDATE dispatch_jobs SET dj_status = 'cancelled', updated_at = now()
+		WHERE operative_id = $1 AND dj_status = ANY($2)
+		RETURNING `+jobColumns, operativeID, statusStrings(activeStatuses))
+	if err != nil {
+		return nil, fmt.Errorf("dispatch: отмена активных запусков агента: %w", err)
 	}
 	return collectJobs(rows)
 }
