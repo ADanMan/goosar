@@ -42,16 +42,21 @@ func (d *Deps) llmHealthStatus(r *http.Request) LlmHealth {
 	return v
 }
 
+// pingLLM — GOOSAR_DEPLOYMENT_LLM_API_BASE/_MODEL — только подсказки,
+// отдаваемые клиентам (contract, «LLM»); реальные учётные данные для этого
+// health-check и для выдачи клиентского секрета ниже берутся из
+// GOOSAR_LLM_API_KEY/GOOSAR_LLM_BASE_URL — без них ни health, ни секрет не
+// работают, даже если GOOSAR_DEPLOYMENT_LLM_API_BASE заполнено.
 func (d *Deps) pingLLM(r *http.Request) LlmHealth {
 	now := time.Now()
-	if d.Config.DeploymentLLMBaseURL == "" || d.Config.DeploymentLLMAPIKey == "" {
+	if d.Config.LLMBaseURL == "" || d.Config.LLMAPIKey == "" {
 		return LlmHealth{Status: "unconfigured", CheckedAt: now}
 	}
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, d.Config.DeploymentLLMBaseURL+"/models", nil)
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, d.Config.LLMBaseURL+"/models", nil)
 	if err != nil {
 		return LlmHealth{Status: "unreachable", CheckedAt: now}
 	}
-	req.Header.Set("Authorization", "Bearer "+d.Config.DeploymentLLMAPIKey)
+	req.Header.Set("Authorization", "Bearer "+d.Config.LLMAPIKey)
 	start := time.Now()
 	resp, err := d.httpClient.Do(req)
 	latency := int(time.Since(start).Milliseconds())
@@ -81,11 +86,19 @@ func (d *Deps) handleGetClientSecrets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	secrets := ClientSecrets{Integrations: map[string]ClientSecretsIntegration{}}
-	if d.Config.DeploymentLLMBaseURL != "" {
+	if d.Config.LLMBaseURL != "" && d.Config.LLMAPIKey != "" {
+		apiBase := d.Config.DeploymentLLMAPIBase
+		if apiBase == "" {
+			apiBase = d.Config.LLMBaseURL
+		}
+		model := d.Config.DeploymentLLMModel
+		if model == "" {
+			model = d.Config.LLMDefaultModel
+		}
 		secrets.LLM = &ClientSecretsLLM{
-			APIBase: d.Config.DeploymentLLMBaseURL,
-			Model:   d.Config.DeploymentLLMModel,
-			APIKey:  d.Config.DeploymentLLMAPIKey,
+			APIBase: apiBase,
+			Model:   model,
+			APIKey:  d.Config.LLMAPIKey,
 		}
 	}
 	fields := []string{}

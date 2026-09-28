@@ -15,13 +15,12 @@ import (
 	"time"
 )
 
-// SMTPSecurity — как шифруется соединение с сервером (SMTP_SECURITY).
+// SMTPSecurity — как шифруется соединение с сервером (SMTP_TLS).
 type SMTPSecurity string
 
 const (
 	SMTPSecurityStartTLS SMTPSecurity = "starttls" // обычное соединение, затем STARTTLS (по умолчанию)
-	SMTPSecurityTLS      SMTPSecurity = "tls"      // TLS с самого подключения (implicit TLS, обычно порт 465)
-	SMTPSecurityNone     SMTPSecurity = "none"     // без шифрования — только для локальных/тестовых серверов
+	SMTPSecurityImplicit SMTPSecurity = "implicit" // TLS с самого подключения (алиасы smtps/ssl), обычно порт 465
 )
 
 // SMTPSender — транспорт почты поверх net/smtp (T-029): своя реализация на
@@ -35,29 +34,30 @@ type SMTPSender struct {
 	Password    string
 	Security    SMTPSecurity
 	From        string
+	Insecure    bool   // SMTP_TLS_INSECURE — пропустить проверку сертификата (приватный/самоподписанный CA)
+	EhloName    string // SMTP_EHLO_NAME — имя, объявляемое в EHLO/HELO
 	DialTimeout time.Duration
 
 	// RootCAs — доверенные CA поверх системного пула; nil означает "только
 	// системный пул" (обычный случай). Позволяет тестам (и деплоям с
 	// собственным internal CA) не трогать доверие ОС. Не читается из
-	// окружения — SMTP_SECURITY/host/port достаточно для контракта T-029,
-	// это поле только для встраивания в код (тесты, будущие деплои).
+	// окружения — это поле только для встраивания в код (тесты, будущие
+	// деплои); SMTP_TLS_INSECURE — операторский эскейп-хетч через Insecure.
 	RootCAs *x509.CertPool
 }
 
-// NewSMTPSender собирает отправитель; security, не совпадающий ни с одним
-// известным значением, тихо сводится к SMTPSecurityStartTLS (наиболее
-// распространённый режим у почтовых провайдеров).
-func NewSMTPSender(host string, port int, username, password, security, from string) *SMTPSender {
-	sec := SMTPSecurity(strings.ToLower(strings.TrimSpace(security)))
-	switch sec {
-	case SMTPSecurityTLS, SMTPSecurityNone:
-	default:
-		sec = SMTPSecurityStartTLS
+// NewSMTPSender собирает отправитель; security, не совпадающий с "implicit",
+// сводится к SMTPSecurityStartTLS (config.normalizeSMTPTLS уже нормализует
+// значение и алиасы smtps/ssl до вызова этой функции).
+func NewSMTPSender(host string, port int, username, password, security, from string, insecure bool, ehloName string) *SMTPSender {
+	sec := SMTPSecurityStartTLS
+	if strings.EqualFold(strings.TrimSpace(security), "implicit") {
+		sec = SMTPSecurityImplicit
 	}
 	return &SMTPSender{
 		Host: host, Port: port, Username: username, Password: password,
-		Security: sec, From: from, DialTimeout: 10 * time.Second,
+		Security: sec, From: from, Insecure: insecure, EhloName: ehloName,
+		DialTimeout: 10 * time.Second,
 	}
 }
 
@@ -70,8 +70,8 @@ func (s *SMTPSender) Send(ctx context.Context, msg Message) error {
 
 	var conn net.Conn
 	var err error
-	if s.Security == SMTPSecurityTLS {
-		conn, err = tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{ServerName: s.Host, RootCAs: s.RootCAs})
+	if s.Security == SMTPSecurityImplicit {
+		conn, err = tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{ServerName: s.Host, RootCAs: s.RootCAs, InsecureSkipVerify: s.Insecure})
 	} else {
 		conn, err = dialer.DialContext(ctx, "tcp", addr)
 	}
@@ -86,9 +86,15 @@ func (s *SMTPSender) Send(ctx context.Context, msg Message) error {
 	}
 	defer func() { _ = client.Close() }()
 
+	if s.EhloName != "" {
+		if err := client.Hello(s.EhloName); err != nil {
+			return fmt.Errorf("mail: smtp: EHLO/HELO: %w", err)
+		}
+	}
+
 	if s.Security == SMTPSecurityStartTLS {
 		if ok, _ := client.Extension("STARTTLS"); ok {
-			if err := client.StartTLS(&tls.Config{ServerName: s.Host, RootCAs: s.RootCAs}); err != nil {
+			if err := client.StartTLS(&tls.Config{ServerName: s.Host, RootCAs: s.RootCAs, InsecureSkipVerify: s.Insecure}); err != nil {
 				return fmt.Errorf("mail: smtp: STARTTLS: %w", err)
 			}
 		}

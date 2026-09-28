@@ -6,9 +6,9 @@ import (
 )
 
 func TestParseGCUploadsFlags_defaults(t *testing.T) {
-	opts, err := parseGCUploadsFlags(nil)
+	opts, err := parseGCUploadsFlags(nil, 168*time.Hour)
 	if err != nil {
-		t.Fatalf("parseGCUploadsFlags(nil): %v", err)
+		t.Fatalf("parseGCUploadsFlags(nil, 168*time.Hour): %v", err)
 	}
 	if opts.dryRun {
 		t.Errorf("dryRun = true, want false by default")
@@ -22,7 +22,7 @@ func TestParseGCUploadsFlags_defaults(t *testing.T) {
 }
 
 func TestParseGCUploadsFlags_overrides(t *testing.T) {
-	opts, err := parseGCUploadsFlags([]string{"--dry-run", "--grace=1h", "--limit=10"})
+	opts, err := parseGCUploadsFlags([]string{"--dry-run", "--grace=1h", "--limit=10"}, 168*time.Hour)
 	if err != nil {
 		t.Fatalf("parseGCUploadsFlags: %v", err)
 	}
@@ -38,10 +38,10 @@ func TestParseGCUploadsFlags_overrides(t *testing.T) {
 }
 
 func TestParseGCUploadsFlags_rejectsNonPositiveLimit(t *testing.T) {
-	if _, err := parseGCUploadsFlags([]string{"--limit=0"}); err == nil {
+	if _, err := parseGCUploadsFlags([]string{"--limit=0"}, 168*time.Hour); err == nil {
 		t.Fatal("expected error for --limit=0")
 	}
-	if _, err := parseGCUploadsFlags([]string{"--limit=-5"}); err == nil {
+	if _, err := parseGCUploadsFlags([]string{"--limit=-5"}, 168*time.Hour); err == nil {
 		t.Fatal("expected error for --limit=-5")
 	}
 }

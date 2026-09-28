@@ -116,18 +116,18 @@ func dispatch(ctx context.Context, out io.Writer, db *store.Store, cfg config.Co
 	case "grant":
 		return runGrant(ctx, out, db, args[0])
 	case "gc-uploads":
-		opts, err := parseGCUploadsFlags(args)
+		opts, err := parseGCUploadsFlags(args, cfg.UploadGCGrace)
 		if err != nil {
 			return err
 		}
 		return runGCUploads(ctx, out, db, cfg, opts)
 	case "purge":
 		defaults := purgeOptions{
-			chat:            durationHours(cfg.RetentionChatHours),
-			tasks:           durationHours(cfg.RetentionTasksHours),
-			closedIssues:    durationHours(cfg.RetentionClosedIssuesHours),
-			activity:        durationHours(cfg.RetentionActivityHours),
-			attachmentGrace: durationHours(cfg.RetentionAttachmentGraceHours),
+			chat:            cfg.RetentionChat,
+			tasks:           cfg.RetentionTasks,
+			closedIssues:    cfg.RetentionClosedIssues,
+			activity:        cfg.RetentionActivity,
+			attachmentGrace: cfg.AttachmentPurgeGrace,
 		}
 		opts, err := parsePurgeFlags(args, defaults)
 		if err != nil {

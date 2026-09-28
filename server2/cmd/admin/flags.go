@@ -16,11 +16,11 @@ type gcUploadsOptions struct {
 	limit  int
 }
 
-func parseGCUploadsFlags(args []string) (gcUploadsOptions, error) {
+func parseGCUploadsFlags(args []string, defaultGrace time.Duration) (gcUploadsOptions, error) {
 	fs := flag.NewFlagSet("gc-uploads", flag.ContinueOnError)
 	opts := gcUploadsOptions{}
 	fs.BoolVar(&opts.dryRun, "dry-run", false, "только напечатать список, ничего не удалять")
-	fs.DurationVar(&opts.grace, "grace", 168*time.Hour, "минимальный возраст осиротевшей загрузки")
+	fs.DurationVar(&opts.grace, "grace", defaultGrace, "минимальный возраст осиротевшей загрузки (по умолчанию — GOOSAR_UPLOAD_GC_GRACE)")
 	fs.IntVar(&opts.limit, "limit", 500, "максимум удаляемых строк за один запуск")
 	if err := fs.Parse(args); err != nil {
 		return gcUploadsOptions{}, err

@@ -126,11 +126,27 @@ func (d *Deps) handlePutProvisioningPins(w http.ResponseWriter, r *http.Request)
 
 // --- каталог/манифест/блоб (файловый бэкенд, см. server2/docs/decisions.md) ---
 
+// provisioningLocalDir — каталог пакетов для GOOSAR_PROVISIONING_STORE=local
+// (contract: "переиспользует хранилище вложений (S3 или локальный диск) как
+// адресуемый по содержимому склад пакетов"): server2 хранит вложения только
+// на локальном диске (LOCAL_UPLOAD_DIR, S3-backend не реализован), поэтому
+// это LOCAL_UPLOAD_DIR/GOOSAR_PROVISIONING_LOCAL_PREFIX. Пусто, если store
+// не "local" (в т.ч. "oci" — не реализован в этой версии, см.
+// server2/docs/env-parity.md) — эндпойнты отвечают 503, как и раньше при
+// незаданном каталоге.
+func (d *Deps) provisioningLocalDir() string {
+	if d.Config.ProvisioningStore != "local" {
+		return ""
+	}
+	return filepath.Join(d.Config.LocalUploadDir, d.Config.ProvisioningLocalPrefix)
+}
+
 func (d *Deps) catalogPackages() ([]ProvisioningPackage, bool) {
-	if d.Config.ProvisioningCatalogDir == "" {
+	dir := d.provisioningLocalDir()
+	if dir == "" {
 		return nil, false
 	}
-	raw, err := os.ReadFile(filepath.Join(d.Config.ProvisioningCatalogDir, "catalog.json"))
+	raw, err := os.ReadFile(filepath.Join(dir, "catalog.json"))
 	if err != nil {
 		return nil, false
 	}
@@ -268,7 +284,8 @@ func (d *Deps) handleGetProvisioningBlob(w http.ResponseWriter, r *http.Request)
 		httpapi.BadRequest(w, "platform is required and must be a known value")
 		return
 	}
-	if d.Config.ProvisioningCatalogDir == "" {
+	dir := d.provisioningLocalDir()
+	if dir == "" {
 		httpapi.WriteError(w, http.StatusServiceUnavailable, "provisioning is not configured on this deployment", "provisioning_unavailable")
 		return
 	}
@@ -289,7 +306,7 @@ func (d *Deps) handleGetProvisioningBlob(w http.ResponseWriter, r *http.Request)
 		httpapi.NotFound(w, "package is not part of the manifest allowed for this workspace/platform")
 		return
 	}
-	path := filepath.Join(d.Config.ProvisioningCatalogDir, "blobs", name+"-"+version+".zst")
+	path := filepath.Join(dir, "blobs", name+"-"+version+".zst")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		httpapi.NotFound(w, "blob not found in storage")
