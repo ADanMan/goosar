@@ -86,6 +86,14 @@
     "redeeming": "Linking your account…",
     "sign_in": "Sign in"
   },
+  "tab_bar": {
+    "close": "Close tab",
+    "close_others": "Close other tabs",
+    "open_as_new_window": "Open as new window",
+    "pin": "Pin tab",
+    "pinned_aria": "{{title}} (pinned)",
+    "unpin": "Unpin tab"
+  },
   "time": {
     "days_ago": "{{count}}d ago",
     "hours_ago": "{{count}}h ago",

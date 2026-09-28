@@ -5,7 +5,10 @@ import enCommon from '@goosar/views/locales/en/common.json';
 
 vi.mock('@goosar/views/i18n', () => ({
   useT: () => ({
-    t: (selector: (resources: typeof enCommon) => string) => selector(enCommon),
+    t: (selector: (resources: typeof enCommon) => string, vars?: Record<string, string>) => {
+      const template = selector(enCommon);
+      return vars ? template.replace(/{{(\w+)}}/g, (_, key: string) => vars[key] ?? '') : template;
+    },
   }),
 }));
 

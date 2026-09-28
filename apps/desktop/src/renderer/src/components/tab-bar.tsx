@@ -123,6 +123,7 @@ function SortableTabItem({
   shouldReduceMotion: boolean;
   showSeparator: boolean;
 }) {
+  const { t } = useT('common');
   const setActiveTab = useTabStore((s) => s.setActiveTab);
   const closeTab = useTabStore((s) => s.closeTab);
   const closeOtherTabs = useTabStore((s) => s.closeOtherTabs);
@@ -191,10 +192,10 @@ function SortableTabItem({
       {...attributes}
       {...listeners}
       onClick={handleClick}
-      aria-label={tab.pinned ? `${title} (pinned)` : title}
+      aria-label={tab.pinned ? t(($) => $.tab_bar.pinned_aria, { title }) : title}
       data-tab-active={isActive ? 'true' : undefined}
       data-tab-entering={isEntering ? 'true' : undefined}
-      title={tab.pinned ? `${title} (pinned)` : undefined}
+      title={tab.pinned ? t(($) => $.tab_bar.pinned_aria, { title }) : undefined}
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       className={cn(
         'group relative flex size-full min-w-0 items-center gap-1.5 px-2.5 text-xs transition-colors',
@@ -219,8 +220,8 @@ function SortableTabItem({
         onClick={handleTogglePin}
         onPointerDown={stopDragOnAction}
         role="button"
-        aria-label={tab.pinned ? 'Unpin tab' : 'Pin tab'}
-        title={tab.pinned ? 'Unpin tab' : 'Pin tab'}
+        aria-label={tab.pinned ? t(($) => $.tab_bar.unpin) : t(($) => $.tab_bar.pin)}
+        title={tab.pinned ? t(($) => $.tab_bar.unpin) : t(($) => $.tab_bar.pin)}
         className="hidden size-3.5 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors group-hover:flex hover:bg-muted-foreground/20 hover:text-foreground"
       >
         {tab.pinned ? <PinOff className="size-2.5" /> : <Pin className="size-2.5" />}
@@ -230,7 +231,7 @@ function SortableTabItem({
           onClick={handleClose}
           onPointerDown={stopDragOnAction}
           role="button"
-          aria-label="Close tab"
+          aria-label={t(($) => $.tab_bar.close)}
           className="hidden size-3.5 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors group-hover:flex hover:bg-muted-foreground/20 hover:text-foreground"
         >
           <X className="size-2.5" />
@@ -289,7 +290,7 @@ function SortableTabItem({
               <>
                 <ContextMenuItem onClick={handleOpenAsWindow}>
                   <AppWindow />
-                  Open as new window
+                  {t(($) => $.tab_bar.open_as_new_window)}
                 </ContextMenuItem>
                 <ContextMenuSeparator />
               </>
@@ -298,12 +299,12 @@ function SortableTabItem({
               {tab.pinned ? (
                 <>
                   <PinOff />
-                  Unpin tab
+                  {t(($) => $.tab_bar.unpin)}
                 </>
               ) : (
                 <>
                   <Pin />
-                  Pin tab
+                  {t(($) => $.tab_bar.pin)}
                 </>
               )}
             </ContextMenuItem>
@@ -314,7 +315,7 @@ function SortableTabItem({
               onClick={() => closeTab(tab.id)}
             >
               <X />
-              Close tab
+              {t(($) => $.tab_bar.close)}
             </ContextMenuItem>
             <ContextMenuItem
               variant="destructive"
@@ -322,7 +323,7 @@ function SortableTabItem({
               onClick={() => closeOtherTabs(tab.id)}
             >
               <ListX />
-              Close other tabs
+              {t(($) => $.tab_bar.close_others)}
             </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>

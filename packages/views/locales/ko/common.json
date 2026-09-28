@@ -86,6 +86,14 @@
     "redeeming": "계정을 연결하는 중…",
     "sign_in": "로그인"
   },
+  "tab_bar": {
+    "close": "탭 닫기",
+    "close_others": "다른 탭 닫기",
+    "open_as_new_window": "새 창에서 열기",
+    "pin": "탭 고정",
+    "pinned_aria": "{{title}}(고정됨)",
+    "unpin": "탭 고정 해제"
+  },
   "time": {
     "days_ago": "{{count}}일 전",
     "hours_ago": "{{count}}시간 전",
