@@ -152,10 +152,20 @@ export function DaemonPanel({ open, onOpenChange, status, runtimeCount }: Daemon
   }, [filtered, t]);
 
   const handleClear = useCallback(() => {
+    // §3 L94: the buffer is local and temporary, so an undo toast (as in
+    // packages/views/issues/.../status-picker.tsx) is enough — no need to
+    // block the clear itself behind a confirm dialog.
+    const cleared = logs;
     setLogs([]);
     setExpandedFields(new Set());
     setExpandedGroups(new Set());
-  }, []);
+    toast.success(t(($) => $.desktop.daemon.logs.cleared), {
+      action: {
+        label: t(($) => $.desktop.daemon.logs.undo),
+        onClick: () => setLogs(cleared),
+      },
+    });
+  }, [logs, t]);
 
   const toggleLevel = useCallback((lv: LogLevel) => {
     setEnabledLevels((prev) => {
