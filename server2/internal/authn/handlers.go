@@ -3,6 +3,7 @@ package authn
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 const (
 	codeTTL          = 10 * time.Minute
 	codeResendWindow = 60 * time.Second
+	linkPurpose      = "login_link"
 )
 
 type sendCodeRequest struct {
@@ -20,8 +22,8 @@ type sendCodeRequest struct {
 }
 
 func (d *Deps) handleSendCode(w http.ResponseWriter, r *http.Request) {
-	if !d.SendCodeIPLimiter.Allow(httpapi.ClientIP(r)) {
-		httpapi.TooManyRequests(w, "too many requests")
+	ip := httpapi.ClientIP(r)
+	if !d.AuthIPLimiter.Enforce(w, ip, "too many requests") {
 		return
 	}
 	var req sendCodeRequest
@@ -34,8 +36,7 @@ func (d *Deps) handleSendCode(w http.ResponseWriter, r *http.Request) {
 		httpapi.BadRequest(w, "email is required")
 		return
 	}
-	if !d.SendCodeEmailLimiter.Allow(email) {
-		httpapi.TooManyRequests(w, "too many requests for this email")
+	if !d.AuthEmailLimiter.Enforce(w, email, "too many requests for this email") {
 		return
 	}
 
@@ -60,6 +61,16 @@ func (d *Deps) handleSendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Вне dev-режима реальная отправка обязательна — иначе код никогда не
+	// доедет до пользователя. Контракт документирует ровно это как 503
+	// "email delivery not configured on this instance" (см.
+	// docs/50-api-contract.yaml, authSendCode).
+	if !mail.Configured(d.Config) {
+		httpapi.WriteError(w, http.StatusServiceUnavailable,
+			"email delivery not configured on this instance", "email_delivery_unavailable")
+		return
+	}
+
 	if last, ok, err := d.Store.LastCodeSentAt(r.Context(), email, "login"); err == nil && ok {
 		if time.Since(last) < codeResendWindow {
 			httpapi.TooManyRequests(w, "code requested too recently")
@@ -72,18 +83,41 @@ func (d *Deps) handleSendCode(w http.ResponseWriter, r *http.Request) {
 		httpapi.WriteError(w, http.StatusInternalServerError, "internal error", "internal_error")
 		return
 	}
+	linkToken, err := randomToken("", 20)
+	if err != nil {
+		httpapi.WriteError(w, http.StatusInternalServerError, "internal error", "internal_error")
+		return
+	}
 	if err := d.Store.StoreCode(r.Context(), email, code, "login", codeTTL); err != nil {
 		httpapi.WriteError(w, http.StatusInternalServerError, "internal error", "internal_error")
 		return
 	}
-	if err := d.Mailer.Send(r.Context(), mail.Message{
-		To:      email,
-		Subject: "Ваш код входа в Goosar",
-		Body:    "Код: " + code,
-	}); err != nil {
+	if err := d.Store.StoreCode(r.Context(), email, linkToken, linkPurpose, codeTTL); err != nil {
+		d.Logger.Warn("auth: сохранение magic-link токена", "err", err)
+	}
+
+	locale := mail.LocaleFrom(d.Store.AccountLocale(r.Context(), email))
+	msg := mail.LoginCodeMessage(email, locale, code, d.magicLinkURL(linkToken))
+	if err := d.Mailer.Send(r.Context(), msg); err != nil {
 		d.Logger.Error("auth: отправка кода", "err", err)
+		httpapi.WriteError(w, http.StatusServiceUnavailable,
+			"email delivery not configured on this instance", "email_delivery_unavailable")
+		return
 	}
 	httpapi.WriteJSON(w, http.StatusOK, map[string]string{"message": "code sent"})
+}
+
+// magicLinkURL строит ссылку на страницу фронтенда, которая заберёт token из
+// query и вызовет POST /auth/verify-link (contract не фиксирует конкретный
+// путь фронтенда — решение этой сессии, см. server2/docs/decisions.md,
+// раздел T-029). Пусто, если FRONTEND_ORIGIN не задан — тогда письмо
+// ограничивается кодом (см. mail.LoginCodeMessage).
+func (d *Deps) magicLinkURL(token string) string {
+	base := strings.TrimRight(d.Config.FrontendOrigin, "/")
+	if base == "" {
+		return ""
+	}
+	return base + "/login/verify?token=" + url.QueryEscape(token)
 }
 
 type verifyCodeRequest struct {
@@ -92,8 +126,8 @@ type verifyCodeRequest struct {
 }
 
 func (d *Deps) handleVerifyCode(w http.ResponseWriter, r *http.Request) {
-	if !d.VerifyIPLimiter.Allow(httpapi.ClientIP(r)) {
-		httpapi.TooManyRequests(w, "too many requests")
+	ip := httpapi.ClientIP(r)
+	if !d.AuthVerifyIPLimiter.Enforce(w, ip, "too many requests") {
 		return
 	}
 	var req verifyCodeRequest
@@ -104,6 +138,9 @@ func (d *Deps) handleVerifyCode(w http.ResponseWriter, r *http.Request) {
 	email := normalizeEmail(req.Email)
 	if !looksLikeEmail(email) || req.Code == "" {
 		httpapi.BadRequest(w, "email and code are required")
+		return
+	}
+	if !d.AuthEmailLimiter.Enforce(w, email, "too many requests for this email") {
 		return
 	}
 
@@ -118,43 +155,110 @@ func (d *Deps) handleVerifyCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	acct, err := d.Store.FindAccountByEmail(r.Context(), email)
-	if errors.Is(err, ErrNotFound) {
-		if !d.Config.AllowSignup {
+	acct, err := d.signupOrFind(r, email, "")
+	if err != nil {
+		if errors.Is(err, errSignupDisabled) {
 			httpapi.WriteError(w, http.StatusForbidden, "signup is disabled on this server", "signup_disabled")
 			return
 		}
-		acct, err = d.Store.CreateAccount(r.Context(), email, displayNameFromEmail(email))
-	}
-	if err != nil {
 		httpapi.WriteError(w, http.StatusInternalServerError, "internal error", "internal_error")
 		return
 	}
 
-	d.startSession(w, r, acct)
+	d.completeLogin(w, r, acct)
 }
 
-// startSession выпускает сессию + JWT для acct и пишет LoginResult.
-func (d *Deps) startSession(w http.ResponseWriter, r *http.Request, acct Account) {
+var errSignupDisabled = errors.New("authn: регистрация отключена на этом сервере")
+
+// signupOrFind — общая часть verify-code/verify-link/oidc/ldap после того,
+// как identity подтверждена внешним фактором (код, magic-link, IdP,
+// каталог): найти существующий аккаунт по email или завести новый, если
+// ALLOW_SIGNUP=true (contract: "при первом входе создаёт пользователя,
+// учитывая allow-list/домены" — allow-list/домены пока не реализованы, см.
+// decisions.md). name — отображаемое имя из IdP/каталога для нового
+// аккаунта; пусто — вывести его из локальной части email (displayNameFromEmail).
+func (d *Deps) signupOrFind(r *http.Request, email, name string) (Account, error) {
+	acct, err := d.Store.FindAccountByEmail(r.Context(), email)
+	if errors.Is(err, ErrNotFound) {
+		if !d.Config.AllowSignup {
+			return Account{}, errSignupDisabled
+		}
+		if name == "" {
+			name = displayNameFromEmail(email)
+		}
+		return d.Store.CreateAccount(r.Context(), email, name)
+	}
+	return acct, err
+}
+
+// issueSessionToken создаёт строку сессии, подписывает JWT и выставляет
+// cookies — общая часть startSession (JSON-ответ) и finishExternalLogin
+// (HTTP-редирект после OIDC), которым в остальном нужен один и тот же токен.
+func (d *Deps) issueSessionToken(w http.ResponseWriter, r *http.Request, acct Account) (string, error) {
 	sess, err := d.Store.CreateSession(r.Context(), acct.ID, r.UserAgent())
 	if err != nil {
-		httpapi.WriteError(w, http.StatusInternalServerError, "internal error", "internal_error")
-		return
+		return "", err
 	}
 	token, err := d.Signer.Sign(Claims{
 		Sub: acct.ID, Email: acct.Email, Name: acct.Name, TV: acct.TokenEpoch, SID: sess.ID,
 	}, sessionTTL)
 	if err != nil {
-		httpapi.WriteError(w, http.StatusInternalServerError, "internal error", "internal_error")
-		return
+		return "", err
 	}
 	csrf, err := randomToken("", 16)
+	if err != nil {
+		return "", err
+	}
+	d.setSessionCookies(w, token, csrf)
+	return token, nil
+}
+
+// loginOrLinkExternal — общий шаг после того, как внешний провайдер (OIDC/LDAP)
+// подтвердил identity: найти аккаунт, уже привязанный к (method, subject),
+// иначе найти/завести по email и привязать (method, subject) к нему на
+// будущее — второй вход того же пользователя пойдёт уже по subject, даже
+// если email в IdP успеет измениться.
+//
+// В отличие от signupOrFind (email-коды/magic-link), здесь не проверяется
+// ALLOW_SIGNUP: ни authLoginLdap, ни authOidcCallback не документируют 403
+// "signup disabled" в docs/50-api-contract.yaml (только 401/404/503 и
+// 302/404 соответственно) — решение этой сессии читает это как "ALLOW_SIGNUP
+// охраняет только публичный вход по email от произвольной регистрации из
+// интернета; успешный вход через корпоративный каталог/IdP сам по себе уже
+// является предъявленным правом на аккаунт" (см. server2/docs/decisions.md,
+// раздел T-029).
+func (d *Deps) loginOrLinkExternal(r *http.Request, method, subject, email, name string) (Account, error) {
+	ctx := r.Context()
+	acct, err := d.Store.FindAccountByExternalSubject(ctx, method, subject)
+	switch {
+	case err == nil:
+		return acct, nil
+	case !errors.Is(err, ErrNotFound):
+		return Account{}, err
+	}
+	acct, err = d.Store.FindAccountByEmail(ctx, email)
+	if errors.Is(err, ErrNotFound) {
+		if name == "" {
+			name = displayNameFromEmail(email)
+		}
+		acct, err = d.Store.CreateAccount(ctx, email, name)
+	}
+	if err != nil {
+		return Account{}, err
+	}
+	if err := d.Store.UpsertExternalBinding(ctx, acct.ID, method, subject, email); err != nil {
+		return Account{}, err
+	}
+	return acct, nil
+}
+
+// startSession выпускает сессию + JWT для acct и пишет LoginResult.
+func (d *Deps) startSession(w http.ResponseWriter, r *http.Request, acct Account) {
+	token, err := d.issueSessionToken(w, r, acct)
 	if err != nil {
 		httpapi.WriteError(w, http.StatusInternalServerError, "internal error", "internal_error")
 		return
 	}
-	d.setSessionCookies(w, token, csrf)
-
 	user, err := d.Store.GetUserView(r.Context(), acct.ID)
 	if err != nil {
 		httpapi.WriteError(w, http.StatusInternalServerError, "internal error", "internal_error")
@@ -166,11 +270,78 @@ func (d *Deps) startSession(w http.ResponseWriter, r *http.Request, acct Account
 	})
 }
 
+// completeLoginToken — ядро MFA-гейта, общее для JSON-ответа (completeLogin)
+// и HTTP-редиректа (finishExternalLogin, OIDC): если у аккаунта включена
+// MFA, возвращает mfa_token вместо сессионного (contract: "при необходимости
+// требует MFA, иначе выдаёт сессию").
+func (d *Deps) completeLoginToken(w http.ResponseWriter, r *http.Request, acct Account) (token string, mfaRequired bool, err error) {
+	status, err := d.Store.MFAStatus(r.Context(), acct.ID)
+	if err != nil {
+		return "", false, err
+	}
+	if status.Enabled {
+		token, err = d.Store.CreatePendingLogin(r.Context(), acct.ID, mfaPendingTTL)
+		return token, true, err
+	}
+	token, err = d.issueSessionToken(w, r, acct)
+	return token, false, err
+}
+
+// completeLogin — общий последний шаг верифицированных email-путей входа
+// (код, magic-link): пишет LoginResult как JSON.
+func (d *Deps) completeLogin(w http.ResponseWriter, r *http.Request, acct Account) {
+	token, mfaRequired, err := d.completeLoginToken(w, r, acct)
+	if err != nil {
+		httpapi.WriteError(w, http.StatusInternalServerError, "internal error", "internal_error")
+		return
+	}
+	if mfaRequired {
+		httpapi.WriteJSON(w, http.StatusOK, map[string]any{"mfa_required": true, "mfa_token": token})
+		return
+	}
+	user, err := d.Store.GetUserView(r.Context(), acct.ID)
+	if err != nil {
+		httpapi.WriteError(w, http.StatusInternalServerError, "internal error", "internal_error")
+		return
+	}
+	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"token": token, "user": user})
+}
+
+type verifyLinkRequest struct {
+	LinkToken string `json:"link_token"`
+}
+
+// handleVerifyLoginLink — magic-link вариант verify-code: тот же эффект
+// (найти/завести аккаунт, пройти MFA-гейт, выдать сессию), но по токену из
+// письма send-code вместо 6-значного кода (contract §3.3: "То же самое, но
+// по magic-link токену вместо кода").
 func (d *Deps) handleVerifyLoginLink(w http.ResponseWriter, r *http.Request) {
-	// Отдельный от кода поток magic-link. Оставлено как 501 (см.
-	// server2/docs/decisions.md, «Пробелы спецификации») — не задействовано
-	// контрактными тестами auth/workspaces/me T-026.
-	httpapi.WriteNotImplemented(w, r)
+	ip := httpapi.ClientIP(r)
+	if !d.AuthVerifyIPLimiter.Enforce(w, ip, "too many requests") {
+		return
+	}
+	var req verifyLinkRequest
+	if err := httpapi.DecodeJSON(r, &req); err != nil || req.LinkToken == "" {
+		httpapi.BadRequest(w, "link_token is required")
+		return
+	}
+
+	email, err := d.Store.ConsumeLinkToken(r.Context(), req.LinkToken, linkPurpose)
+	if err != nil {
+		httpapi.WriteError(w, http.StatusBadRequest, "invalid or expired link", "invalid_or_expired_link")
+		return
+	}
+
+	acct, err := d.signupOrFind(r, email, "")
+	if err != nil {
+		if errors.Is(err, errSignupDisabled) {
+			httpapi.WriteError(w, http.StatusForbidden, "signup is disabled on this server", "signup_disabled")
+			return
+		}
+		httpapi.WriteError(w, http.StatusInternalServerError, "internal error", "internal_error")
+		return
+	}
+	d.completeLogin(w, r, acct)
 }
 
 func (d *Deps) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -179,9 +350,22 @@ func (d *Deps) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *Deps) handleListMethods(w http.ResponseWriter, r *http.Request) {
-	httpapi.WriteJSON(w, http.StatusOK, map[string]any{
-		"methods": []string{"email"},
-	})
+	ip := httpapi.ClientIP(r)
+	if !d.AuthVerifyIPLimiter.Enforce(w, ip, "too many requests") {
+		return
+	}
+	methods := []string{"email"}
+	resp := map[string]any{}
+	if d.Config.OIDC.IssuerURL != "" {
+		methods = append(methods, "oidc")
+		resp["oidc_display_name"] = d.Config.OIDC.DisplayName
+	}
+	if d.Config.LDAP.URL != "" {
+		methods = append(methods, "ldap")
+		resp["ldap_display_name"] = d.Config.LDAP.DisplayName
+	}
+	resp["methods"] = methods
+	httpapi.WriteJSON(w, http.StatusOK, resp)
 }
 
 func (d *Deps) handleGetMfaStatus(w http.ResponseWriter, r *http.Request) {

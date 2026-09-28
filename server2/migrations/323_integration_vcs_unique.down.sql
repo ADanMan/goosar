@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS vcs_connections_provider_instance_uk;

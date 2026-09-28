@@ -1,10 +1,12 @@
 package authn
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base32"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -96,4 +98,35 @@ func randomCode(numDigits int) (string, error) {
 		return "", fmt.Errorf("authn: randomCode: генерация: %w", err)
 	}
 	return fmt.Sprintf("%0*d", numDigits, n.Int64()), nil
+}
+
+// signHMACPayload/verifyHMACPayload — короткоживущий подписанный опаковый
+// токен для cookie, которым не нужна отдельная строка в БД (например
+// OIDC state/nonce, oidc.go): payload в base64url, "." и HMAC-SHA256 подпись
+// в base64url поверх него. Тот же приём, что MintDaemonToken/verifyDaemonToken
+// в daemon_token.go, вынесенный сюда как общий примитив для payload
+// произвольного вида (не только "workspaceID|daemonID").
+func signHMACPayload(secret, payload string) string {
+	sig := hmac.New(sha256.New, []byte(secret))
+	sig.Write([]byte(payload))
+	mac := base64.RawURLEncoding.EncodeToString(sig.Sum(nil))
+	return base64.RawURLEncoding.EncodeToString([]byte(payload)) + "." + mac
+}
+
+func verifyHMACPayload(secret, token string) (payload string, ok bool) {
+	encPayload, mac, found := strings.Cut(token, ".")
+	if !found {
+		return "", false
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(encPayload)
+	if err != nil {
+		return "", false
+	}
+	sig := hmac.New(sha256.New, []byte(secret))
+	sig.Write(raw)
+	want := base64.RawURLEncoding.EncodeToString(sig.Sum(nil))
+	if subtle.ConstantTimeCompare([]byte(want), []byte(mac)) != 1 {
+		return "", false
+	}
+	return string(raw), true
 }

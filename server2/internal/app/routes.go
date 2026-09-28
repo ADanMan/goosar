@@ -9,13 +9,18 @@ import (
 	"github.com/adanman/goosar/server2/internal/asset"
 	"github.com/adanman/goosar/server2/internal/authn"
 	"github.com/adanman/goosar/server2/internal/autopilot"
+	"github.com/adanman/goosar/server2/internal/billing"
 	"github.com/adanman/goosar/server2/internal/chat"
 	"github.com/adanman/goosar/server2/internal/cloudruntime"
 	"github.com/adanman/goosar/server2/internal/daemon"
 	"github.com/adanman/goosar/server2/internal/dashboard"
+	"github.com/adanman/goosar/server2/internal/deployment"
+	"github.com/adanman/goosar/server2/internal/export"
 	"github.com/adanman/goosar/server2/internal/feed"
 	"github.com/adanman/goosar/server2/internal/httpapi"
 	"github.com/adanman/goosar/server2/internal/identity"
+	"github.com/adanman/goosar/server2/internal/integration"
+	"github.com/adanman/goosar/server2/internal/misc"
 	"github.com/adanman/goosar/server2/internal/note"
 	"github.com/adanman/goosar/server2/internal/pin"
 	"github.com/adanman/goosar/server2/internal/project"
@@ -64,6 +69,11 @@ func NewRouter(d *Deps) *httpapi.Router {
 	agenttemplate.Register(router, d.AgentTemplate)
 	agentbuilder.Register(router, d.AgentBuilder)
 	dashboard.Register(router, d.Dashboard)
+	deployment.Register(router, d.Deployment)
+	integration.Register(router, d.Integration)
+	billing.Register(router, d.Billing)
+	export.Register(router, d.Export)
+	misc.Register(router, d.Misc)
 	realtime.Register(router, d.Hub, d.Authn, d.Workspace.Store.RealtimeMembership(), d.Task.RealtimeTaskAccess(), chat.NewChatAccessBridge(d.Chat.Store), d.Logger)
 
 	RegisterStubs(router)
@@ -83,6 +93,11 @@ func (d *Deps) BuildHandler(router *httpapi.Router) http.Handler {
 		func(h http.Handler) http.Handler { return httpapi.WithCORS(h, d.Config.FrontendOrigin) },
 		func(h http.Handler) http.Handler { return httpapi.WithCommonMiddleware(h, d.Logger) },
 		d.Authn.Middleware,
+		// WithAPIRateLimit — T-029, RATE_LIMIT_API (contract §1.5). Стоит
+		// после d.Authn.Middleware: ключ лимита предпочитает actor.UserID,
+		// который эта миддлварь ещё не положила бы в контекст, будь она
+		// раньше в цепочке.
+		func(h http.Handler) http.Handler { return httpapi.WithAPIRateLimit(h, d.APILimiter) },
 	}
 
 	handler := http.Handler(router)

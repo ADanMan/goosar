@@ -7,6 +7,7 @@ package app
 
 import (
 	"log/slog"
+	"time"
 
 	"github.com/adanman/goosar/server2/internal/agent"
 	"github.com/adanman/goosar/server2/internal/agentbuilder"
@@ -14,15 +15,21 @@ import (
 	"github.com/adanman/goosar/server2/internal/asset"
 	"github.com/adanman/goosar/server2/internal/authn"
 	"github.com/adanman/goosar/server2/internal/autopilot"
+	"github.com/adanman/goosar/server2/internal/billing"
 	"github.com/adanman/goosar/server2/internal/chat"
 	"github.com/adanman/goosar/server2/internal/cloudruntime"
 	"github.com/adanman/goosar/server2/internal/config"
 	"github.com/adanman/goosar/server2/internal/daemon"
 	"github.com/adanman/goosar/server2/internal/dashboard"
+	"github.com/adanman/goosar/server2/internal/deployment"
 	"github.com/adanman/goosar/server2/internal/dispatch"
+	"github.com/adanman/goosar/server2/internal/export"
 	"github.com/adanman/goosar/server2/internal/feed"
+	"github.com/adanman/goosar/server2/internal/httpapi"
 	"github.com/adanman/goosar/server2/internal/identity"
+	"github.com/adanman/goosar/server2/internal/integration"
 	"github.com/adanman/goosar/server2/internal/mail"
+	"github.com/adanman/goosar/server2/internal/misc"
 	"github.com/adanman/goosar/server2/internal/note"
 	"github.com/adanman/goosar/server2/internal/pin"
 	"github.com/adanman/goosar/server2/internal/project"
@@ -43,6 +50,11 @@ type Deps struct {
 	Logger *slog.Logger
 	Mailer mail.Sender
 	Hub    *realtime.Hub
+
+	// APILimiter — T-029, общий лимит RATE_LIMIT_API на всю группу /api/**
+	// (contract §1.5), подключается один раз в BuildHandler поверх готового
+	// Router — не принадлежит ни одному домену.
+	APILimiter *httpapi.Limiter
 
 	Authn     *authn.Deps
 	Identity  *identity.Deps
@@ -91,11 +103,31 @@ type Deps struct {
 	AgentTemplate *agenttemplate.Deps
 	AgentBuilder  *agentbuilder.Deps
 	Dashboard     *dashboard.Deps
+
+	// Deployment — T-029, администрирование деплоя: роли deployment-admin с
+	// двухканальным подтверждением, аудит деплоя, MCP-серверы деплоя/
+	// воркспейса, политика деплоя, обзор воркспейсов/join-targets/fleet,
+	// слой конфигурации воркспейса (LLM/MCP) и её персональные override'ы,
+	// provisioning (манифест/каталог/pin'ы), client-secrets, llm/health
+	// (server2/internal/deployment).
+	Deployment *deployment.Deps
+
+	// Integration/Billing/Export/Misc — T-029, эта сессия: интеграции
+	// воркспейса (GitHub App/self-hosted VCS/Slack/Composio,
+	// server2/internal/integration), прозрачный прокси в облачный биллинг +
+	// вебхук Stripe (server2/internal/billing), экспорт воркспейса/личных
+	// данных (server2/internal/export) и последние одиночные ручки без
+	// отдельного домена — feedback/contact-sales/client-usage/status
+	// (server2/internal/misc).
+	Integration *integration.Deps
+	Billing     *billing.Deps
+	Export      *export.Deps
+	Misc        *misc.Deps
 }
 
 // New строит все доменные Deps поверх общей инфраструктуры.
 func New(cfg config.Config, db *store.Store, logger *slog.Logger) *Deps {
-	mailer := mail.NewLoggerSender(logger)
+	mailer := mail.FromConfig(cfg, logger)
 	hub := realtime.NewHub(logger)
 
 	authnDeps := authn.New(db, cfg, mailer, logger)
@@ -132,20 +164,28 @@ func New(cfg config.Config, db *store.Store, logger *slog.Logger) *Deps {
 	agentBuilderDeps := agentbuilder.New(db, agentDeps.Store, chatDeps.Store, workspaceDeps.Store, logger)
 	dashboardDeps := dashboard.New(db, workspaceDeps.Store, logger)
 
+	deploymentDeps := deployment.New(db, workspaceDeps.Store, authnDeps, hub, cfg, logger)
+
+	integrationDeps := integration.New(db, cfg, hub, logger)
+	billingDeps := billing.New(cfg.CloudRuntimeBaseURL, cfg.CloudRuntimeAPIKey, logger)
+	exportDeps := export.New(db, assetDeps.Storage, logger)
+	miscDeps := misc.New(db, cfg.RateLimits.ContactSales, logger)
+
 	return &Deps{
-		Config:    cfg,
-		Store:     db,
-		Logger:    logger,
-		Mailer:    mailer,
-		Hub:       hub,
-		Authn:     authnDeps,
-		Identity:  identityDeps,
-		Workspace: workspaceDeps,
-		Dispatch:  dispatchDeps,
-		Task:      taskDeps,
-		Project:   projectDeps,
-		Feed:      feedDeps,
-		Chat:      chatDeps,
+		Config:     cfg,
+		Store:      db,
+		Logger:     logger,
+		Mailer:     mailer,
+		Hub:        hub,
+		APILimiter: httpapi.NewLimiter(cfg.RateLimits.API, time.Minute),
+		Authn:      authnDeps,
+		Identity:   identityDeps,
+		Workspace:  workspaceDeps,
+		Dispatch:   dispatchDeps,
+		Task:       taskDeps,
+		Project:    projectDeps,
+		Feed:       feedDeps,
+		Chat:       chatDeps,
 
 		Note:    noteDeps,
 		Tagging: taggingDeps,
@@ -164,5 +204,12 @@ func New(cfg config.Config, db *store.Store, logger *slog.Logger) *Deps {
 		AgentTemplate: agentTemplateDeps,
 		AgentBuilder:  agentBuilderDeps,
 		Dashboard:     dashboardDeps,
+
+		Deployment: deploymentDeps,
+
+		Integration: integrationDeps,
+		Billing:     billingDeps,
+		Export:      exportDeps,
+		Misc:        miscDeps,
 	}
 }

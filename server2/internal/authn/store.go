@@ -48,6 +48,19 @@ func (s *Store) FindAccountByEmail(ctx context.Context, email string) (Account, 
 	return a, nil
 }
 
+// AccountLocale читает acct_locale по email — только для выбора языка письма
+// (mail.LocaleFrom) до того, как аккаунт точно существует; отсутствие строки
+// — не ошибка, просто "ещё не выбрана" (найдётся английский фолбэк).
+func (s *Store) AccountLocale(ctx context.Context, email string) string {
+	var locale *string
+	if err := s.db.Pool.QueryRow(ctx,
+		`SELECT acct_locale FROM accounts WHERE lower(acct_email) = lower($1)`, email,
+	).Scan(&locale); err != nil || locale == nil {
+		return ""
+	}
+	return *locale
+}
+
 // FindAccountByID — то же по id.
 func (s *Store) FindAccountByID(ctx context.Context, id string) (Account, error) {
 	var a Account
@@ -152,6 +165,27 @@ func (s *Store) ConsumeCode(ctx context.Context, email, code, purpose string) er
 		return ErrNotFound
 	}
 	return nil
+}
+
+// ConsumeLinkToken погашает magic-link токен (login_codes, lc_purpose=
+// "login_link") и возвращает email, для которого он был выпущен — в отличие
+// от ConsumeCode, вызывающий код ещё не знает email (POST /auth/verify-link
+// принимает только link_token, contract §3.3).
+func (s *Store) ConsumeLinkToken(ctx context.Context, token, purpose string) (string, error) {
+	var email string
+	err := s.db.Pool.QueryRow(ctx, `
+		UPDATE login_codes SET lc_consumed_at = now()
+		WHERE lc_purpose = $1 AND lc_code_digest = $2
+		  AND lc_consumed_at IS NULL AND lc_valid_until > now()
+		RETURNING lc_email`, purpose, digest(token),
+	).Scan(&email)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("authn: погашение magic-link токена: %w", err)
+	}
+	return email, nil
 }
 
 // --- sessions ----------------------------------------------------------------
@@ -309,6 +343,22 @@ func (s *Store) RevokePAT(ctx context.Context, id, accountID string) error {
 		return fmt.Errorf("authn: отзыв PAT: %w", err)
 	}
 	return nil
+}
+
+// RevokeAllPATs — правка T-029 (internal/deployment): удаляет все личные
+// токены доступа аккаунта разом. Нужна деактивации/удалению учётной записи
+// на уровне деплоя (docs/50-api-contract.md §7:
+// deactivateDeploymentUser/deleteDeploymentUser — «отзывает все личные
+// токены доступа... все токены даемона/раннера»; в этой схеме токен
+// раннера — тот же PAT, см. server2/docs/decisions.md, раздел T-029), для
+// которой не хватало отзыва по одному access_keys.id за раз. Возвращает
+// число удалённых токенов.
+func (s *Store) RevokeAllPATs(ctx context.Context, accountID string) (int64, error) {
+	tag, err := s.db.Pool.Exec(ctx, `DELETE FROM access_keys WHERE account_id = $1`, accountID)
+	if err != nil {
+		return 0, fmt.Errorf("authn: отзыв всех PAT: %w", err)
+	}
+	return tag.RowsAffected(), nil
 }
 
 // FindPATByToken ищет PAT по значению в открытом виде (проверка формата
