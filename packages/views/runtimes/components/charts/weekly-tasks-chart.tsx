@@ -6,11 +6,15 @@ import {
   type ChartConfig,
 } from '@goosar/ui/components/ui/chart';
 import { useT, useUiLocale } from '../../../i18n';
+import { labelOf } from './failure-class-visuals';
 
-const weeklyTasksChartConfig = {
-  completed: { label: 'Completed', color: 'var(--chart-1)' },
-  failed: { label: 'Failed', color: 'var(--chart-5)' },
-} satisfies ChartConfig;
+function useWeeklyTasksChartConfig(): ChartConfig {
+  const { t } = useT('usage');
+  return {
+    completed: { label: t(($) => $.series.completed), color: 'var(--chart-1)' },
+    failed: { label: t(($) => $.series.failed), color: 'var(--chart-5)' },
+  } satisfies ChartConfig;
+}
 
 export interface WeeklyTasksData {
   weekStart: string;
@@ -27,6 +31,7 @@ export function WeeklyTasksChart({ data }: { data: WeeklyTasksData[] }) {
   const { t } = useT('usage');
   const { t: tRuntimes } = useT('runtimes');
   const uiLocale = useUiLocale();
+  const weeklyTasksChartConfig = useWeeklyTasksChartConfig();
   return (
     <ChartContainer config={weeklyTasksChartConfig} className="aspect-[3/1] w-full">
       <BarChart data={data} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
@@ -53,7 +58,7 @@ export function WeeklyTasksChart({ data }: { data: WeeklyTasksData[] }) {
                     })
                   : row.rangeLabel;
               }}
-              formatter={(value, name) => `${value} ${name}`}
+              formatter={(value, name) => `${value} ${labelOf(weeklyTasksChartConfig, name)}`}
               footer={(payload) => {
                 const total = payload.reduce(
                   (sum, item) => sum + (typeof item.value === 'number' ? item.value : 0),

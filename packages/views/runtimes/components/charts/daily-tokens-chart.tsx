@@ -7,17 +7,22 @@ import {
 } from '@goosar/ui/components/ui/chart';
 import { formatTokens, type DailyTokenData } from '../../utils';
 import { useT, useUiLocale } from '../../../i18n';
+import { labelOf } from './failure-class-visuals';
 
-export const tokenStackConfig = {
-  input: { label: 'Input', color: 'var(--chart-1)' },
-  output: { label: 'Output', color: 'var(--chart-2)' },
-  cacheRead: { label: 'Cache read', color: 'var(--chart-4)' },
-  cacheWrite: { label: 'Cache write', color: 'var(--chart-3)' },
-} satisfies ChartConfig;
+export function useTokenStackConfig(): ChartConfig {
+  const { t } = useT('runtimes');
+  return {
+    input: { label: t(($) => $.usage.legend_input), color: 'var(--chart-1)' },
+    output: { label: t(($) => $.usage.legend_output), color: 'var(--chart-2)' },
+    cacheRead: { label: t(($) => $.usage.legend_cache_read), color: 'var(--chart-4)' },
+    cacheWrite: { label: t(($) => $.usage.legend_cache_write), color: 'var(--chart-3)' },
+  } satisfies ChartConfig;
+}
 
 export function DailyTokensChart({ data }: { data: DailyTokenData[] }) {
   const { t } = useT('runtimes');
   const uiLocale = useUiLocale();
+  const tokenStackConfig = useTokenStackConfig();
   return (
     <ChartContainer config={tokenStackConfig} className="aspect-[3/1] w-full">
       <BarChart data={data} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
@@ -40,7 +45,9 @@ export function DailyTokensChart({ data }: { data: DailyTokenData[] }) {
           content={
             <ChartTooltipContent
               formatter={(value, name) =>
-                typeof value === 'number' ? `${formatTokens(value)} ${name}` : `${value} ${name}`
+                typeof value === 'number'
+                  ? `${formatTokens(value)} ${labelOf(tokenStackConfig, name)}`
+                  : `${value} ${labelOf(tokenStackConfig, name)}`
               }
               footer={(payload) => {
                 const total = payload.reduce(

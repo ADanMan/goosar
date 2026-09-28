@@ -5,10 +5,15 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from '@goosar/ui/components/ui/chart';
+import { useT } from '../../../i18n';
+import { labelOf } from './failure-class-visuals';
 
-const timeChartConfig = {
-  totalSeconds: { label: 'Run time', color: 'var(--chart-1)' },
-} satisfies ChartConfig;
+function useTimeChartConfig(): ChartConfig {
+  const { t } = useT('usage');
+  return {
+    totalSeconds: { label: t(($) => $.series.time), color: 'var(--chart-1)' },
+  } satisfies ChartConfig;
+}
 
 export interface DailyTimeData {
   date: string;
@@ -25,6 +30,7 @@ export function DailyTimeChart({
   formatY: (seconds: number) => string;
   formatTooltip: (seconds: number) => string;
 }) {
+  const timeChartConfig = useTimeChartConfig();
   return (
     <ChartContainer config={timeChartConfig} className="aspect-[3/1] w-full">
       <BarChart data={data} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
@@ -47,7 +53,9 @@ export function DailyTimeChart({
           content={
             <ChartTooltipContent
               formatter={(value, name) =>
-                typeof value === 'number' ? `${formatTooltip(value)} ${name}` : `${value} ${name}`
+                typeof value === 'number'
+                  ? `${formatTooltip(value)} ${labelOf(timeChartConfig, name)}`
+                  : `${value} ${labelOf(timeChartConfig, name)}`
               }
             />
           }

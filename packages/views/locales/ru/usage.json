@@ -95,5 +95,10 @@
   },
   "duration": {
     "less_than_minute": "<1 мин"
+  },
+  "series": {
+    "completed": "Выполнено",
+    "failed": "Ошибка",
+    "time": "Время"
   }
 }

@@ -95,5 +95,10 @@
   },
   "duration": {
     "less_than_minute": "<1m"
+  },
+  "series": {
+    "completed": "Completed",
+    "failed": "Failed",
+    "time": "Time"
   }
 }

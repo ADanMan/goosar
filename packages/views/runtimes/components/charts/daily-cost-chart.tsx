@@ -7,15 +7,20 @@ import {
 } from '@goosar/ui/components/ui/chart';
 import type { DailyCostStackData } from '../../utils';
 import { useT } from '../../../i18n';
+import { labelOf } from './failure-class-visuals';
 
-export const costStackConfig = {
-  input: { label: 'Input', color: 'var(--chart-1)' },
-  output: { label: 'Output', color: 'var(--chart-2)' },
-  cacheWrite: { label: 'Cache write', color: 'var(--chart-3)' },
-} satisfies ChartConfig;
+export function useCostStackConfig(): ChartConfig {
+  const { t } = useT('runtimes');
+  return {
+    input: { label: t(($) => $.usage.legend_input), color: 'var(--chart-1)' },
+    output: { label: t(($) => $.usage.legend_output), color: 'var(--chart-2)' },
+    cacheWrite: { label: t(($) => $.usage.legend_cache_write), color: 'var(--chart-3)' },
+  } satisfies ChartConfig;
+}
 
 export function DailyCostChart({ data }: { data: DailyCostStackData[] }) {
   const { t } = useT('runtimes');
+  const costStackConfig = useCostStackConfig();
   return (
     <ChartContainer config={costStackConfig} className="aspect-[3/1] w-full">
       <BarChart data={data} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
@@ -38,7 +43,9 @@ export function DailyCostChart({ data }: { data: DailyCostStackData[] }) {
           content={
             <ChartTooltipContent
               formatter={(value, name) =>
-                typeof value === 'number' ? `$${value.toFixed(2)} ${name}` : `${value} ${name}`
+                typeof value === 'number'
+                  ? `$${value.toFixed(2)} ${labelOf(costStackConfig, name)}`
+                  : `${value} ${labelOf(costStackConfig, name)}`
               }
               footer={(payload) => {
                 const total = payload.reduce(

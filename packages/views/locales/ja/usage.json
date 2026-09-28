@@ -95,5 +95,10 @@
   },
   "duration": {
     "less_than_minute": "1分未満"
+  },
+  "series": {
+    "completed": "成功",
+    "failed": "失敗",
+    "time": "時間"
   }
 }

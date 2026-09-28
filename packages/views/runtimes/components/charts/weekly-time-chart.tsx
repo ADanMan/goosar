@@ -6,10 +6,14 @@ import {
   type ChartConfig,
 } from '@goosar/ui/components/ui/chart';
 import { useT } from '../../../i18n';
+import { labelOf } from './failure-class-visuals';
 
-const weeklyTimeChartConfig = {
-  totalSeconds: { label: 'Run time', color: 'var(--chart-1)' },
-} satisfies ChartConfig;
+function useWeeklyTimeChartConfig(): ChartConfig {
+  const { t } = useT('usage');
+  return {
+    totalSeconds: { label: t(($) => $.series.time), color: 'var(--chart-1)' },
+  } satisfies ChartConfig;
+}
 
 export interface WeeklyTimeData {
   weekStart: string;
@@ -31,6 +35,7 @@ export function WeeklyTimeChart({
   formatTooltip: (seconds: number) => string;
 }) {
   const { t } = useT('usage');
+  const weeklyTimeChartConfig = useWeeklyTimeChartConfig();
   return (
     <ChartContainer config={weeklyTimeChartConfig} className="aspect-[3/1] w-full">
       <BarChart data={data} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
@@ -64,7 +69,9 @@ export function WeeklyTimeChart({
                   : row.rangeLabel;
               }}
               formatter={(value, name) =>
-                typeof value === 'number' ? `${formatTooltip(value)} ${name}` : `${value} ${name}`
+                typeof value === 'number'
+                  ? `${formatTooltip(value)} ${labelOf(weeklyTimeChartConfig, name)}`
+                  : `${value} ${labelOf(weeklyTimeChartConfig, name)}`
               }
             />
           }
