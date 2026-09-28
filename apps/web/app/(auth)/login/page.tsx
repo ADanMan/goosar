@@ -19,6 +19,7 @@ import { Button } from '@goosar/ui/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import { setLoggedInCookie } from '@/features/auth/auth-cookie';
 import Link from 'next/link';
+import { GoosarIcon } from '@goosar/ui/components/common/goosar-icon';
 import { LoginPage, validateCliCallback } from '@goosar/views/auth';
 import { useT } from '@goosar/views/i18n';
 
@@ -186,6 +187,11 @@ function LoginPageContent() {
 
   return (
     <LoginPage
+      logo={
+        <Link href="/" className="inline-flex">
+          <GoosarIcon bordered size="lg" />
+        </Link>
+      }
       onSuccess={handleSuccess}
       cliCallback={
         cliCallbackRaw && validateCliCallback(cliCallbackRaw)

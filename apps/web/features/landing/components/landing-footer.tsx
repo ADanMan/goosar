@@ -86,6 +86,7 @@ export function LandingFooter() {
                 type="button"
                 key={l}
                 onClick={() => setLocale(l)}
+                aria-pressed={l === locale}
                 className={cn(
                   'px-1.5 py-1 text-[12px] font-medium transition-colors',
                   l === locale ? 'text-white/70' : 'text-white/30 hover:text-white/50',

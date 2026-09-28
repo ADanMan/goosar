@@ -5,6 +5,8 @@ export function createEnDict(allowSignup: boolean): LandingDict {
   return {
     header: {
       github: 'GitHub',
+      download: 'Download',
+      about: 'About',
       cta: 'Get started',
       dashboard: 'Dashboard',
       navigation: 'Primary navigation',
@@ -95,7 +97,8 @@ export function createEnDict(allowSignup: boolean): LandingDict {
         points: [
           {
             title: 'Standard agent runtime',
-            description: 'Hermes Agent is the default runtime that executes tasks assigned to agents.',
+            description:
+              'Hermes Agent is the default runtime that executes tasks assigned to agents.',
           },
           {
             title: 'ACP protocol',
@@ -104,7 +107,8 @@ export function createEnDict(allowSignup: boolean): LandingDict {
           },
           {
             title: 'Bundled with desktop',
-            description: 'The desktop app ships with Hermes Agent included \u2014 nothing extra to install.',
+            description:
+              'The desktop app ships with Hermes Agent included \u2014 nothing extra to install.',
           },
         ],
         imageAlt: 'Task card with the agent activity feed',
@@ -259,10 +263,6 @@ export function createEnDict(allowSignup: boolean): LandingDict {
             { label: 'How it Works', href: '/#how-it-works' },
             { label: 'Download', href: '/download' },
           ],
-        },
-        resources: {
-          label: 'Resources',
-          links: [{ label: 'API', href: githubUrl }],
         },
         company: {
           label: 'Company',

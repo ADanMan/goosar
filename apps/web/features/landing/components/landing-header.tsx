@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Menu, X } from 'lucide-react';
+import { Download, Info, Menu, X } from 'lucide-react';
 import { GoosarIcon } from '@goosar/ui/components/common/goosar-icon';
 import { cn } from '@goosar/ui/lib/utils';
 import { useAuthStore } from '@goosar/core/auth';
@@ -54,6 +54,15 @@ export function LandingHeader({ variant = 'dark' }: { variant?: LandingVariant }
               goosar
             </span>
           </Link>
+
+          <nav aria-label={t.header.navigation} className="hidden items-center gap-6 md:flex">
+            <Link href="/download" className={navLinkClassName(variant)}>
+              {t.header.download}
+            </Link>
+            <Link href="/about" className={navLinkClassName(variant)}>
+              {t.header.about}
+            </Link>
+          </nav>
         </div>
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
@@ -99,6 +108,22 @@ export function LandingHeader({ variant = 'dark' }: { variant?: LandingVariant }
         >
           <div>
             <Link
+              href="/download"
+              onClick={() => setIsMenuOpen(false)}
+              className={mobileNavLinkClassName(variant)}
+            >
+              <Download className="size-3.5" aria-hidden />
+              {t.header.download}
+            </Link>
+            <Link
+              href="/about"
+              onClick={() => setIsMenuOpen(false)}
+              className={mobileNavLinkClassName(variant)}
+            >
+              <Info className="size-3.5" aria-hidden />
+              {t.header.about}
+            </Link>
+            <Link
               href={githubUrl}
               target="_blank"
               rel="noreferrer"
@@ -122,6 +147,17 @@ function GitHubStarsBadge({ label }: { label: string }) {
       <span aria-hidden className="h-3 w-px bg-current opacity-25" />
       {label}
     </span>
+  );
+}
+
+function navLinkClassName(variant: LandingVariant) {
+  return cn(
+    'text-[14px] font-medium transition-colors',
+    variant === 'dark'
+      ? 'text-white/72 hover:text-white'
+      : variant === 'light'
+        ? 'text-[#1c1917]/64 hover:text-[#1c1917]'
+        : 'text-[#1c1917]/64 hover:text-[#1c1917] dark:text-white/72 dark:hover:text-white',
   );
 }
 

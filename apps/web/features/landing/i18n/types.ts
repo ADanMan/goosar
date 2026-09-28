@@ -23,6 +23,8 @@ type FooterGroup = {
 export type LandingDict = {
   header: {
     github: string;
+    download: string;
+    about: string;
     cta: string;
     dashboard: string;
     navigation: string;
@@ -103,7 +105,6 @@ export type LandingDict = {
     cta: string;
     groups: {
       product: FooterGroup;
-      resources: FooterGroup;
       company: FooterGroup;
     };
     copyright: string;

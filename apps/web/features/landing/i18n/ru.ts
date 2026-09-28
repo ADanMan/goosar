@@ -9,6 +9,8 @@ export function createRuDict(allowSignup: boolean): LandingDict {
     ...base,
     header: {
       github: 'GitHub',
+      download: 'Скачать',
+      about: 'О проекте',
       cta: 'Начать',
       dashboard: 'Дашборд',
       navigation: 'Основная навигация',
@@ -78,15 +80,18 @@ export function createRuDict(allowSignup: boolean): LandingDict {
         points: [
           {
             title: 'Docker-образы',
-            description: 'Весь стек поставляется Docker-образами, которые вы запускаете на своих хостах.',
+            description:
+              'Весь стек поставляется Docker-образами, которые вы запускаете на своих хостах.',
           },
           {
             title: 'Offline-набор',
-            description: 'Установочный набор без обращений к внешним реестрам и сервисам при развёртывании.',
+            description:
+              'Установочный набор без обращений к внешним реестрам и сервисам при развёртывании.',
           },
           {
             title: 'Helm-чарт',
-            description: 'Helm-чарт для развёртывания в Kubernetes, версия синхронизирована с релизом.',
+            description:
+              'Helm-чарт для развёртывания в Kubernetes, версия синхронизирована с релизом.',
           },
         ],
       },
@@ -98,15 +103,18 @@ export function createRuDict(allowSignup: boolean): LandingDict {
         points: [
           {
             title: 'Стандартный агентный рантайм',
-            description: 'Hermes Agent — рантайм по умолчанию, который выполняет задачи, поставленные агенту.',
+            description:
+              'Hermes Agent — рантайм по умолчанию, который выполняет задачи, поставленные агенту.',
           },
           {
             title: 'Протокол ACP',
-            description: 'Агенты общаются с платформой по ACP — открытому протоколу, а не частной интеграции.',
+            description:
+              'Агенты общаются с платформой по ACP — открытому протоколу, а не частной интеграции.',
           },
           {
             title: 'Поставляется в десктопе',
-            description: 'Десктопное приложение уже включает Hermes Agent — устанавливать отдельно не нужно.',
+            description:
+              'Десктопное приложение уже включает Hermes Agent — устанавливать отдельно не нужно.',
           },
         ],
         imageAlt: 'Карточка задачи с лентой активности агента',
@@ -263,10 +271,6 @@ export function createRuDict(allowSignup: boolean): LandingDict {
             { label: 'Как это работает', href: '/#how-it-works' },
             { label: 'Скачать', href: '/download' },
           ],
-        },
-        resources: {
-          label: 'Ресурсы',
-          links: [{ label: 'API', href: githubUrl }],
         },
         company: {
           label: 'Компания',
