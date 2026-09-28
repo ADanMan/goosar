@@ -14,6 +14,7 @@
     "continue_on_web": "ウェブで続ける",
     "start_exploring": "探索を始める",
     "skip_existing": "以前にやったことがあります",
+    "skip_existing_target": "{{workspace_name}}に移動します",
     "illustration_caption": "すべてのタスク、すべてのスレッド、すべての判断を、チームとエージェントで共有。",
     "illustration": {
       "card1_actor_name": "あなた",
@@ -127,6 +128,7 @@
   "cloud_waitlist": {
     "intro_main": "クラウドランタイムはまだ提供されていません。メールアドレスを残していただければ、準備ができ次第ご連絡します。",
     "intro_warning": "注意: ランタイムがないとエージェントはタスクを実行できません。今スキップすると、戻ってきてインストールするまでワークスペースは読み取り専用になります。",
+    "intro_warning_download": "注意: ランタイムがないとエージェントはタスクを実行できません。このページからインストールするか、後でワークスペースの設定から接続してください。",
     "email_label": "メールアドレス",
     "email_placeholder": "you@work.com",
     "reason_label": "クラウドを使いたい理由",

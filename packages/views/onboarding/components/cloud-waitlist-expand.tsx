@@ -9,6 +9,7 @@ import { Input } from '@goosar/ui/components/ui/input';
 import { Label } from '@goosar/ui/components/ui/label';
 import { Textarea } from '@goosar/ui/components/ui/textarea';
 import { joinCloudWaitlist } from '@goosar/core/onboarding';
+import { CharCounter } from '../../agents/components/char-counter';
 import { useT } from '../../i18n';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -17,9 +18,14 @@ const REASON_MAX = 500;
 export function CloudWaitlistExpand({
   submitted,
   onSubmitted,
+  context = 'onboarding',
 }: {
   submitted: boolean;
   onSubmitted: () => void;
+  /** Where this is rendered: the onboarding step still has a "Skip" button
+   *  to point to; the standalone /download page doesn't, so its copy must
+   *  not reference one. */
+  context?: 'onboarding' | 'download';
 }) {
   const { t } = useT('onboarding');
   const [email, setEmail] = useState('');
@@ -53,7 +59,11 @@ export function CloudWaitlistExpand({
     <div className="flex flex-col gap-4 rounded-lg border bg-muted/40 p-5">
       <p className="text-[13.5px] leading-[1.55] text-foreground/85">
         {t(($) => $.cloud_waitlist.intro_main)}{' '}
-        <span className="text-foreground/70">{t(($) => $.cloud_waitlist.intro_warning)}</span>
+        <span className="text-foreground/70">
+          {context === 'download'
+            ? t(($) => $.cloud_waitlist.intro_warning_download)
+            : t(($) => $.cloud_waitlist.intro_warning)}
+        </span>
       </p>
 
       <div className="flex flex-col gap-1.5">
@@ -93,6 +103,7 @@ export function CloudWaitlistExpand({
           rows={3}
           maxLength={REASON_MAX}
         />
+        <CharCounter length={[...reason].length} max={REASON_MAX} />
       </div>
 
       <div className="flex items-center justify-end">

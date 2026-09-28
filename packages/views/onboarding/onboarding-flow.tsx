@@ -329,6 +329,7 @@ export function OnboardingFlow({
       <StepWelcome
         onNext={handleWelcomeNext}
         onSkip={canSkipWelcome ? handleWelcomeSkip : undefined}
+        skipTargetName={workspaces.length > 1 ? workspaces[0]?.name : undefined}
         isWeb={isWeb}
       />
     );

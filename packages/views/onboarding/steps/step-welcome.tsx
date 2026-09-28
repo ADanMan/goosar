@@ -15,10 +15,14 @@ import { useT } from '../../i18n';
 export function StepWelcome({
   onNext,
   onSkip,
+  skipTargetName,
   isWeb = false,
 }: {
   onNext: () => void | Promise<void>;
   onSkip?: () => void | Promise<void>;
+  /** Name of the workspace `onSkip` lands in, shown next to the button when
+   *  there's more than one workspace to disambiguate where "familiar" goes. */
+  skipTargetName?: string;
   isWeb?: boolean;
 }) {
   const { t } = useT('onboarding');
@@ -112,10 +116,24 @@ export function StepWelcome({
                 </Button>
               )}
               {onSkip && (
-                <Button size="lg" variant="ghost" onClick={handleSkip} disabled={pending !== null}>
-                  {pending === 'skip' && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {t(($) => $.welcome.skip_existing)}
-                </Button>
+                <div className="flex flex-col items-start gap-1">
+                  <Button
+                    size="lg"
+                    variant="ghost"
+                    onClick={handleSkip}
+                    disabled={pending !== null}
+                  >
+                    {pending === 'skip' && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {t(($) => $.welcome.skip_existing)}
+                  </Button>
+                  {skipTargetName && (
+                    <span className="px-4 text-xs text-muted-foreground">
+                      {t(($) => $.welcome.skip_existing_target, {
+                        workspace_name: skipTargetName,
+                      })}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           </div>

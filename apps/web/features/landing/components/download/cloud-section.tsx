@@ -18,7 +18,11 @@ export function CloudSection() {
         <p className="mt-4 max-w-[560px] text-[15px] leading-7 text-[#1c1917]/72">{d.sub}</p>
 
         <div className="mt-10">
-          <CloudWaitlistExpand submitted={submitted} onSubmitted={() => setSubmitted(true)} />
+          <CloudWaitlistExpand
+            submitted={submitted}
+            onSubmitted={() => setSubmitted(true)}
+            context="download"
+          />
         </div>
       </div>
     </section>

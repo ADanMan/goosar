@@ -14,6 +14,7 @@
     "continue_on_web": "Continue on web",
     "start_exploring": "Start exploring",
     "skip_existing": "I've done this before",
+    "skip_existing_target": "Takes you to {{workspace_name}}",
     "illustration_caption": "Every task, every thread, every decision — shared by your team and agents.",
     "illustration": {
       "card1_actor_name": "You",
@@ -127,6 +128,7 @@
   "cloud_waitlist": {
     "intro_main": "Cloud runtimes aren't live yet. Leave your email and we'll reach out when they are.",
     "intro_warning": "Heads-up: agents can't execute tasks without a runtime — if you hit Skip now, your workspace is read-only until you come back and install one.",
+    "intro_warning_download": "Heads-up: agents can't execute tasks without a runtime. Install one from this page, or connect one later from your workspace settings.",
     "email_label": "Email",
     "email_placeholder": "you@work.com",
     "reason_label": "Why cloud?",
