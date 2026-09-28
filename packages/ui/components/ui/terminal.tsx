@@ -98,7 +98,7 @@ export const AnimatedSpan = ({
       initial={{ opacity: 0, y: -5 }}
       animate={shouldAnimate ? { opacity: 1, y: 0 } : { opacity: 0, y: -5 }}
       transition={{ duration: 0.3, delay: sequence ? 0 : delay / 1000 }}
-      className={cn("grid text-sm font-normal tracking-tight", className)}
+      className={cn("grid font-mono text-sm font-normal tracking-tight", className)}
       onAnimationComplete={() => {
         if (!sequence) return
         if (itemIndex === null) return
@@ -219,7 +219,7 @@ export const TypingAnimation = ({
   return (
     <MotionComponent
       ref={elementRef}
-      className={cn("text-sm font-normal tracking-tight", className)}
+      className={cn("font-mono text-sm font-normal tracking-tight", className)}
       {...props}
     >
       {displayedText}
@@ -280,13 +280,13 @@ export const Terminal = ({
     >
       <div className="border-border flex flex-col gap-y-2 border-b p-4">
         <div className="flex flex-row gap-x-2">
-          <div className="h-2 w-2 rounded-full bg-red-500"></div>
-          <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
-          <div className="h-2 w-2 rounded-full bg-green-500"></div>
+          <div className="h-2 w-2 rounded-full bg-destructive"></div>
+          <div className="h-2 w-2 rounded-full bg-warning"></div>
+          <div className="h-2 w-2 rounded-full bg-success"></div>
         </div>
       </div>
       <pre className="p-4">
-        <code className="grid gap-y-1 overflow-auto">{wrappedChildren}</code>
+        <code className="grid gap-y-1 overflow-auto font-mono">{wrappedChildren}</code>
       </pre>
     </div>
   )

@@ -161,7 +161,7 @@ export function DataTable<TData>({
             <TableCell
               key={cell.id}
               className={cn(
-                'overflow-hidden px-4 py-2',
+                'overflow-hidden px-3 py-2',
                 isPinned &&
                   'bg-background group-hover:bg-[color-mix(in_oklab,var(--muted)_50%,var(--background))]',
               )}
@@ -215,7 +215,7 @@ export function DataTable<TData>({
                       key={header.id}
                       colSpan={header.colSpan}
                       className={cn(
-                        'relative h-8 overflow-hidden px-4 py-2 text-xs uppercase tracking-wider text-muted-foreground',
+                        'relative h-9 overflow-hidden px-3 py-2 text-xs font-medium text-muted-foreground',
                         isPinned && 'bg-[color-mix(in_oklab,var(--muted)_30%,var(--background))]',
                       )}
                       style={getCellStyle(header.column, {
