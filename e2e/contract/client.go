@@ -67,6 +67,12 @@ func (c *apiClient) raw(t testing.TB, method, path string, body any) (int, []byt
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	// Every real client (web or desktop) identifies itself on the wire; the
+	// contract documents this and at least one operation (meUpsertClientUsage)
+	// hard-requires it to be "web" or "desktop" (docs/50-api-contract.yaml,
+	// docs/50-api-contract.md - "X-Client-Platform"). This suite always talks
+	// like a web client.
+	req.Header.Set("X-Client-Platform", "web")
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
@@ -182,6 +188,7 @@ func (c *apiClient) rawMultipart(t testing.TB, path string, fields map[string]st
 		t.Fatalf("build multipart request %s: %v", path, err)
 	}
 	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("X-Client-Platform", "web")
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}

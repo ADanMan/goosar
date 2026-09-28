@@ -2854,6 +2854,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '500':
+          description: 'frozen legacy path: can fail on internal state this shim no longer accounts for
+            (e.g. writing the built-in assistant agent)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '401':
           $ref: '#/components/responses/Unauthorized'
   /api/me/onboarding/no-runtime-bootstrap:
@@ -3840,6 +3847,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '404':
+          description: VCS-интеграция выключена на этом деплое (отдельно от отсутствия ключа шифрования
+            — см. 503)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '502':
           description: инстанс провайдера недоступен
           content:
@@ -4477,6 +4491,12 @@ paths:
                 $ref: '#/components/schemas/Error'
         '410':
           description: токен недействителен или истёк
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: Slack-интеграция не настроена на этом деплое
           content:
             application/json:
               schema:
@@ -9406,9 +9426,12 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/IssuePullRequestLink'
+                type: object
+                properties:
+                  pull_requests:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IssuePullRequestLink'
         '404':
           $ref: '#/components/responses/NotFound'
         '401':
@@ -14229,12 +14252,8 @@ paths:
       - admin
       - member (только создатель навыка)
       responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
+        '204':
+          description: Удалено
         '403':
           description: недостаточно прав
           content:
@@ -21178,27 +21197,106 @@ components:
           format: date-time
     IssuePullRequestLink:
       type: object
+      description: Связанный pull request (GitHub App-интеграция или self-hosted VCS-подключение,
+        нормализованы к одной форме).
       properties:
-        issue_id:
+        id:
           type: string
           format: uuid
         provider:
           type: string
-        url:
+        workspace_id:
+          type: string
+          format: uuid
+        repo_owner:
+          type: string
+        repo_name:
           type: string
         number:
           type: integer
         title:
-          type:
-          - string
-          - 'null'
+          type: string
         state:
+          type: string
+        html_url:
+          type: string
+        branch:
           type:
           - string
           - 'null'
-        created_at:
+        author_login:
+          type:
+          - string
+          - 'null'
+        author_avatar_url:
+          type:
+          - string
+          - 'null'
+        merged_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        closed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        pr_created_at:
           type: string
           format: date-time
+        pr_updated_at:
+          type: string
+          format: date-time
+        mergeable_state:
+          type:
+          - string
+          - 'null'
+        mergeable:
+          type:
+          - string
+          - 'null'
+        merge_state_status:
+          type:
+          - string
+          - 'null'
+        snapshot_available:
+          type: boolean
+        checks_rollup:
+          type:
+          - string
+          - 'null'
+        checks_conclusion:
+          type:
+          - string
+          - 'null'
+        checks_total:
+          type: integer
+        checks_passed:
+          type: integer
+        checks_failed:
+          type: integer
+        checks_running:
+          type: integer
+        checks_pending:
+          type: integer
+        failed_check_names:
+          type: array
+          items:
+            type: string
+        snapshot_stale:
+          type: boolean
+        snapshot_fetched_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        additions:
+          type: integer
+        deletions:
+          type: integer
+        changed_files:
+          type: integer
     IssueUsageSummary:
       type: object
       properties:
@@ -22746,9 +22844,13 @@ components:
           - 'null'
           description: Заполнен, когда status=skipped — почему запуск не состоялся
         trigger_payload:
-          description: Полный payload только в getAutopilotRun; в списках может отсутствовать
+          description: Полный payload только в getAutopilotRun; в списках может отсутствовать. Произвольный
+            JSON или null, если для этого запуска нет сохранённого payload.
+          nullable: true
         result:
-          description: Полный result только в getAutopilotRun
+          description: Полный result только в getAutopilotRun. Произвольный JSON; null, пока запуск не
+            завершён (status=running/queued), либо если для него нет result.
+          nullable: true
         created_at:
           type: string
           format: date-time

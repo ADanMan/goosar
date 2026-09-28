@@ -415,7 +415,7 @@ CORS настроен глобально: разрешённые источни�
 | GET `.../github/installations/{installationId}/repositories` | owner, admin | Проксирует список репозиториев из GitHub API, постранично | — |
 | DELETE `.../github/installations/{installationId}` | owner, admin | Отключить установку | realtime `github.installation.deleted` |
 | GET `/api/workspaces/{id}/vcs/connections` | member | Список self-hosted VCS-подключений; `available:false`, если интеграция выключена | — |
-| POST `/api/workspaces/{id}/vcs/connections` | owner, admin | Подключить self-hosted VCS: токен проверяется у провайдера, секреты запечатываются | realtime `vcs.connection.created` |
+| POST `/api/workspaces/{id}/vcs/connections` | owner, admin | Подключить self-hosted VCS: токен проверяется у провайдера, секреты запечатываются. 404, если VCS-интеграция выключена на деплое (отдельно от 503 «нет ключа шифрования») | realtime `vcs.connection.created` |
 | POST `.../vcs/connections/{connectionId}/rotate-webhook` | owner, admin | Перевыпустить вебхук-секрет (старый сразу недействителен) | realtime `vcs.connection.created` |
 | DELETE `.../vcs/connections/{connectionId}` | owner, admin | Удалить подключение | realtime `vcs.connection.deleted` |
 | GET `/api/workspaces/{id}/runtime-profiles` | member | Список профилей рантайма | — |
@@ -465,7 +465,7 @@ CORS настроен глобально: разрешённые источни�
 
 | Метод и путь | Права | Поведение | Побочные эффекты |
 |---|---|---|---|
-| POST `/api/slack/binding/redeem` | any-authenticated | Погашает одноразовый токен привязки Slack-аккаунта к вызывающему пользователю (токен выдаёт Slack-бот). 403, если не участник соответствующего пространства; 409, если Slack-аккаунт уже привязан к другому пользователю; 410, если токен недействителен/истёк | — |
+| POST `/api/slack/binding/redeem` | any-authenticated | Погашает одноразовый токен привязки Slack-аккаунта к вызывающему пользователю (токен выдаёт Slack-бот). 403, если не участник соответствующего пространства; 409, если Slack-аккаунт уже привязан к другому пользователю; 410, если токен недействителен/истёк; 503, если Slack-интеграция не настроена на этом деплое | — |
 
 ---
 

@@ -118,6 +118,16 @@ func testAuth(f *fixture) func(t *testing.T) {
 		mfaClient, mfaEmail, _ := loginFreshUser(t, f)
 
 		status, body := f.callAs(t, mfaClient, http.MethodPost, "/api/auth/mfa/totp/enroll", "/api/auth/mfa/totp/enroll", nil)
+		if status == 503 {
+			// Documented alternate path (docs/50-api-contract.yaml,
+			// authEnrollTotp '503'): MFA secrets can only be sealed and
+			// stored when the deployment's encryption key is configured.
+			// This deployment doesn't have one, so there is nothing left to
+			// exercise in the rest of the MFA lifecycle below.
+			t.Logf("POST /api/auth/mfa/totp/enroll: got documented 503 (MFA storage not configured on " +
+				"this deployment); skipping the rest of the MFA lifecycle")
+			return
+		}
 		if status != 200 {
 			t.Fatalf("POST /api/auth/mfa/totp/enroll: expected 200, got %d, body=%s", status, truncate(body))
 		}
@@ -1215,7 +1225,20 @@ func testAutopilots(f *fixture) func(t *testing.T) {
 			}
 		}
 
-		f.ensureSecondUser(t)
+		secondClient, secondEmail := f.ensureSecondUser(t)
+		// addAutopilotCollaborator requires user_id to already be a workspace
+		// member (docs/50-api-contract.yaml, addAutopilotCollaborator '400').
+		// The shared second user may have been invited-and-removed again by
+		// the "workspaces" subtest by the time this one runs, so (re-)invite
+		// and accept here rather than assuming membership survived.
+		if status, body := f.call(t, http.MethodPost, "/api/workspaces/{id}/members",
+			"/api/workspaces/"+f.workspaceID+"/members", map[string]any{"email": secondEmail}); status == 201 || status == 200 {
+			invite := decodeJSON(t, body)
+			if inviteID := str(invite, "id"); inviteID != "" {
+				f.callAs(t, secondClient, http.MethodPost, "/api/invitations/{id}/accept",
+					"/api/invitations/"+inviteID+"/accept", nil)
+			}
+		}
 		status, _ = f.call(t, http.MethodPost, "/api/autopilots/{id}/collaborators",
 			"/api/autopilots/"+autopilotID+"/collaborators", map[string]any{"user_id": f.secondUserID})
 		if status != 201 {
@@ -1413,9 +1436,43 @@ func testAgents(f *fixture) func(t *testing.T) {
 			}
 		}
 
+		// setAgentRuntimeSkillEnabled only accepts runtimes on one of the two
+		// providers that actually ship built-in runtime skills
+		// (docs/50-api-contract.yaml, setAgentRuntimeSkillEnabled description
+		// - "провайдеры runtime-c/runtime-e"), so f.runtimeID (a generic
+		// contract-test runtime) doesn't qualify: register a dedicated
+		// runtime-c runtime and an agent bound to it just for this call.
+		status, body = f.call(t, http.MethodPost, "/api/daemon/register", "/api/daemon/register", map[string]any{
+			"workspace_id": f.workspaceID,
+			"daemon_id":    "contract-daemon-rtc-" + uniqueSuffix(),
+			"device_name":  "contract-test-runtime-c",
+			"runtimes": []map[string]any{
+				{"name": "contract-runtime-c", "type": "runtime-c", "status": "online"},
+			},
+		})
+		if status != 200 {
+			t.Fatalf("POST /api/daemon/register (runtime-c): expected 200, got %d, body=%s", status, truncate(body))
+		}
+		rtcResp := decodeJSON(t, body)
+		rtcRuntimes, _ := rtcResp["runtimes"].([]any)
+		if len(rtcRuntimes) == 0 {
+			t.Fatalf("POST /api/daemon/register (runtime-c): expected at least one runtime, got %s", truncate(body))
+		}
+		rtcRuntime, _ := rtcRuntimes[0].(map[string]any)
+		rtcRuntimeID := mustStr(t, rtcRuntime, "id")
+
+		status, body = f.call(t, http.MethodPost, "/api/agents", "/api/agents", map[string]any{
+			"name":       "Contract Agent runtime-c " + uniqueSuffix(),
+			"runtime_id": rtcRuntimeID,
+		})
+		if status != 200 && status != 201 {
+			t.Fatalf("POST /api/agents (runtime-c): expected 200/201, got %d, body=%s", status, truncate(body))
+		}
+		rtcAgentID := mustStr(t, decodeJSON(t, body), "id")
+
 		status, _ = f.call(t, http.MethodPut, "/api/agents/{id}/runtime-skills/enabled",
-			"/api/agents/"+f.agentID+"/runtime-skills/enabled", map[string]any{
-				"runtime_id": f.runtimeID, "root": "universal", "key": "contract-runtime-skill", "enabled": false,
+			"/api/agents/"+rtcAgentID+"/runtime-skills/enabled", map[string]any{
+				"runtime_id": rtcRuntimeID, "root": "universal", "key": "contract-runtime-skill", "enabled": false,
 			})
 		if status != 204 {
 			t.Errorf("PUT /api/agents/{id}/runtime-skills/enabled: expected 204, got %d", status)
@@ -1710,8 +1767,8 @@ func testSkills(f *fixture) func(t *testing.T) {
 			if fileID := str(skillFile, "id"); fileID != "" {
 				status, _ = f.call(t, http.MethodDelete, "/api/skills/{id}/files/{fileId}",
 					"/api/skills/"+f.skillID+"/files/"+fileID, nil)
-				if status != 200 {
-					t.Errorf("DELETE /api/skills/{id}/files/{fileId}: expected 200, got %d", status)
+				if status != 204 {
+					t.Errorf("DELETE /api/skills/{id}/files/{fileId}: expected 204, got %d", status)
 				}
 			}
 		}
