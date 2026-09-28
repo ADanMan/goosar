@@ -1,4 +1,4 @@
-import { Cloud, Monitor, Wifi, WifiHigh, WifiOff } from 'lucide-react';
+import { AlertTriangle, Cloud, Monitor, Wifi, WifiHigh, WifiOff } from 'lucide-react';
 import { Badge } from '@goosar/ui/components/ui/badge';
 import type { RuntimeHealth } from '@goosar/core/runtimes';
 import { ProviderLogo } from './provider-logo';
@@ -41,11 +41,15 @@ export function HealthDot({
   );
 }
 
+// about_to_gc gets its own shape (not WifiOff) — it's a far more urgent
+// state than a plain offline machine ("this runtime is deleted in 7 days"),
+// and until now it was distinguishable from offline only by color (T-033
+// §3.2 L70).
 const HEALTH_ICON: Record<RuntimeHealth, { Icon: typeof Wifi; tone: string }> = {
   online: { Icon: Wifi, tone: 'text-success' },
   recently_lost: { Icon: WifiHigh, tone: 'text-warning' },
   offline: { Icon: WifiOff, tone: 'text-muted-foreground' },
-  about_to_gc: { Icon: WifiOff, tone: 'text-destructive' },
+  about_to_gc: { Icon: AlertTriangle, tone: 'text-destructive' },
 };
 
 export function HealthIcon({

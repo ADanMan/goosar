@@ -26,7 +26,7 @@ import { ProviderLogo } from './provider-logo';
 import { buildWorkloadIndex, RuntimeList } from './runtime-list';
 import { pendingRuntimeFromProfile } from './pending-runtime';
 import { buildRuntimeMachines, type RuntimeMachine } from './runtime-machines';
-import { HealthDot, HealthIcon, useHealthLabel } from './shared';
+import { HealthIcon, useHealthLabel } from './shared';
 import { useT, useTimeAgo } from '../../i18n';
 import { installRuntimeDocsHref } from './runtime-docs';
 
@@ -277,10 +277,15 @@ function MachineRow({ machine }: { machine: RuntimeMachine }) {
     <>
       <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border bg-background">
         <Icon aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
-        <HealthDot
-          health={machine.health}
-          className="absolute -bottom-0.5 -right-0.5 ring-2 ring-background"
-        />
+        {/* Status badge — a shaped icon, not just a colored dot, so it stays
+            legible for color-blind users, and shown at every width (T-033
+            §3.2 L57): the wider health column below is md+ only, so this was
+            previously the only status indicator on narrow screens, and it
+            carried no shape or label at all. */}
+        <span className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-background ring-2 ring-background">
+          <HealthIcon health={machine.health} className="h-2.5 w-2.5" />
+        </span>
+        <span className="sr-only">{healthLabel(machine.health)}</span>
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium">{machine.title}</span>

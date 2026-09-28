@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Globe, Info, Lock } from 'lucide-react';
+import { AlertTriangle, Globe, Info, Lock, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
 import { ApiError } from '@goosar/core/api';
@@ -156,16 +156,28 @@ export function DeleteRuntimeDialog({
   );
 }
 
+// Two notices with a different meaning shared one identical warning style,
+// making them hard to tell apart at a glance (T-033 §3.2 L72): a distinct
+// title and icon per case, so scanning the dialog tells you which situation
+// you're in before you read the body text. Both stay role="status" — neither
+// blocks the delete action, they only explain what happens after it (T-033
+// §3.2 L73; the destructive cascade banner below is the one that gets
+// role="alert").
 function DeletePersistenceNotice({ runtime }: { runtime: AgentRuntime }) {
   const { t } = useT('runtimes');
   if (runtime.profile_id) {
     return (
       <div
         role="status"
-        className="mt-3 flex items-start gap-2 rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-xs"
+        className="mt-3 flex items-start gap-2 rounded-md border bg-muted/40 px-3 py-2 text-xs"
       >
-        <Info className="mt-0.5 size-3.5 shrink-0 text-warning" />
-        <span>{t(($) => $.detail.delete_dialog.profile_backed_notice)}</span>
+        <Info className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+        <span>
+          <span className="block font-medium text-foreground">
+            {t(($) => $.detail.delete_dialog.profile_backed_title)}
+          </span>
+          {t(($) => $.detail.delete_dialog.profile_backed_notice)}
+        </span>
       </div>
     );
   }
@@ -175,8 +187,13 @@ function DeletePersistenceNotice({ runtime }: { runtime: AgentRuntime }) {
       role="status"
       className="mt-3 flex items-start gap-2 rounded-md border border-warning/40 bg-warning/5 px-3 py-2 text-xs"
     >
-      <Info className="mt-0.5 size-3.5 shrink-0 text-warning" />
-      <span>{t(($) => $.detail.delete_dialog.self_heal_notice)}</span>
+      <RefreshCw className="mt-0.5 size-3.5 shrink-0 text-warning" />
+      <span>
+        <span className="block font-medium text-warning">
+          {t(($) => $.detail.delete_dialog.self_heal_title)}
+        </span>
+        {t(($) => $.detail.delete_dialog.self_heal_notice)}
+      </span>
     </div>
   );
 }
