@@ -145,9 +145,8 @@ export function SettingsPage({
   const viewerRole = members.find((m) => m.user_id === user?.id)?.role;
   const canManageWorkspace = viewerRole === 'owner' || viewerRole === 'admin';
 
-  const { data: deploymentAdmins, isLoading: isDeploymentAdminsLoading } = useQuery(
-    deploymentAdminsOptions(),
-  );
+  const { data: deploymentAdmins, isLoading: isDeploymentAdminsLoading } =
+    useQuery(deploymentAdminsOptions());
   const isDeploymentAdmin = Array.isArray(deploymentAdmins);
 
   const workspaceTabKeys = React.useMemo(

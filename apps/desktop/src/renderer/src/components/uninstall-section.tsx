@@ -13,7 +13,12 @@ import {
   AlertDialogTitle,
 } from '@goosar/ui/components/ui/alert-dialog';
 import { cn } from '@goosar/ui/lib/utils';
-import { SettingsCard, SettingsRow, SettingsSection, TypedConfirmDialog } from '@goosar/views/settings';
+import {
+  SettingsCard,
+  SettingsRow,
+  SettingsSection,
+  TypedConfirmDialog,
+} from '@goosar/views/settings';
 import { useT } from '@goosar/views/i18n';
 
 import {
@@ -366,7 +371,9 @@ export function UninstallSection() {
         >
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>{t(($) => $.desktop.uninstall.confirm_daemon_title)}</AlertDialogTitle>
+              <AlertDialogTitle>
+                {t(($) => $.desktop.uninstall.confirm_daemon_title)}
+              </AlertDialogTitle>
               <AlertDialogDescription>
                 {t(($) => $.desktop.uninstall.confirm_daemon_description, {
                   size: formatBytes(totalBytes(selected)),

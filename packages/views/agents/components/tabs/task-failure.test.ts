@@ -20,9 +20,7 @@ describe('failureReasonLabel', () => {
     expect(failureReasonLabel('agent_error.provider_capacity_or_rate_limit', enT)).toBe(
       'Rate limited by provider',
     );
-    expect(failureReasonLabel('agent_error.context_overflow', enT)).toBe(
-      'Context window exceeded',
-    );
+    expect(failureReasonLabel('agent_error.context_overflow', enT)).toBe('Context window exceeded');
     expect(failureReasonLabel('queued_expired', enT)).toBe('Expired in queue');
   });
 

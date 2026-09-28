@@ -487,8 +487,7 @@ function TaskRow({
         ? timeAgo(task.completed_at)
         : '—';
 
-  const failureLabel =
-    task.status === 'failed' ? failureReasonLabel(task.failure_reason, t) : null;
+  const failureLabel = task.status === 'failed' ? failureReasonLabel(task.failure_reason, t) : null;
 
   let durationText: string | null = null;
   if (timeMode === 'completed' && task.started_at && task.completed_at) {

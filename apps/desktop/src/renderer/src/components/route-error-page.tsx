@@ -128,7 +128,9 @@ function DesktopUnexpectedErrorPage({ error }: { error: unknown }) {
         <AlertTriangle className="h-6 w-6" aria-hidden="true" />
       </div>
       <div className="space-y-2">
-        <h2 className="text-lg font-semibold">{t(($) => $.desktop.route_error.unexpected_title)}</h2>
+        <h2 className="text-lg font-semibold">
+          {t(($) => $.desktop.route_error.unexpected_title)}
+        </h2>
         <p className="max-w-lg text-sm text-muted-foreground">
           {t(($) => $.desktop.route_error.unexpected_description)}
         </p>
