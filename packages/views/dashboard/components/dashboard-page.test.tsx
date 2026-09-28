@@ -8,6 +8,7 @@ import type { NavigationAdapter } from '../../navigation';
 const queryKeys = vi.hoisted(() => [] as unknown[][]);
 const dashboardDataRef = vi.hoisted(() => ({ current: false }));
 const manyAgentsRef = vi.hoisted(() => ({ current: false }));
+const emptyDataRef = vi.hoisted(() => ({ current: false }));
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -20,6 +21,11 @@ vi.mock('@tanstack/react-query', async () => {
     ...actual,
     useQuery: (opts: { queryKey: unknown[] }) => {
       queryKeys.push(opts.queryKey);
+      // Loaded but genuinely empty (T-033 §3.2 L67) — distinct from the
+      // still-loading ref below, which never settles to isLoading: false.
+      if (emptyDataRef.current) {
+        return { data: [], isLoading: false, isSuccess: true };
+      }
       if (dashboardDataRef.current) {
         if (opts.queryKey[0] === 'workspaces' && opts.queryKey[2] === 'agents') {
           return {
@@ -152,6 +158,7 @@ vi.mock('@goosar/core/api', () => ({
 vi.mock('@goosar/core/paths', () => ({
   useWorkspacePaths: () => ({
     agentDetail: (id: string) => `/acme/agents/${id}`,
+    newAgent: () => '/acme/agents/new',
   }),
 }));
 
@@ -473,5 +480,22 @@ describe('DashboardPage — leaderboard density', () => {
     const list = within(screen.getByRole('list', { name: 'Leaderboard' }));
     expect(list.getAllByRole('listitem')).toHaveLength(1);
     expect(screen.queryByRole('button', { name: 'Show all' })).not.toBeInTheDocument();
+  });
+});
+
+describe('DashboardPage — empty state CTA (T-033 §3.2 L67)', () => {
+  beforeEach(() => {
+    queryKeys.length = 0;
+    dashboardDataRef.current = false;
+    emptyDataRef.current = true;
+    tzRef.current = 'UTC';
+    cleanup();
+  });
+
+  it('offers a way to create the first agent instead of just explaining the empty state', () => {
+    renderDashboard();
+
+    const cta = screen.getByRole('button', { name: /Create your first agent/i });
+    expect(cta).toHaveAttribute('href', '/acme/agents/new');
   });
 });

@@ -1,9 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { BarChart3, FolderKanban, Trash2 } from 'lucide-react';
+import { BarChart3, FolderKanban, Plus, Trash2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Skeleton } from '@goosar/ui/components/ui/skeleton';
+import { Button } from '@goosar/ui/components/ui/button';
 import {
   CompactNumberFlow,
   CurrencyNumberFlow,
@@ -1197,11 +1198,24 @@ function DashboardSkeleton() {
 
 function DashboardEmpty() {
   const { t } = useT('usage');
+  const p = useWorkspacePaths();
   return (
     <div className="flex flex-col items-center rounded-lg border border-dashed py-12 text-center">
       <BarChart3 className="h-6 w-6 text-muted-foreground/40" />
       <p className="mt-3 text-sm font-medium">{t(($) => $.empty.title)}</p>
       <p className="mt-1 max-w-md text-xs text-muted-foreground">{t(($) => $.empty.body)}</p>
+      {/* Carbon empty-state pattern calls for a primary action, not just an
+          explanation (T-033 §3.2 L67) — the fastest way out of "no data yet"
+          is to go create the agent that will start generating it. */}
+      <Button
+        className="mt-4"
+        size="sm"
+        render={<AppLink href={p.newAgent()} />}
+        nativeButton={false}
+      >
+        <Plus aria-hidden="true" className="size-3" />
+        {t(($) => $.empty.cta)}
+      </Button>
     </div>
   );
 }

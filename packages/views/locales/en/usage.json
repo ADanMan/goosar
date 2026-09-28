@@ -91,7 +91,8 @@
   },
   "empty": {
     "title": "No usage yet",
-    "body": "Once agents start running tasks here, their token spend and run time will appear in this view."
+    "body": "Once agents start running tasks here, their token spend and run time will appear in this view.",
+    "cta": "Create your first agent"
   },
   "duration": {
     "less_than_minute": "<1m"
