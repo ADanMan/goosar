@@ -97,7 +97,7 @@ export function AvatarCropDialog({
           <DialogTitle>{t(($) => $.avatar_crop.title)}</DialogTitle>
         </DialogHeader>
 
-        <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-neutral-900">
+        <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-inverse">
           {objectUrl && !loadError ? (
             <>
               <Cropper

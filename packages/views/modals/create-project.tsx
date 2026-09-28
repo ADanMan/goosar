@@ -699,7 +699,7 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
                   </form>
                   {selectedRepos.length > 0 && (
                     <div className="space-y-1 pt-1 border-t">
-                      <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                      <div className="text-2xs font-medium text-muted-foreground uppercase tracking-wider">
                         {t(($) => $.create_project.repos_selected)}
                       </div>
                       {selectedRepos.map((url) => (
@@ -728,14 +728,14 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
                       the picker; once it boots we re-render automatically
                       via useLocalDaemonStatus. */}
                   {daemonStatus.daemonId && daemonStatus.running ? (
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-2xs text-muted-foreground">
                       {t(($) => $.create_project.local_on_device, {
                         device:
                           daemonStatus.deviceName ?? t(($) => $.create_project.local_this_machine),
                       })}
                     </p>
                   ) : (
-                    <p className="text-[11px] text-warning">
+                    <p className="text-2xs text-warning">
                       {t(($) => $.create_project.local_daemon_offline)}
                     </p>
                   )}
@@ -748,7 +748,7 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
                           {selectedLocalLabel && (
                             <div className="font-medium truncate">{selectedLocalLabel}</div>
                           )}
-                          <div className="font-mono text-[10px] text-muted-foreground break-all">
+                          <div className="font-mono text-2xs text-muted-foreground break-all">
                             {selectedLocalPath}
                           </div>
                         </div>
@@ -789,10 +789,10 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
                   )}
 
                   {localPickError && (
-                    <p className="text-[11px] text-destructive">{localPickError}</p>
+                    <p className="text-2xs text-destructive">{localPickError}</p>
                   )}
 
-                  <p className="text-[10px] text-muted-foreground leading-snug">
+                  <p className="text-2xs text-muted-foreground leading-snug">
                     {t(($) => $.create_project.local_hint)}
                   </p>
                 </>

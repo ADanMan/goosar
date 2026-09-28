@@ -283,7 +283,7 @@ export function ProjectResourcesSection({ projectId }: { projectId: string }) {
                             <TooltipContent side="top">{repo.url}</TooltipContent>
                           </Tooltip>
                           {isAttached && (
-                            <span className="text-[10px] text-muted-foreground">
+                            <span className="text-2xs text-muted-foreground">
                               {t(($) => $.resources.attached_badge)}
                             </span>
                           )}
@@ -321,12 +321,12 @@ export function ProjectResourcesSection({ projectId }: { projectId: string }) {
                 {t(($) => $.resources.add_local_directory_button)}
               </Button>
               {!daemonStatus.running && (
-                <p className="px-2 pt-0.5 text-[10px] text-muted-foreground">
+                <p className="px-2 pt-0.5 text-2xs text-muted-foreground">
                   {t(($) => $.resources.local_daemon_offline_hint)}
                 </p>
               )}
               {daemonStatus.running && hasLocalDirectoryForCurrentDaemon && (
-                <p className="px-2 pt-0.5 text-[10px] text-muted-foreground">
+                <p className="px-2 pt-0.5 text-2xs text-muted-foreground">
                   {t(($) => $.resources.local_daemon_already_attached_hint)}
                 </p>
               )}
@@ -488,7 +488,7 @@ function LocalDirectoryRow({
         <Tooltip>
           <TooltipTrigger render={<span className="truncate flex-1">{display}</span>} />
           <TooltipContent side="top">
-            <div className="space-y-0.5 text-[11px]">
+            <div className="space-y-0.5 text-2xs">
               <div className="font-mono">{ref.local_path}</div>
               {mismatch && (
                 <div className="text-muted-foreground">

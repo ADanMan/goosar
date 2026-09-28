@@ -135,7 +135,7 @@ export function PropertyIconPicker({
       <div className="flex items-center justify-between px-1 pb-2">
         <span className="text-xs font-medium text-foreground">{label}</span>
         {value && (
-          <span className="truncate pl-3 text-[11px] text-muted-foreground">
+          <span className="truncate pl-3 text-2xs text-muted-foreground">
             {findPropertyIcon(value)?.label}
           </span>
         )}

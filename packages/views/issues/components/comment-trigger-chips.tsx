@@ -76,7 +76,7 @@ function TriggerAgentTooltipBody({
     <div className="space-y-0.5">
       <div className="flex items-baseline gap-1.5">
         <span className="font-medium">{agent.name}</span>
-        <span className="text-[10px] text-muted-foreground">{sourceLabel(agent.source, t)}</span>
+        <span className="text-2xs text-muted-foreground">{sourceLabel(agent.source, t)}</span>
       </div>
       {suppressed ? (
         <div>{t(($) => $.comment.trigger_click_to_restore)}</div>
@@ -154,7 +154,7 @@ function BlockedTriggerChip({
       <TooltipTrigger
         render={
           <span
-            className="inline-flex h-6 min-w-0 max-w-full animate-in fade-in items-center gap-1.5 rounded-md px-1.5 text-[11px] font-medium text-destructive"
+            className="inline-flex h-6 min-w-0 max-w-full animate-in fade-in items-center gap-1.5 rounded-md px-1.5 text-2xs font-medium text-destructive"
             aria-label={
               label
                 ? t(($) => $.comment.trigger_blocked_chip_aria, {
@@ -212,7 +212,7 @@ function SingleTriggerChip({
             aria-label={t(($) => $.comment.trigger_chip_aria, { name: agent.name, state })}
             onClick={() => onToggle(agent.id)}
             className={cn(
-              'inline-flex h-6 min-w-0 max-w-full animate-in fade-in cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-[11px] font-medium text-muted-foreground transition-colors duration-200 hover:bg-muted hover:text-foreground',
+              'inline-flex h-6 min-w-0 max-w-full animate-in fade-in cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-2xs font-medium text-muted-foreground transition-colors duration-200 hover:bg-muted hover:text-foreground',
               suppressed && 'opacity-60',
             )}
           >
@@ -256,7 +256,7 @@ function MultiTriggerChip({
         <button
           type="button"
           className={cn(
-            'inline-flex h-6 min-w-0 max-w-full animate-in fade-in cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-[11px] font-medium text-muted-foreground transition-colors duration-200 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground',
+            'inline-flex h-6 min-w-0 max-w-full animate-in fade-in cursor-pointer items-center gap-1.5 rounded-md px-1.5 text-2xs font-medium text-muted-foreground transition-colors duration-200 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground',
             activeCount === 0 && 'opacity-60',
           )}
         />
@@ -338,7 +338,7 @@ function MultiTriggerChip({
                       >
                         {agent.name}
                       </span>
-                      <span className="shrink-0 text-[10px] text-muted-foreground">{state}</span>
+                      <span className="shrink-0 text-2xs text-muted-foreground">{state}</span>
                     </button>
                   }
                 />

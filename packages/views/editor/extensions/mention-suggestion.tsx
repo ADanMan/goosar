@@ -311,7 +311,7 @@ export const MentionList = forwardRef<MentionListRef, MentionListProps>(function
     >
       {groups.map((group) => (
         <div key={group.label}>
-          <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/80">
+          <div className="px-3 py-2 text-2xs font-semibold uppercase tracking-wide text-muted-foreground/80">
             {groupLabel(group.label)}
           </div>
           {renderRows(group)}
@@ -412,13 +412,13 @@ function MentionRow({
       </span>
       {item.type === 'agent' && (
         // eslint-disable-next-line i18next/no-literal-string
-        <Badge variant="outline" className="ml-auto text-[10px] h-4 px-1.5">
+        <Badge variant="outline" className="ml-auto text-2xs h-4 px-1.5">
           Agent
         </Badge>
       )}
       {item.type === 'squad' && (
         // eslint-disable-next-line i18next/no-literal-string
-        <Badge variant="outline" className="ml-auto text-[10px] h-4 px-1.5">
+        <Badge variant="outline" className="ml-auto text-2xs h-4 px-1.5">
           Squad
         </Badge>
       )}

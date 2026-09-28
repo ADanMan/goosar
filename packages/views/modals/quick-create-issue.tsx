@@ -628,7 +628,7 @@ export function AgentCreatePanel({
             onSelect={(file) => editorRef.current?.uploadFile(file)}
           />
           {keepOpen && sentCount > 0 && (
-            <span className="text-xs text-emerald-600 dark:text-emerald-400">
+            <span className="text-xs text-success">
               {t(($) => $.create_issue.agent.sent_count, { count: sentCount })}
             </span>
           )}
@@ -661,7 +661,7 @@ export function AgentCreatePanel({
                 ? t(($) => $.create_issue.agent.version_blocked_tooltip, { min: versionCheck.min })
                 : undefined
             }
-            className={justSent ? 'min-w-28 !bg-emerald-600 !text-white' : 'min-w-28'}
+            className={justSent ? 'min-w-28 !bg-success !text-white' : 'min-w-28'}
           >
             {submitting ? (
               t(($) => $.create_issue.agent.sending)

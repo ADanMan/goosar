@@ -172,7 +172,7 @@ function ProgressRing({ project }: { project: Project }) {
             cy="8"
           />
           <circle
-            className="text-emerald-500"
+            className="text-success"
             strokeWidth="2"
             stroke="currentColor"
             fill="none"
@@ -570,7 +570,7 @@ function ProjectCard({
                   cy="8"
                 />
                 <circle
-                  className="text-emerald-500"
+                  className="text-success"
                   strokeWidth="2"
                   stroke="currentColor"
                   fill="none"
@@ -582,12 +582,12 @@ function ProjectCard({
                 />
               </svg>
             </div>
-            <span className="text-[10px] tabular-nums text-muted-foreground">
+            <span className="text-2xs tabular-nums text-muted-foreground">
               {project.done_count}/{project.issue_count}
             </span>
           </div>
         ) : (
-          <span className="flex justify-end pt-2 text-[10px] text-muted-foreground">
+          <span className="flex justify-end pt-2 text-2xs text-muted-foreground">
             {t(($) => $.detail.no_issues_yet)}
           </span>
         )}
@@ -612,7 +612,7 @@ function ProjectCard({
               ) : (
                 <span className="inline-flex h-5 w-5 rounded-full border border-dashed border-muted-foreground/30" />
               )}
-              <span className="max-w-[60px] truncate text-[10px] text-muted-foreground">
+              <span className="max-w-[60px] truncate text-2xs text-muted-foreground">
                 {leadName ?? t(($) => $.lead.no_lead)}
               </span>
             </button>
@@ -620,7 +620,7 @@ function ProjectCard({
         />
         <div className="flex items-center gap-2">
           <ProjectPriorityBadge project={project} handleUpdate={handleUpdate} align="start" />
-          <span className="text-[10px] text-muted-foreground">
+          <span className="text-2xs text-muted-foreground">
             {formatRelativeDate(project.created_at)}
           </span>
         </div>

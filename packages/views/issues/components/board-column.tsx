@@ -270,7 +270,7 @@ function BoardGroupHeading({ group, count }: { group: BoardColumnGroup; count: n
         <span className="truncate text-sm font-medium" title={group.title}>
           {group.title}
         </span>
-        <span className="shrink-0 rounded-full bg-background px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+        <span className="shrink-0 rounded-full bg-background px-1.5 py-0.5 text-2xs font-medium tabular-nums text-muted-foreground">
           {count}
         </span>
       </div>
@@ -297,7 +297,7 @@ function BoardGroupHeading({ group, count }: { group: BoardColumnGroup; count: n
       <span className="truncate text-sm font-medium" title={group.title}>
         {group.title}
       </span>
-      <span className="shrink-0 rounded-full bg-background px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+      <span className="shrink-0 rounded-full bg-background px-1.5 py-0.5 text-2xs font-medium tabular-nums text-muted-foreground">
         {count}
       </span>
     </div>

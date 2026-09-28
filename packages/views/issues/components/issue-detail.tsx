@@ -676,7 +676,7 @@ function SubIssueRow({
           href={paths.issueDetail(child.id)}
           className="flex min-w-0 flex-1 items-center gap-2.5"
         >
-          <span className="text-[11px] text-muted-foreground tabular-nums font-medium shrink-0">
+          <span className="text-2xs text-muted-foreground tabular-nums font-medium shrink-0">
             {child.identifier}
           </span>
           <IssueAgentActivityIndicator issueId={child.id} />
@@ -695,7 +695,7 @@ function SubIssueRow({
                   <LabelChip key={label.id} label={label} />
                 ))}
                 {labels.length > 2 && (
-                  <span className="text-[11px] text-muted-foreground">+{labels.length - 2}</span>
+                  <span className="text-2xs text-muted-foreground">+{labels.length - 2}</span>
                 )}
               </span>
             )}
@@ -704,9 +704,9 @@ function SubIssueRow({
                 {customPropsWithValue.slice(0, 3).map((property) => (
                   <span
                     key={property.id}
-                    className="inline-flex max-w-[120px] items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5 text-[11px] text-muted-foreground"
+                    className="inline-flex max-w-[120px] items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5 text-2xs text-muted-foreground"
                   >
-                    <PropertyIcon property={property} className="size-3 text-[11px]" />
+                    <PropertyIcon property={property} className="size-3 text-2xs" />
                     <CustomPropertyValueDisplay
                       property={property}
                       value={child.properties?.[property.id]}
@@ -718,7 +718,7 @@ function SubIssueRow({
             {rowProps.childProgress && childProgress && childProgress.total > 0 && (
               <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5">
                 <ProgressRing done={childProgress.done} total={childProgress.total} size={11} />
-                <span className="text-[11px] text-muted-foreground tabular-nums font-medium">
+                <span className="text-2xs text-muted-foreground tabular-nums font-medium">
                   {childProgress.done}/{childProgress.total}
                 </span>
               </span>
@@ -2229,7 +2229,7 @@ export function IssueDetail({
                   return (
                     <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5 shrink-0">
                       <ProgressRing done={done} total={parentChildIssues.length} size={11} />
-                      <span className="tabular-nums text-[10.5px] font-medium">
+                      <span className="tabular-nums text-2xs font-medium">
                         {done}/{parentChildIssues.length}
                       </span>
                     </span>
@@ -2312,7 +2312,7 @@ export function IssueDetail({
                       </button>
                       <div className="inline-flex items-center gap-1.5 rounded-full bg-muted/60 px-2 py-0.5">
                         <ProgressRing done={doneCount} total={childIssues.length} size={11} />
-                        <span className="text-[11px] text-muted-foreground tabular-nums font-medium">
+                        <span className="text-2xs text-muted-foreground tabular-nums font-medium">
                           {doneCount}/{childIssues.length}
                         </span>
                       </div>
@@ -2370,7 +2370,7 @@ export function IssueDetail({
                             {groups.map(({ stage: groupStage, items }) => (
                               <Fragment key={groupStage ?? 'unstaged'}>
                                 {staged && (
-                                  <div className="bg-muted/40 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                                  <div className="bg-muted/40 px-3 py-1 text-2xs font-medium uppercase tracking-wider text-muted-foreground">
                                     {groupStage == null
                                       ? t(($) => $.stage.none)
                                       : t(($) => $.stage.value, { n: groupStage })}

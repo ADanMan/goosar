@@ -200,7 +200,7 @@ export const BoardCardContent = memo(function BoardCardContent({
       {(showProject || showLabels || cardCustomProperties.length > 0) && (
         <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
           {showProject && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5 text-[11px] text-muted-foreground max-w-[160px]">
+            <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5 text-2xs text-muted-foreground max-w-[160px]">
               <ProjectIcon project={project} size="sm" />
               <span className="truncate">{project!.title}</span>
             </span>
@@ -209,9 +209,9 @@ export const BoardCardContent = memo(function BoardCardContent({
           {cardCustomProperties.map((property) => (
             <span
               key={property.id}
-              className="inline-flex max-w-[160px] items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5 text-[11px] text-muted-foreground"
+              className="inline-flex max-w-[160px] items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5 text-2xs text-muted-foreground"
             >
-              <PropertyIcon property={property} className="size-3 text-[11px]" />
+              <PropertyIcon property={property} className="size-3 text-2xs" />
               <CustomPropertyValueDisplay
                 property={property}
                 value={issue.properties?.[property.id]}
@@ -280,7 +280,7 @@ export const BoardCardContent = memo(function BoardCardContent({
               {showChildProgress && (
                 <div className="inline-flex shrink-0 items-center gap-1">
                   <ProgressRing done={childProgress!.done} total={childProgress!.total} size={14} />
-                  <span className="text-[11px] text-muted-foreground tabular-nums font-medium">
+                  <span className="text-2xs text-muted-foreground tabular-nums font-medium">
                     {childProgress!.done}/{childProgress!.total}
                   </span>
                 </div>

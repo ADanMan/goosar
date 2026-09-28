@@ -123,7 +123,7 @@ export function AttributionBadge({
           <div className="flex flex-col">
             <span>{t(($) => $.execution_log.attribution.on_behalf_of, { name })}</span>
             <span
-              className={cn('text-[11px]', uncertain ? 'text-warning' : 'text-muted-foreground')}
+              className={cn('text-2xs', uncertain ? 'text-warning' : 'text-muted-foreground')}
             >
               {sourceLabel}
             </span>

@@ -109,11 +109,11 @@ function getEventColor(item: TimelineItem): EventColor {
 }
 
 const colorClasses: Record<EventColor, { bg: string; bgActive: string; label: string }> = {
-  agent: { bg: 'bg-emerald-400/60', bgActive: 'bg-emerald-500', label: 'bg-emerald-500' },
+  agent: { bg: 'bg-success/60', bgActive: 'bg-success', label: 'bg-success' },
   thinking: {
-    bg: 'bg-violet-400/60',
-    bgActive: 'bg-violet-500',
-    label: 'bg-violet-500/20 text-violet-700 dark:text-violet-300',
+    bg: 'bg-status-review/60',
+    bgActive: 'bg-status-review',
+    label: 'bg-status-review/20 text-status-review',
   },
   tool: {
     bg: 'bg-accent-beak/60',
@@ -121,8 +121,8 @@ const colorClasses: Record<EventColor, { bg: string; bgActive: string; label: st
     label: 'bg-accent-beak/20 text-accent-beak',
   },
   result: {
-    bg: 'bg-slate-300/60 dark:bg-slate-600/60',
-    bgActive: 'bg-slate-400 dark:bg-slate-500',
+    bg: 'bg-muted-foreground/60',
+    bgActive: 'bg-muted-foreground',
     label: 'bg-muted text-muted-foreground',
   },
   error: {
@@ -762,7 +762,7 @@ export function AgentTranscriptDialog({
                       <DropdownMenuRadioItem key={value} value={value} className="items-start">
                         <span className="flex min-w-0 flex-col gap-0.5">
                           <span>{name}</span>
-                          <span className="text-[11px] leading-snug text-muted-foreground">
+                          <span className="text-2xs leading-snug text-muted-foreground">
                             {description}
                           </span>
                         </span>
@@ -798,7 +798,7 @@ export function AgentTranscriptDialog({
                   <Filter className="h-3 w-3" />
                   <span className="hidden sm:inline">{t(($) => $.transcript.filter)}</span>
                   {activeFilterKeys.length > 0 && (
-                    <span className="ml-0.5 rounded-full bg-brand-foreground/20 px-1.5 py-0 text-[10px] font-medium tabular-nums">
+                    <span className="ml-0.5 rounded-full bg-brand-foreground/20 px-1.5 py-0 text-2xs font-medium tabular-nums">
                       {activeFilterKeys.length}
                     </span>
                   )}
@@ -1006,7 +1006,7 @@ function TimelineBar({
             title={`${traceEventLabel(items[seg.startIdx]!)}${seg.count > 1 ? ` (+${seg.count - 1} more)` : ''}`}
           >
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-10 pointer-events-none">
-              <div className="rounded bg-popover border px-2 py-1 text-[10px] text-popover-foreground shadow-md whitespace-nowrap">
+              <div className="rounded bg-popover border px-2 py-1 text-2xs text-popover-foreground shadow-md whitespace-nowrap">
                 {traceEventLabel(items[seg.startIdx]!)}
                 {seg.count > 1 && (
                   <span className="text-muted-foreground ml-1">+{seg.count - 1}</span>
@@ -1061,7 +1061,7 @@ const TranscriptEventRow = ({
           {/* Type label badge */}
           <span
             className={cn(
-              'inline-flex items-center shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium mt-0.5 min-w-[60px] justify-center',
+              'inline-flex items-center shrink-0 rounded px-1.5 py-0.5 text-2xs font-medium mt-0.5 min-w-[60px] justify-center',
               colorClasses[color].label,
             )}
           >
@@ -1118,7 +1118,7 @@ const TranscriptEventRow = ({
                 <span
                   className={cn(
                     'truncate',
-                    traceEventSummaryIsMono(kind) && summary && 'font-mono text-[11px]',
+                    traceEventSummaryIsMono(kind) && summary && 'font-mono text-2xs',
                     !summary && 'text-muted-foreground/60',
                   )}
                 >
@@ -1129,14 +1129,14 @@ const TranscriptEventRow = ({
           )}
 
           {/* Seq number / index */}
-          <span className="shrink-0 text-[10px] text-muted-foreground/50 tabular-nums mt-1">
+          <span className="shrink-0 text-2xs text-muted-foreground/50 tabular-nums mt-1">
             #{item.seq}
           </span>
 
           {/* Timestamp */}
           {date && (
             <span
-              className="shrink-0 text-[10px] text-muted-foreground/50 tabular-nums mt-1"
+              className="shrink-0 text-2xs text-muted-foreground/50 tabular-nums mt-1"
               title={date.toLocaleString(uiLocale)}
             >
               {date.toLocaleTimeString(uiLocale, {
@@ -1183,7 +1183,7 @@ function ToolDetailSurface({ text }: { text: string }) {
     <div className="relative">
       <pre
         className={cn(
-          'p-3 font-mono text-[11px] text-muted-foreground whitespace-pre-wrap break-all',
+          'p-3 font-mono text-2xs text-muted-foreground whitespace-pre-wrap break-all',
           isLong && !showAll && 'max-h-52 overflow-hidden',
         )}
       >
@@ -1194,7 +1194,7 @@ function ToolDetailSurface({ text }: { text: string }) {
           <button
             type="button"
             onClick={() => setShowAll(true)}
-            className="mb-1.5 rounded px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="mb-1.5 rounded px-2 py-0.5 text-2xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             {t(($) => $.transcript.show_all)}
           </button>

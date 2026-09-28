@@ -432,7 +432,7 @@ export function CustomPropertyValueDisplay({
           {selected.map((option) => (
             <span
               key={option.id}
-              className="inline-flex max-w-32 items-center gap-1 rounded-full border border-surface-border px-1.5 py-px text-[11px]"
+              className="inline-flex max-w-32 items-center gap-1 rounded-full border border-surface-border px-1.5 py-px text-2xs"
             >
               <span
                 className="size-2 shrink-0 rounded-full"

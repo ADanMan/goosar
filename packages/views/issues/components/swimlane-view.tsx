@@ -1429,7 +1429,7 @@ function DraggableSwimLane({
           )}
           <span className="truncate text-sm font-semibold">{lane.title}</span>
           {lane.identifier && (
-            <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+            <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-2xs font-medium tabular-nums text-muted-foreground">
               {lane.identifier}
             </span>
           )}

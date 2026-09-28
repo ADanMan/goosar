@@ -167,7 +167,7 @@ function CreateRunHint({
       <div className="overflow-hidden">
         <div
           aria-live="polite"
-          className="flex items-center gap-1.5 px-4 pb-1 pt-0.5 text-[0.6875rem] text-muted-foreground"
+          className="flex items-center gap-1.5 px-4 pb-1 pt-0.5 text-2xs text-muted-foreground"
         >
           {avatarId && (
             <ActorAvatar actorType={avatarType} actorId={avatarId} size="sm" profileLink={false} />
@@ -506,7 +506,7 @@ export function ManualCreatePanel({
             (toastId) => (
               <div className="bg-popover text-popover-foreground border rounded-lg shadow-lg p-4 w-[360px]">
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="flex items-center justify-center size-5 rounded-full bg-emerald-500/15 text-emerald-500">
+                  <div className="flex items-center justify-center size-5 rounded-full bg-success/15 text-success">
                     <Check className="size-3" />
                   </div>
                   <span className="text-sm font-medium">

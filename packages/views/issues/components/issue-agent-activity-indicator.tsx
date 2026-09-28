@@ -57,7 +57,7 @@ export const IssueAgentActivityIndicator = memo(function IssueAgentActivityIndic
       <AgentAvatarStack agentIds={agentIds} size={size} opacity={opacity} max={3} />
       <span
         className={cn(
-          'text-[10px] leading-none',
+          'text-2xs leading-none',
           isRunning ? 'animate-chat-text-shimmer' : 'text-muted-foreground',
         )}
       >

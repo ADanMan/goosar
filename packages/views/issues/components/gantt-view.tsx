@@ -157,7 +157,7 @@ function GanttAxis({
             <div
               key={i}
               className={cn(
-                'absolute top-0 bottom-0 flex items-center justify-center text-[10px] text-muted-foreground border-l',
+                'absolute top-0 bottom-0 flex items-center justify-center text-2xs text-muted-foreground border-l',
                 isMonth
                   ? 'border-foreground/15'
                   : isWeek
@@ -171,7 +171,7 @@ function GanttAxis({
                   {zoom === 'day' && (
                     <>
                       <span className="tabular-nums">{date.getUTCDate()}</span>
-                      <span className="text-[9px] opacity-70">
+                      <span className="text-2xs opacity-70">
                         {date.toLocaleDateString(locale, {
                           weekday: 'short',
                           timeZone: 'UTC',
@@ -360,7 +360,7 @@ function ScheduledRow({
                     style={{ left: bar.left, width: bar.width }}
                   >
                     {!bar.isMarker && bar.width > 60 && (
-                      <span className="block truncate px-2 py-[2px] text-[11px] leading-4 text-white/95">
+                      <span className="block truncate px-2 py-[2px] text-2xs leading-4 text-white/95">
                         {issue.title}
                       </span>
                     )}
@@ -468,7 +468,7 @@ export function GanttView({ issues }: { issues: Issue[] }) {
               className="sticky left-0 z-30 shrink-0 border-b border-r bg-background"
               style={{ width: LEFT_COL_WIDTH, height: HEADER_HEIGHT }}
             >
-              <div className="flex h-full items-end px-3 pb-1.5 text-[11px] font-medium text-muted-foreground">
+              <div className="flex h-full items-end px-3 pb-1.5 text-2xs font-medium text-muted-foreground">
                 {t(($) => $.gantt.header_issue)}
               </div>
             </div>

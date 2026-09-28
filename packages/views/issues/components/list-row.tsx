@@ -119,7 +119,7 @@ function ListRowContent({
             {showChildProgress && (
               <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5">
                 <ProgressRing done={childProgress!.done} total={childProgress!.total} size={14} />
-                <span className="text-[11px] text-muted-foreground tabular-nums font-medium">
+                <span className="text-2xs text-muted-foreground tabular-nums font-medium">
                   {childProgress!.done}/{childProgress!.total}
                 </span>
               </span>
@@ -130,7 +130,7 @@ function ListRowContent({
                   <LabelChip key={label.id} label={label} />
                 ))}
                 {labels.length > 3 && (
-                  <span className="text-[11px] text-muted-foreground">+{labels.length - 3}</span>
+                  <span className="text-2xs text-muted-foreground">+{labels.length - 3}</span>
                 )}
               </span>
             )}
@@ -139,9 +139,9 @@ function ListRowContent({
                 {cardCustomProperties.slice(0, 3).map((property) => (
                   <span
                     key={property.id}
-                    className="inline-flex max-w-[120px] items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5 text-[11px] text-muted-foreground"
+                    className="inline-flex max-w-[120px] items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5 text-2xs text-muted-foreground"
                   >
-                    <PropertyIcon property={property} className="size-3 text-[11px]" />
+                    <PropertyIcon property={property} className="size-3 text-2xs" />
                     <CustomPropertyValueDisplay
                       property={property}
                       value={issue.properties?.[property.id]}

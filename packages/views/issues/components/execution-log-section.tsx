@@ -397,7 +397,7 @@ export function TaskCommentCoverage({ task }: { task: AgentTask }) {
   if (commentIds.size <= 1) return null;
 
   return (
-    <span className="shrink-0 whitespace-nowrap text-[11px] text-muted-foreground">
+    <span className="shrink-0 whitespace-nowrap text-2xs text-muted-foreground">
       {t(($) => $.execution_log.included_comments, { count: commentIds.size })}
     </span>
   );
