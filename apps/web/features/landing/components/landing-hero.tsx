@@ -57,7 +57,16 @@ export function LandingHero() {
           </div>
 
           <div id="preview" className="mt-10 sm:mt-12 flex justify-center">
-            <DemoTerminal lines={t.demoLog.lines} reducedMotion={reducedMotion} />
+            {/* The terminal's lines animate in over time; screen readers can't
+                reliably pick up content inserted line by line, so the visible
+                animation is hidden from assistive tech and a single static
+                sr-only transcript with aria-live announces the full log. */}
+            <div aria-hidden className="contents">
+              <DemoTerminal lines={t.demoLog.lines} reducedMotion={reducedMotion} />
+            </div>
+            <p className="sr-only" aria-live="polite">
+              {demoLog.map((line) => t.demoLog.lines[line.key]).join('. ')}
+            </p>
           </div>
         </section>
       </main>
@@ -86,7 +95,10 @@ function DemoTerminal({
 }) {
   if (reducedMotion) {
     return (
-      <Terminal className="max-h-none max-w-[560px] bg-black/24 text-left text-white" sequence={false}>
+      <Terminal
+        className="max-h-none max-w-[560px] bg-black/24 text-left text-white"
+        sequence={false}
+      >
         {demoLog.map((line) => (
           <div key={line.key} className="grid text-sm font-normal tracking-tight">
             {lines[line.key]}
@@ -97,17 +109,23 @@ function DemoTerminal({
   }
 
   return (
-    <Terminal className="max-h-none max-w-[560px] bg-black/24 text-left text-white" startOnView={false} sequence={false}>
+    <Terminal
+      className="max-h-none max-w-[560px] bg-black/24 text-left text-white"
+      startOnView={false}
+      sequence={false}
+    >
       {demoLog.map((line, index) => (
-        <AnimatedSpan startOnView={false} delay={index * 350} key={line.key}>{lines[line.key]}</AnimatedSpan>
+        <AnimatedSpan startOnView={false} delay={index * 350} key={line.key}>
+          {lines[line.key]}
+        </AnimatedSpan>
       ))}
     </Terminal>
   );
 }
 
 const HEX_SIDE = 44;
-const HEX_W = Math.sqrt(3) * HEX_SIDE; 
-const HEX_H = 3 * HEX_SIDE; 
+const HEX_W = Math.sqrt(3) * HEX_SIDE;
+const HEX_H = 3 * HEX_SIDE;
 
 const HEX_PATH = [
   `M0 ${HEX_SIDE / 2} L${HEX_W / 2} 0 L${HEX_W} ${HEX_SIDE / 2}`,

@@ -209,6 +209,7 @@ function Row({ icon, label, formats, unavailable, isLast }: RowProps) {
               title={unavailable}
             >
               {f.label}
+              <span className="sr-only">{` — ${unavailable}`}</span>
             </span>
           ),
         )}
