@@ -842,7 +842,7 @@
     "runtime_missing_executable": "未安装运行器 CLI",
     "agent_error_unknown": "智能体执行出错",
     "agent_error": "智能体执行出错",
-    "codex_semantic_inactivity": "Codex 语义空闲超时",
+    "codex_semantic_inactivity": "超时：代理停止推进",
     "manual": "用户取消"
   },
   "last_active": {

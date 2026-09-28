@@ -887,7 +887,7 @@
     "runtime_missing_executable": "CLI раннера не установлен",
     "agent_error_unknown": "Ошибка при выполнении",
     "agent_error": "Ошибка при выполнении",
-    "codex_semantic_inactivity": "Тайм-аут семантического простоя Codex",
+    "codex_semantic_inactivity": "Тайм-аут: агент перестал отвечать по существу",
     "manual": "Отменена пользователем"
   },
   "last_active": {

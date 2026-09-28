@@ -735,7 +735,7 @@
     "runtime_missing_executable": "ランナー CLI がインストールされていません",
     "agent_error_unknown": "エージェント実行エラー",
     "agent_error": "エージェント実行エラー",
-    "codex_semantic_inactivity": "Codex のセマンティック無応答タイムアウト",
+    "codex_semantic_inactivity": "タイムアウト：エージェントの進行が止まりました",
     "manual": "ユーザーがキャンセルしました"
   },
   "runtime_filter": {

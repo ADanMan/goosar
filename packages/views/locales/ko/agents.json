@@ -743,7 +743,7 @@
     "runtime_missing_executable": "러너 CLI가 설치되지 않음",
     "agent_error_unknown": "에이전트 실행 오류",
     "agent_error": "에이전트 실행 오류",
-    "codex_semantic_inactivity": "Codex 의미론적 유휴 시간 초과",
+    "codex_semantic_inactivity": "시간 초과: 에이전트 진행이 멈췄습니다",
     "manual": "사용자가 취소함"
   },
   "last_active": {

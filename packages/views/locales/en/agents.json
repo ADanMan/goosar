@@ -857,7 +857,7 @@
     "runtime_missing_executable": "Runner CLI not installed",
     "agent_error_unknown": "Agent execution error",
     "agent_error": "Agent execution error",
-    "codex_semantic_inactivity": "Codex semantic inactivity timeout",
+    "codex_semantic_inactivity": "Timed out: agent stopped making progress",
     "manual": "Cancelled by user"
   },
   "last_active": {
