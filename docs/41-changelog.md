@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 ### Added
+- UI-ревью визуального слоя по ADR-0007: 61 находка в `docs/34-ui-review.md` (T-034); референс ADR-0008 (Atlassian Design System, Fluent 2); перестройка визуала — T-035.
 - Комплексное UX-ревью всех экранов по ADR-0006: 75 находок в `docs/33-ux-review.md` (T-031); фиксы Critical/High вынесены в T-032.
 
 ## [1.2.0] — 2026-09-28

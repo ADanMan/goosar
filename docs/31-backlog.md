@@ -518,3 +518,37 @@ Acceptance criteria:
 
 Затрагивает: то же, что T-032, плюс `apps/web/features/landing/**`, `e2e/visual/**`
 Риск: L1
+
+## Эпик E10. Визуальный слой по референсу (ADR-0007, ADR-0008)
+
+### T-034 · UI-ревью визуального слоя
+Эпик: E10
+Оценка: 1 день
+Зависит от: T-031
+Статус: выполнен 28.09.2026
+
+Задача: проверить токены, контраст, типографику, сетку и единообразие компонентов по числовым правилам ADR-0007 тремя аудиторами (токены и расчёт WCAG, экраны приложения, сайт).
+
+Acceptance criteria:
+- [x] `docs/34-ui-review.md`: 61 находка (13 Critical, 15 High, 15 Medium, 18 Low) с правилом, расчётом или скриншотом и адресом в коде;
+- [x] расчёт контраста токенов обеих тем приложен (скрипт на python в отчёте аудитора, переезжает в `scripts/check-ui-tokens.mjs` в T-035).
+
+Затрагивает: `docs/34-ui-review.md`, `docs/21-adr/ADR-0007-ui-visual-standard.md`
+Риск: L0
+
+### T-035 · Перестройка визуала по Atlassian Design System и Fluent 2
+Эпик: E10
+Оценка: 8 дней
+Зависит от: T-033, T-034
+
+Задача: привести интерфейс к референсу ADR-0008, сохранив гамму «Речная синь» и шрифты. Порядок: 1) токены — исправить `--warning`, `--accent-beak`, `--status-backlog`, `--input` до порогов ADR-0007 в обеих темах; ввести тёплые нейтральные поверхности (background, card, muted, rail) по настроению Claude Desktop; одна шкала размеров (`--text-2xs`…`--text-3xl`), радиусы `--radius-sm/md/lg/xl` 6/8/10/12px, тени 3 уровня; 2) `packages/ui` — кнопки, инпуты, селекты, бейджи, таблицы, диалоги, пустые состояния по паттернам ADS (плотность, высоты 32/40, отступы 8/16/24) и Fluent (data grid, командная панель); 3) `PageHeader` единый для всех экранов, включая Настройки и Оплату; статусные бейджи и `ProjectStatusBadge` через `Badge`; 4) заменить 445 произвольных `text-[…]` на шкалу, `label-chip`, `color-picker`, `chart` на токены; 5) лендинг и /download на токены (`.landing-light`), полупрозрачный текст ≥ 4.5:1, тени и радиусы из токенов, иконки ОС из lucide/simple-icons (MIT/CC0), градиент /download в гамме; 6) `scripts/check-ui-tokens.mjs`: падает на hex/rgb/oklch-литералах и `text-[…px]` вне allow-list и считает контраст токенов; 7) визуальные эталоны `e2e/visual` перезаписаны, скриншоты лендинга `public/images/app-*.png` пересняты.
+
+Acceptance criteria:
+- [ ] Все строки Critical/High в `docs/34-ui-review.md` помечены «исправлено <хеш>» или «отложено: причина»; Medium/Low — не меньше половины;
+- [ ] `node scripts/check-ui-tokens.mjs` зелёный: 0 литералов цветов в `packages/**` и `apps/web/features/**`, 0 `text-[…px]`, все пары токенов обеих тем ≥ 4.5:1 (текст) и ≥ 3:1 (UI);
+- [ ] `pnpm typecheck`, `pnpm --filter @goosar/views test`, `pnpm --filter @goosar/ui test`, `node scripts/check-ui-strings.mjs` зелёные;
+- [ ] Заимствованный код (если брался из Atlaskit/Fluent UI) внесён в `THIRD_PARTY_NOTICES.md` через `scripts/third-party-notices.mjs`;
+- [ ] ветка `ux/review-fixes` (после T-033), PR не создаётся; в `docs/41-changelog.md` раздел Changed с перечнем токенов, изменивших значение.
+
+Затрагивает: `packages/ui/**`, `packages/views/**`, `apps/web/features/landing/**`, `apps/web/app/*.css`, `apps/desktop/src/renderer/src/*.css`, `scripts/check-ui-tokens.mjs`, `e2e/visual/**`
+Риск: L2
