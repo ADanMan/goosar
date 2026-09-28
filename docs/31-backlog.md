@@ -552,3 +552,37 @@ Acceptance criteria:
 
 Затрагивает: `packages/ui/**`, `packages/views/**`, `apps/web/features/landing/**`, `apps/web/app/*.css`, `apps/desktop/src/renderer/src/*.css`, `scripts/check-ui-tokens.mjs`, `e2e/visual/**`
 Риск: L2
+
+## Эпик E11. Собственная кодовая база ≥ 90% (критерий владельца, 28.09.2026)
+
+Критерий успеха всех переписей: доля собственного кода по репозиторию не ниже 90%, то есть совокупное сходство с исходником по нормализованному difflib не выше 10%. На 28.09.2026 сходство 71% (server 81%, views 68%, ui 61%). E8 закрывает бэкенд и `packages/core`; фронт требует такой же clean-room переписи.
+
+### T-036 · Ворота «доля своего кода»
+Эпик: E11
+Оценка: 1 день
+Зависит от: T-024
+
+Задача: расширить `scripts/similarity-check.py` до замера по всему репозиторию: сравнение с эталонным снимком исходника (путь через переменную окружения, снимок вне репозитория), нормализация (комментарии, пустые строки, имена продуктов → X), исключения (node_modules, lock-файлы, сгенерированное, локали, картинки, THIRD_PARTY_NOTICES); вывод общей доли и по каталогам; порог задаётся флагом `--min-own 90`, при недоборе код возврата 1. Результат в `docs/53-own-code-report.md` с датой и таблицей по каталогам.
+
+Acceptance criteria:
+- [ ] `python3 scripts/similarity-check.py --repo-wide --min-own 90` работает и печатает таблицу по каталогам;
+- [ ] отчёт `docs/53-own-code-report.md` с текущим замером закоммичен;
+- [ ] в T-030 и T-037 замер обязателен в acceptance criteria.
+
+Затрагивает: `scripts/similarity-check.py`, `docs/53-own-code-report.md`
+Риск: L0
+
+### T-037 · Clean-room перепись фронта
+Эпик: E11
+Оценка: 30–40 дней
+Зависит от: T-030, T-035, T-036
+
+Задача: тем же методом, что E8, переписать `packages/views`, `packages/ui`, `apps/web` (кроме лендинга, который уже свой) и `apps/desktop/renderer`: спецификатор описывает поведение экранов по `docs/33-ux-review.md`, `docs/34-ui-review.md`, локалям и контракту `docs/50-api-contract.yaml`; реализаторы пишут по спецификации, не открывая старые компоненты; базовые компоненты берутся из открытых библиотек по ADR-0005 и ADR-0008 (shadcn/Radix, Atlaskit-паттерны), а не копируются из текущих файлов. Ведётся в `packages/views2`/`ui2` до паритета, затем переключение.
+
+Acceptance criteria:
+- [ ] `python3 scripts/similarity-check.py --repo-wide --min-own 90` зелёный;
+- [ ] визуальные и e2e-тесты зелёные на новых пакетах, старые каталоги удалены;
+- [ ] `docs/53-own-code-report.md` обновлён, ADR-0004 переведён в Superseded.
+
+Затрагивает: `packages/views/**`, `packages/ui/**`, `apps/web/app/**`, `apps/desktop/src/renderer/**`
+Риск: L2
