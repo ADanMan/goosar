@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { I18nProvider } from '@goosar/core/i18n/react';
 import enCommon from '../../locales/en/common.json';
@@ -871,5 +871,90 @@ describe('MembersTab perimeter and invitation confirmations (issue #248)', () =>
         role: 'member',
       }),
     );
+  });
+});
+
+describe('MembersTab invite email validation (§3 L88)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.createMember.mockResolvedValue({});
+    viewerRef.current = { id: 'user-1' };
+    invitationsRef.current = [];
+    membersRef.current = [member({ id: 'm-1', user_id: 'user-1', role: 'owner', name: 'Alice' })];
+  });
+
+  it('shows an inline hint and blocks Invite for a malformed address', () => {
+    renderTab();
+    fireEvent.change(screen.getByLabelText('user@company.com'), {
+      target: { value: 'not-an-email' },
+    });
+
+    expect(screen.getByText("That doesn't look like an email address.")).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Invite' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
+    expect(mocks.createMember).not.toHaveBeenCalled();
+  });
+
+  it('does not show the hint while the field is still empty', () => {
+    renderTab();
+    expect(screen.queryByText("That doesn't look like an email address.")).toBeNull();
+  });
+
+  it('clears the hint and allows the invite once the address is valid', async () => {
+    renderTab();
+    const input = screen.getByLabelText('user@company.com');
+    fireEvent.change(input, { target: { value: 'not-an-email' } });
+    fireEvent.change(input, { target: { value: 'valid@example.com' } });
+
+    expect(screen.queryByText("That doesn't look like an email address.")).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Invite' }));
+    await waitFor(() =>
+      expect(mocks.createMember).toHaveBeenCalledWith('ws-1', {
+        email: 'valid@example.com',
+        role: 'member',
+      }),
+    );
+  });
+});
+
+describe('MembersTab invite role select (§3 L89)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    viewerRef.current = { id: 'user-1' };
+    invitationsRef.current = [];
+    membersRef.current = [member({ id: 'm-1', user_id: 'user-1', role: 'owner', name: 'Alice' })];
+  });
+
+  it('shows the localized role label, never the raw enum value', () => {
+    renderTab();
+    const combobox = screen.getByRole('combobox');
+    expect(combobox).toHaveTextContent('Member');
+    expect(combobox).not.toHaveTextContent('member');
+  });
+});
+
+describe('MembersTab list column headers (§3 L96)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    viewerRef.current = { id: 'user-1' };
+    invitationsRef.current = [];
+  });
+
+  it('shows a header row above the member rows, aligned to their columns', () => {
+    membersRef.current = [
+      member({ id: 'm-1', user_id: 'user-1', role: 'owner', name: 'Alice' }),
+      member({ id: 'm-2', user_id: 'user-2', role: 'member', name: 'Bob' }),
+    ];
+    renderTab();
+
+    const header = within(screen.getByTestId('members-list-header'));
+    expect(header.getByText('Member')).toBeInTheDocument();
+    expect(header.getByText('Role')).toBeInTheDocument();
+  });
+
+  it('does not render a header over an empty list', () => {
+    membersRef.current = [];
+    renderTab();
+    expect(screen.queryByTestId('members-list-header')).toBeNull();
   });
 });

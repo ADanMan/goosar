@@ -70,6 +70,10 @@ import { roleChangeGate } from './membership-gates';
 import { SettingsCard, SettingsSection, SettingsTab } from './settings-layout';
 import { TypedConfirmDialog } from './typed-confirm-dialog';
 
+// §3 L88: a plain, permissive email shape check — good enough to catch a
+// typo before it round-trips through the server, not a full RFC validator.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 function toastServerFailure(
   tCommon: ReturnType<typeof useT<'common'>>['t'],
   err: unknown,
@@ -107,6 +111,23 @@ function useRoleLabels() {
       icon: ROLE_ICONS.member,
     },
   } as const;
+}
+
+// §3 L96: header aligned to MemberRow's own columns below (avatar spacer,
+// name/email, role) — same pattern as T-032's MachineListHeader for the
+// runtime list (4c3682d), not a switch to a full data table.
+function MembersListHeader() {
+  const { t } = useT('settings');
+  return (
+    <div
+      data-testid="members-list-header"
+      className="flex items-center gap-3 bg-muted/30 px-4 py-2 text-xs font-medium text-muted-foreground"
+    >
+      <span className="w-8 shrink-0" aria-hidden="true" />
+      <span className="min-w-0 flex-1">{t(($) => $.members.column_member)}</span>
+      <span className="shrink-0">{t(($) => $.members.column_role)}</span>
+    </div>
+  );
 }
 
 function MemberRow({
@@ -327,6 +348,11 @@ export function MembersTab() {
     role: currentMember?.role ?? null,
   };
   const canManageWorkspace = canManageMembers(permissionCtx).allowed;
+  // §3 L88: catch an obviously malformed address before it round-trips
+  // through the server — an empty field is just "not filled in yet", not
+  // an error, so the hint only appears once something is actually typed.
+  const trimmedInviteEmail = inviteEmail.trim();
+  const inviteEmailInvalid = trimmedInviteEmail !== '' && !EMAIL_RE.test(trimmedInviteEmail);
   const isOwner = currentMember?.role === 'owner';
   const ownerCount = members.filter((m) => m.role === 'owner').length;
   const perimeterEnabled = useConfigStore(isPerimeterDeliveryProfile);
@@ -352,7 +378,7 @@ export function MembersTab() {
   };
 
   const handleInviteMember = () => {
-    if (!workspace) return;
+    if (!workspace || !trimmedInviteEmail || inviteEmailInvalid) return;
     const email = inviteEmail;
     const role = inviteRole;
     if (role !== 'admin') {
@@ -564,11 +590,13 @@ export function MembersTab() {
                   autoComplete="email"
                   spellCheck={false}
                   aria-label={t(($) => $.members.invite_email_placeholder)}
+                  aria-invalid={inviteEmailInvalid}
+                  aria-describedby={inviteEmailInvalid ? 'invite-email-error' : undefined}
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                   placeholder={t(($) => $.members.invite_email_placeholder)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && inviteEmail.trim()) handleInviteMember();
+                    if (e.key === 'Enter') handleInviteMember();
                   }}
                 />
                 <Select
@@ -589,10 +617,15 @@ export function MembersTab() {
                 </Select>
                 <Button
                   onClick={handleInviteMember}
-                  disabled={inviteLoading || !inviteEmail.trim()}
+                  disabled={inviteLoading || !trimmedInviteEmail || inviteEmailInvalid}
                 >
                   {inviteLoading ? t(($) => $.members.inviting) : t(($) => $.members.invite_button)}
                 </Button>
+                {inviteEmailInvalid && (
+                  <p id="invite-email-error" className="text-xs text-destructive sm:col-span-3">
+                    {t(($) => $.members.invite_email_invalid)}
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -600,6 +633,10 @@ export function MembersTab() {
 
         {members.length > 0 ? (
           <SettingsCard>
+            {/* §3 L96: header row above the rows below, aligned to the same
+                columns (as T-032 did for the runtime list in 4c3682d) —
+                short of turning this into a full data table. */}
+            <MembersListHeader />
             {members.map((m) => (
               <div key={m.id}>
                 <MemberRow
