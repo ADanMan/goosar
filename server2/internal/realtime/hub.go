@@ -237,6 +237,28 @@ func (h *Hub) PublishToChat(chatID string, event Event) {
 	h.PublishRoom(roomKey("chat", chatID), event)
 }
 
+// CloseUserConnections принудительно закрывает все живые WebSocket-соединения
+// пользователя (комната user:<userID>) — используется деактивацией/удалением
+// учётной записи деплоя (T-029, internal/deployment): контракт требует
+// «закрытие realtime-подключений» как побочный эффект deactivateDeploymentUser/
+// deleteDeploymentUser. Возвращает число закрытых соединений. Закрытие само
+// разбудит read-loop каждого сокета в ws.go, который и вызовет unregisterConn/
+// leaveAll — здесь достаточно оборвать транспорт, не трогая счётчики хаба
+// напрямую (иначе он рискует разойтись с реальным состоянием rooms/conns).
+func (h *Hub) CloseUserConnections(userID string) int {
+	h.mu.Lock()
+	rm, ok := h.rooms[roomKey("user", userID)]
+	h.mu.Unlock()
+	if !ok {
+		return 0
+	}
+	sockets := rm.snapshot()
+	for _, s := range sockets {
+		_ = s.ws.Close(websocket.StatusNormalClosure, "session revoked")
+	}
+	return len(sockets)
+}
+
 // Stats — снимок счётчиков для GET /health/realtime.
 type Stats struct {
 	Rooms       int `json:"rooms"`
