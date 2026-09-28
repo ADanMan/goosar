@@ -122,7 +122,7 @@ const SETTINGS_TAB_TRIGGER_CLASS =
 // short of reading each icon. Callers add their own md:pt-* (the desktop
 // layout still wants more space above the 2nd/3rd group than the 1st).
 const SETTINGS_TAB_GROUP_LABEL_CLASS =
-  'flex shrink-0 items-center whitespace-nowrap px-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground md:block md:pb-1 md:text-xs md:font-medium md:normal-case md:tracking-normal';
+  'flex shrink-0 items-center whitespace-nowrap px-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground md:block md:pb-1 md:text-xs md:font-medium md:normal-case md:tracking-normal';
 
 export interface ExtraSettingsTab {
   value: string;

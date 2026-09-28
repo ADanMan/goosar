@@ -208,7 +208,7 @@ export function StepWorkspace({
         <div className="text-xs font-medium text-muted-foreground">
           {t(($) => $.step_workspace.issue_prefix_label)}
         </div>
-        <div className="text-sm leading-[1.55] text-muted-foreground">
+        <div className="text-sm leading-snug text-muted-foreground">
           {t(($) => $.step_workspace.issue_prefix_prefix)}
           <span className="font-mono text-foreground">{issuePrefix(slug)}-123</span>
           {t(($) => $.step_workspace.issue_prefix_suffix)}
@@ -252,7 +252,7 @@ export function StepWorkspace({
                   ? t(($) => $.step_workspace.eyebrow_first)
                   : t(($) => $.step_workspace.creation_disabled_eyebrow)}
             </div>
-            <h1 className="text-balance font-serif text-[36px] font-medium leading-[1.1] tracking-tight text-foreground">
+            <h1 className="text-balance font-serif text-2xl font-medium tracking-tight text-foreground">
               {reusing
                 ? workspaceCreationAllowed
                   ? t(($) => $.step_workspace.headline_resume, { name: reusing.name })
@@ -263,7 +263,7 @@ export function StepWorkspace({
                   ? t(($) => $.step_workspace.headline_first)
                   : t(($) => $.step_workspace.creation_disabled_headline)}
             </h1>
-            <p className="mt-4 text-[15.5px] leading-[1.55] text-foreground/80">
+            <p className="mt-4 text-base leading-relaxed text-foreground/80">
               {reusing
                 ? workspaceCreationAllowed
                   ? t(($) => $.step_workspace.lede_resume)
@@ -369,7 +369,7 @@ function ExistingWorkspaceCard({
     >
       <WorkspaceAvatar name={workspace.name} avatarUrl={workspace.avatar_url} size="lg" />
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="truncate text-[14.5px] font-medium text-foreground">{workspace.name}</div>
+        <div className="truncate text-sm font-medium text-foreground">{workspace.name}</div>
         <div className="truncate font-mono text-xs text-muted-foreground">
           {`${urlHost}/${workspace.slug}`}
         </div>
@@ -413,7 +413,7 @@ function CreateNewWorkspaceCard({
           <Plus className="h-4 w-4" />
         </div>
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="truncate text-[14.5px] font-medium text-foreground">
+          <div className="truncate text-sm font-medium text-foreground">
             {t(($) => $.step_workspace.create_new_title)}
           </div>
           <div className="truncate text-xs text-muted-foreground">
@@ -483,8 +483,8 @@ function WorkspacePreviewCard({ name, slug }: { name: string; slug: string }) {
       <div className="flex items-center gap-3 border-b px-4 py-3.5">
         <WorkspaceAvatar name={name} size="md" />
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="truncate text-[14px] font-medium text-foreground">{name}</div>
-          <div className="truncate font-mono text-[11.5px] text-muted-foreground">
+          <div className="truncate text-sm font-medium text-foreground">{name}</div>
+          <div className="truncate font-mono text-xs text-muted-foreground">
             {`${urlHost}/${slug}`}
           </div>
         </div>
@@ -552,13 +552,13 @@ function EntityRow({
         {icon}
       </span>
       <span
-        className={cn('flex-1 text-[13.5px]', dim ? 'text-muted-foreground' : 'text-foreground')}
+        className={cn('flex-1 text-sm', dim ? 'text-muted-foreground' : 'text-foreground')}
       >
         {label}
       </span>
       <span
         className={cn(
-          'font-mono text-[11.5px]',
+          'font-mono text-xs',
           dim ? 'text-muted-foreground/70' : 'text-muted-foreground',
         )}
       >
@@ -572,7 +572,7 @@ function PerkRow({ children }: { children: ReactNode }) {
   return (
     <div className="grid grid-cols-[18px_1fr] items-start gap-3">
       <span aria-hidden className="mt-[11px] h-px w-3 shrink-0 bg-muted-foreground/40" />
-      <div className="text-[13.5px] leading-[1.55] text-foreground/85">{children}</div>
+      <div className="text-sm leading-relaxed text-foreground/85">{children}</div>
     </div>
   );
 }

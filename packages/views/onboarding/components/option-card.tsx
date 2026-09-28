@@ -29,7 +29,7 @@ export function OptionCard({
       )}
     >
       <RadioMark selected={selected} />
-      <span className="text-[14.5px] font-normal leading-tight text-foreground">{label}</span>
+      <span className="text-sm font-normal leading-tight text-foreground">{label}</span>
     </button>
   );
 }
@@ -65,7 +65,7 @@ export function OtherOptionCard({
         className="flex w-full items-center gap-3.5 px-4 py-2.5 text-left"
       >
         <RadioMark selected={selected} />
-        <span className="text-[14.5px] font-normal leading-tight text-foreground">
+        <span className="text-sm font-normal leading-tight text-foreground">
           {t(($) => $.option_card.other_label)}
         </span>
       </button>

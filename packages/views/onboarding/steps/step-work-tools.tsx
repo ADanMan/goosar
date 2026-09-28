@@ -161,7 +161,7 @@ export function StepWorkTools({
   const cardBadge = (name: HelperMcpPresetName): ReactNode => {
     if (status.kind === 'saved' && status.enabled.includes(name)) {
       return (
-        <span className="flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-medium text-success">
+        <span className="flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-2xs font-medium text-success">
           <Check className="h-3 w-3" aria-hidden />
           {t(($) => $.step_work_tools.badge_saved_enabled)}
         </span>
@@ -172,7 +172,7 @@ export function StepWorkTools({
     return (
       <span
         className={cn(
-          'rounded-full px-2 py-0.5 text-[11px] font-medium',
+          'rounded-full px-2 py-0.5 text-2xs font-medium',
           complete ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
         )}
       >
@@ -195,7 +195,7 @@ export function StepWorkTools({
     const visible = visibleSecrets.has(fieldId);
     return (
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor={fieldId} className="text-[13px]">
+        <Label htmlFor={fieldId} className="text-sm">
           {label}
         </Label>
         <div className="relative">
@@ -267,11 +267,11 @@ export function StepWorkTools({
             <span className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
               {t(($) => $.step_work_tools.eyebrow)}
             </span>
-            <span className="rounded-full border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+            <span className="rounded-full border px-2 py-0.5 text-2xs font-medium text-muted-foreground">
               {t(($) => $.step_work_tools.optional_badge)}
             </span>
           </div>
-          <h1 className="text-balance font-serif text-[34px] font-medium leading-[1.15] tracking-tight text-foreground">
+          <h1 className="text-balance font-serif text-2xl font-medium tracking-tight text-foreground">
             {t(($) => $.step_work_tools.headline)}
           </h1>
           <p className="mt-3 max-w-[560px] text-sm leading-relaxed text-muted-foreground">
@@ -357,7 +357,7 @@ export function StepWorkTools({
                       }))
                     }
                   />
-                  <Label htmlFor="work-tools-atlassian-ssl-verify" className="text-[13px]">
+                  <Label htmlFor="work-tools-atlassian-ssl-verify" className="text-sm">
                     {t(($) => $.step_work_tools.presets.atlassian.ssl_verify_label)}
                   </Label>
                 </div>
@@ -368,7 +368,7 @@ export function StepWorkTools({
             {visibleCardOrder.includes('outlook') && (
               <WorkToolsCard preset="outlook" badge={cardBadge('outlook')}>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="work-tools-ews-email" className="text-[13px]">
+                  <Label htmlFor="work-tools-ews-email" className="text-sm">
                     {t(($) => $.step_work_tools.presets.outlook.email_label)}
                   </Label>
                   {/* A mailbox address is not a secret — plain text input. */}
@@ -399,7 +399,7 @@ export function StepWorkTools({
             {visibleCardOrder.includes('bitrix24') && (
               <WorkToolsCard preset="bitrix24" badge={cardBadge('bitrix24')}>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="work-tools-b24-webhook" className="text-[13px]">
+                  <Label htmlFor="work-tools-b24-webhook" className="text-sm">
                     {t(($) => $.step_work_tools.presets.bitrix24.webhook_label)}
                   </Label>
                   <Input
@@ -417,7 +417,7 @@ export function StepWorkTools({
                       }))
                     }
                   />
-                  <p className="text-[11.5px] leading-[1.5] text-muted-foreground">
+                  <p className="text-xs leading-snug text-muted-foreground">
                     {t(($) => $.step_work_tools.presets.bitrix24.webhook_hint)}
                   </p>
                   {/* URL-slot validation: spaces or query/fragment markers would
@@ -426,7 +426,7 @@ export function StepWorkTools({
                   {webhookInvalid && (
                     <p
                       aria-live="polite"
-                      className="flex items-start gap-1.5 text-[11.5px] leading-[1.5] text-destructive"
+                      className="flex items-start gap-1.5 text-xs leading-snug text-destructive"
                     >
                       <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
                       {t(($) => $.step_work_tools.presets.bitrix24.webhook_invalid)}
@@ -445,7 +445,7 @@ export function StepWorkTools({
                     })),
                 )}
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="work-tools-kb-deployment" className="text-[13px]">
+                  <Label htmlFor="work-tools-kb-deployment" className="text-sm">
                     {t(($) => $.step_work_tools.presets.bitrix24.kb_deployment_label)}
                   </Label>
                   <Input
@@ -487,7 +487,7 @@ export function StepWorkTools({
                       }))
                     }
                   />
-                  <Label htmlFor="work-tools-fetch-enabled" className="text-[13px]">
+                  <Label htmlFor="work-tools-fetch-enabled" className="text-sm">
                     {t(($) => $.step_work_tools.presets.fetch.enable_label)}
                   </Label>
                 </div>

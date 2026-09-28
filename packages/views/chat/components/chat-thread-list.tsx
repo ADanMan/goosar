@@ -272,7 +272,7 @@ export function ChatThreadList({
             >
               {titleText}
             </span>
-            <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{timeText}</span>
+            <span className="ml-auto shrink-0 text-2xs text-muted-foreground">{timeText}</span>
           </div>
 
           {/* Line 2: preview + unread badge, or an inline confirm prompt */}
@@ -309,7 +309,7 @@ export function ChatThreadList({
                 {unread > 0 && (
                   <span
                     aria-label={t(($) => $.session_history.row_subtitle.new_reply)}
-                    className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-destructive px-1 text-[10.5px] font-semibold text-white"
+                    className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-destructive px-1 text-2xs font-semibold text-white"
                   >
                     {unread > 99 ? '99+' : unread}
                   </span>
@@ -499,7 +499,7 @@ function ConfirmRow({
             onCancel();
           }}
           disabled={pending}
-          className="inline-flex h-6 items-center rounded px-2 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+          className="inline-flex h-6 items-center rounded px-2 text-2xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
         >
           {cancelText}
         </button>
@@ -515,7 +515,7 @@ function ConfirmRow({
             onConfirm();
           }}
           disabled={pending}
-          className="inline-flex h-6 items-center rounded px-2 text-[11px] font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+          className="inline-flex h-6 items-center rounded px-2 text-2xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
         >
           {confirmText}
         </button>

@@ -261,7 +261,7 @@ function SourceBackfillDialogBody({ onComplete }: { onComplete: () => void }) {
   return (
     <DialogContent className="sm:max-w-2xl p-0 gap-0 overflow-hidden">
       <div className="px-6 pt-6 pb-2">
-        <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        <div className="text-2xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
           {t(($) => $.source_backfill.eyebrow)}
         </div>
         <h2 className="mt-1 text-balance font-serif text-xl font-medium leading-tight tracking-tight text-foreground">

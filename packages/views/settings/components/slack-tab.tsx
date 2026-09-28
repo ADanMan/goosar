@@ -86,7 +86,7 @@ export function SlackTab() {
             <p className="text-sm font-medium">{t(($) => $.slack.not_enabled_title)}</p>
             <p className="text-xs text-muted-foreground">
               {t(($) => $.slack.not_enabled_description_prefix)}{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-[10px]">
+              <code className="rounded bg-muted px-1 py-0.5 text-2xs">
                 GOOSAR_SLACK_SECRET_KEY
               </code>{' '}
               {t(($) => $.slack.not_enabled_description_suffix)}{' '}
@@ -193,12 +193,12 @@ function InstallationRow({
           <p className="text-sm font-medium">
             {agentName}
             {!isActive && (
-              <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-2xs text-muted-foreground">
                 {t(($) => $.slack.revoked_badge)}
               </span>
             )}
           </p>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-2xs text-muted-foreground">
             {t(($) => $.slack.installed_at_label, {
               when: new Date(installation.installed_at).toLocaleString(uiLocale),
             })}

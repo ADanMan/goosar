@@ -118,10 +118,10 @@ export function StepPrepareWorkspace({
 
       <main className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[620px] px-6 py-10 sm:px-10 md:px-14 lg:px-0 lg:py-14">
-          <h1 className="text-balance font-serif text-[36px] font-medium leading-[1.1] tracking-tight text-foreground">
+          <h1 className="text-balance font-serif text-2xl font-medium tracking-tight text-foreground">
             {t(($) => $.step_prepare_workspace.headline)}
           </h1>
-          <p className="mt-4 max-w-[560px] text-[15.5px] leading-[1.55] text-muted-foreground">
+          <p className="mt-4 max-w-[560px] text-base leading-relaxed text-muted-foreground">
             {failed
               ? t(($) => $.step_prepare_workspace.lede_fail)
               : restartPending
@@ -170,7 +170,7 @@ export function StepPrepareWorkspace({
           {failed && (
             <p
               aria-live="polite"
-              className="mt-6 flex items-start gap-1.5 text-[13px] leading-[1.55] text-destructive"
+              className="mt-6 flex items-start gap-1.5 text-sm leading-snug text-destructive"
             >
               <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
               {reasonMessage(t, status.reasonCode)}
@@ -242,17 +242,17 @@ function LlmGatewayRow({
       >
         {ok ? <Check className="h-3.5 w-3.5" /> : <TriangleAlert className="h-3.5 w-3.5" />}
       </span>
-      <span className="flex-1 text-[14px] text-foreground">
+      <span className="flex-1 text-sm text-foreground">
         {t(($) => $.step_prepare_workspace.row_ai_gateway)}
         {source === 'server' && (
-          <span className="ml-1.5 text-[12px] text-muted-foreground">
+          <span className="ml-1.5 text-xs text-muted-foreground">
             ({t(($) => $.step_prepare_workspace.ai_gateway_source_server)})
           </span>
         )}
       </span>
       <span
         className={cn(
-          'text-[12.5px]',
+          'text-xs',
           tone === 'success'
             ? 'text-success'
             : tone === 'destructive'
@@ -327,17 +327,17 @@ function PxProxyRow({
       >
         {ok ? <Check className="h-3.5 w-3.5" /> : <TriangleAlert className="h-3.5 w-3.5" />}
       </span>
-      <span className="flex-1 text-[14px] text-foreground">
+      <span className="flex-1 text-sm text-foreground">
         {t(($) => $.step_prepare_workspace.row_px_proxy)}
         {mcpCheckLabel && (
-          <span className="ml-1.5 text-[12px] text-muted-foreground">
+          <span className="ml-1.5 text-xs text-muted-foreground">
             ({t(($) => $.step_prepare_workspace.px_mcp_check_label)}: {mcpCheckLabel})
           </span>
         )}
       </span>
       <span
         className={cn(
-          'text-[12.5px]',
+          'text-xs',
           tone === 'success'
             ? 'text-success'
             : tone === 'warning'
@@ -403,9 +403,9 @@ function ProgressRow({
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
         )}
       </span>
-      <span className="flex-1 text-[14px] text-foreground">{label}</span>
+      <span className="flex-1 text-sm text-foreground">{label}</span>
       <span
-        className="font-mono text-[12.5px] text-muted-foreground"
+        className="font-mono text-xs text-muted-foreground"
         title={
           unavailable.length > 0
             ? unavailable.map((u) => `${u.name}: ${u.reason}`).join('\n')
@@ -488,8 +488,8 @@ function AgentRow({
             <Loader2 className={cn('h-3.5 w-3.5', isWorking && 'animate-spin')} />
           )}
         </span>
-        <span className="flex-1 text-[14px] text-foreground">{label}</span>
-        <span className="text-[12.5px] text-muted-foreground">{statusText}</span>
+        <span className="flex-1 text-sm text-foreground">{label}</span>
+        <span className="text-xs text-muted-foreground">{statusText}</span>
         {(isError || needsConfig) && !skipped && onRetry && (
           <Button size="sm" variant="secondary" onClick={() => void onRetry()}>
             {t(($) => $.step_prepare_workspace.agent_row.retry)}
@@ -497,7 +497,7 @@ function AgentRow({
         )}
       </div>
       {isReady && status.bashProbe != null && (
-        <p className="pl-9 text-[12px] text-muted-foreground">
+        <p className="pl-9 text-xs text-muted-foreground">
           {status.bashProbe.ok
             ? t(($) => $.step_prepare_workspace.agent_row.bash_ok)
             : t(($) => $.step_prepare_workspace.agent_row.bash_failed, {
@@ -507,7 +507,7 @@ function AgentRow({
       )}
       {isError && !skipped && (
         <div className="flex items-center justify-between gap-2 pl-9">
-          {reasonText ? <p className="text-[12px] text-destructive">{reasonText}</p> : <span />}
+          {reasonText ? <p className="text-xs text-destructive">{reasonText}</p> : <span />}
           {onSkip && status.state !== 'unsupported' && (
             <Button size="sm" variant="ghost" onClick={onSkip}>
               {t(($) => $.step_prepare_workspace.agent_row.continue_without)}

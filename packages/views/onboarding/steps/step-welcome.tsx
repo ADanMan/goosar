@@ -62,7 +62,7 @@ export function StepWelcome({
               </span>
             </div>
 
-            <h1 className="text-balance font-serif text-5xl font-medium leading-[1.04] tracking-tight sm:text-6xl">
+            <h1 className="text-balance font-serif text-2xl font-medium tracking-tight">
               {t(($) => $.welcome.headline_line1)}
               <br />
               {t(($) => $.welcome.headline_line2)}{' '}
@@ -149,7 +149,7 @@ export function StepWelcome({
       <div className="hidden border-l bg-muted/40 lg:flex lg:flex-1 lg:flex-col lg:overflow-hidden">
         <DragStrip />
         <div className="flex flex-1 flex-col items-center justify-center gap-7 px-8 py-8">
-          <p className="max-w-[440px] text-balance text-center font-serif text-[15px] italic leading-snug text-muted-foreground">
+          <p className="max-w-[440px] text-balance text-center font-serif text-base italic leading-snug text-muted-foreground">
             {t(($) => $.welcome.illustration_caption)}
           </p>
           <WelcomeIllustration />
@@ -281,7 +281,7 @@ function MockActivityCard({
           <MockAvatar actor={actor} />
           <span className="truncate text-sm font-medium text-foreground">{actor.name}</span>
         </div>
-        <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{issueId}</span>
+        <span className="shrink-0 font-mono text-2xs text-muted-foreground">{issueId}</span>
       </div>
 
       <p className="mt-2.5 text-sm leading-snug text-foreground/85">{content}</p>
@@ -296,7 +296,7 @@ function MockAvatar({ actor }: { actor: ActivityActor }) {
     return (
       <div
         aria-hidden
-        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-foreground text-[11px] font-semibold text-background"
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-foreground text-2xs font-semibold text-background"
       >
         {actor.initial}
       </div>

@@ -200,7 +200,7 @@ export function VCSTab() {
             {!configured ? (
               <p className="text-xs text-muted-foreground">
                 {t(($) => $.vcs.not_configured)}{' '}
-                <code className="rounded bg-muted px-1 py-0.5 text-[10px]">
+                <code className="rounded bg-muted px-1 py-0.5 text-2xs">
                   GOOSAR_VCS_SECRET_KEY
                 </code>
                 .

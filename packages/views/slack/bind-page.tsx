@@ -102,7 +102,7 @@ export function SlackBindPage({ token }: { token: string | null }) {
                   }
                 })()}
               </p>
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-2xs text-muted-foreground">
                 {t(($) => $.slack_bind.error_admin_hint)}
               </p>
             </>

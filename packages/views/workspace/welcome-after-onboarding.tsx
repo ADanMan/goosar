@@ -286,7 +286,7 @@ function RuntimeWelcome({ workspaceId, runtimeId, onAbandon, onComplete }: Runti
           aria-describedby="welcome-after-onboarding-runtime-success-subtitle"
         >
           <div className="flex flex-col items-center gap-3 pt-4">
-            <div className="text-4xl animate-welcome-emoji-pop" aria-hidden>
+            <div className="text-2xl animate-welcome-emoji-pop" aria-hidden>
               🎉
             </div>
             <DialogTitle className="text-center text-xl font-semibold">
@@ -540,7 +540,7 @@ function SkipWelcome({ workspaceId, onDismiss }: SkipWelcomeProps) {
         aria-describedby="welcome-after-onboarding-skip-subtitle"
       >
         <div className="flex flex-col items-center gap-4 pt-6">
-          <div className="text-6xl animate-welcome-emoji-pop" aria-hidden>
+          <div className="text-2xl animate-welcome-emoji-pop" aria-hidden>
             🎉
           </div>
           <DialogTitle className="text-center text-xl font-semibold">
@@ -621,7 +621,7 @@ function SkipPreviewCard({
           <p className="text-sm font-medium leading-tight">{title}</p>
           <span
             className={cn(
-              'rounded-full px-2 py-0.5 text-[11px] font-medium',
+              'rounded-full px-2 py-0.5 text-2xs font-medium',
               statusTone === 'active'
                 ? 'bg-primary/10 text-primary'
                 : 'bg-muted text-muted-foreground',

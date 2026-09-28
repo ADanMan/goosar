@@ -152,14 +152,14 @@ export function StepCompletionRecovery({
       <DragStrip />
       <main className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-[620px] px-6 py-16 sm:px-10 md:px-14 lg:px-0 lg:py-24">
-          <h1 className="text-balance font-serif text-[36px] font-medium leading-[1.1] tracking-tight text-foreground">
+          <h1 className="text-balance font-serif text-2xl font-medium tracking-tight text-foreground">
             {headline}
           </h1>
-          <p className="mt-4 text-[15.5px] leading-[1.55] text-muted-foreground">{lede}</p>
+          <p className="mt-4 text-base leading-relaxed text-muted-foreground">{lede}</p>
 
           <p
             aria-live="polite"
-            className="mt-8 flex items-start gap-2 text-[13.5px] leading-[1.55]"
+            className="mt-8 flex items-start gap-2 text-sm leading-snug"
           >
             <StatusIcon phase={phase.kind} />
             <span
@@ -173,7 +173,7 @@ export function StepCompletionRecovery({
 
           {phase.kind === 'failed' && hasInvitation && (
             <div className="mt-6 rounded-md border border-border bg-muted/40 p-4">
-              <p className="text-[13.5px] leading-[1.55] text-foreground">
+              <p className="text-sm leading-relaxed text-foreground">
                 {t(($) => $.step_completion_recovery.invitation_notice)}
               </p>
               <Button
@@ -207,7 +207,7 @@ export function StepCompletionRecovery({
                   {t(($) => $.step_completion_recovery.start_over)}
                 </Button>
               </div>
-              <p className="mt-3 text-xs leading-[1.55] text-muted-foreground">
+              <p className="mt-3 text-xs leading-snug text-muted-foreground">
                 {t(($) => $.step_completion_recovery.start_over_hint)}
               </p>
             </>

@@ -385,7 +385,7 @@ function ReachabilityBanner({ fact }: { fact: LlmAuthReachability | null }) {
       ) : (
         <OutcomeBanner
           tone="neutral"
-          icon={<CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-500" />}
+          icon={<CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />}
           title={t(($) => $.desktop.llm.reach_ok_title)}
         >
           <p className="mt-0.5 text-sm text-muted-foreground">

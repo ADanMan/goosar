@@ -185,7 +185,7 @@ export function GitHubTab() {
                   ) : canManage ? (
                     <p className="text-xs text-muted-foreground">
                       {t(($) => $.github.connection_description_prefix)}{' '}
-                      <code className="rounded bg-muted px-1 py-0.5 text-[10px]">
+                      <code className="rounded bg-muted px-1 py-0.5 text-2xs">
                         {t(($) => $.github.connection_identifier_example)}
                       </code>{' '}
                       {t(($) => $.github.connection_description_suffix)}{' '}
@@ -227,9 +227,9 @@ export function GitHubTab() {
             {canManage && !configured && (
               <p className="text-xs text-muted-foreground">
                 {t(($) => $.github.not_configured)}{' '}
-                <code className="rounded bg-muted px-1 py-0.5 text-[10px]">GITHUB_APP_SLUG</code>{' '}
+                <code className="rounded bg-muted px-1 py-0.5 text-2xs">GITHUB_APP_SLUG</code>{' '}
                 {t(($) => $.github.not_configured_and)}{' '}
-                <code className="rounded bg-muted px-1 py-0.5 text-[10px]">
+                <code className="rounded bg-muted px-1 py-0.5 text-2xs">
                   GITHUB_WEBHOOK_SECRET
                 </code>
                 .

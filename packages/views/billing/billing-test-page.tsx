@@ -324,7 +324,7 @@ function TierButton({
         {baseLine}
         {bonusLine}
       </div>
-      <div className="mt-1 font-mono text-[10px] text-muted-foreground/70">
+      <div className="mt-1 font-mono text-2xs text-muted-foreground/70">
         {t(($) => $.buy.tier_id, { id: tier.id })}
       </div>
     </button>
@@ -394,7 +394,7 @@ function TransactionRow({ row }: { row: BillingTransaction }) {
       {row.description && (
         <div className="mt-1 text-xs text-muted-foreground">{row.description}</div>
       )}
-      <div className="mt-1 font-mono text-[10px] text-muted-foreground/70">
+      <div className="mt-1 font-mono text-2xs text-muted-foreground/70">
         {t(($) => $.transactions.row_meta, {
           date: formatDate(row.created_at, t),
           balance: (row.balance_after / MICRO_PER_CREDIT).toLocaleString(),
@@ -451,7 +451,7 @@ function BatchRow({ row }: { row: BillingBatch }) {
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-medium">
           {row.source_type}
-          <span className="ml-1.5 font-mono text-[10px] text-muted-foreground">
+          <span className="ml-1.5 font-mono text-2xs text-muted-foreground">
             {t(($) => $.batches.id_suffix, { id: row.id.slice(0, 8) })}
           </span>
         </span>
@@ -541,7 +541,7 @@ function TopupRow({ row }: { row: BillingTopup }) {
               })}
         </span>
       </div>
-      <div className="mt-1 font-mono text-[10px] text-muted-foreground/70">
+      <div className="mt-1 font-mono text-2xs text-muted-foreground/70">
         {t(($) => $.topups.row_meta, {
           date: formatDate(row.created_at, t),
           checkout: row.stripe_checkout_id || t(($) => $.topups.stripe_empty),
@@ -563,7 +563,7 @@ function PagingFooter({
   const { t } = useT('billing');
   if (total === 0) return null;
   return (
-    <div className="mt-3 text-[10px] text-muted-foreground">
+    <div className="mt-3 text-2xs text-muted-foreground">
       {t(($) => $.shared.paging, {
         page,
         totalPages: Math.max(1, Math.ceil(total / pageSize)),

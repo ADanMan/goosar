@@ -248,13 +248,13 @@ function ToolkitCard({
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{toolkit.name || toolkit.slug}</p>
           {isConnected ? (
-            <p className="truncate text-[10px] text-muted-foreground">
+            <p className="truncate text-2xs text-muted-foreground">
               {lastUsedAt
                 ? t(($) => $.composio.last_used, { when: timeAgo(lastUsedAt) })
                 : t(($) => $.composio.last_used_never)}
             </p>
           ) : toolkit.category ? (
-            <p className="truncate text-[10px] uppercase tracking-wide text-muted-foreground">
+            <p className="truncate text-2xs uppercase tracking-wide text-muted-foreground">
               {toolkit.category}
             </p>
           ) : null}

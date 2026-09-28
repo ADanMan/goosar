@@ -406,7 +406,7 @@ function LevelBadge({ level }: { level: LogLevel }) {
   return (
     <span
       className={cn(
-        'inline-flex h-4 shrink-0 items-center rounded border px-1 text-[10px] font-medium uppercase tracking-wide',
+        'inline-flex h-4 shrink-0 items-center rounded border px-1 text-2xs font-medium uppercase tracking-wide',
         LEVEL_BADGE_CLASS[level],
       )}
     >
@@ -501,7 +501,7 @@ function GroupRows({
         <button
           type="button"
           onClick={onToggle}
-          className="my-0.5 ml-2 inline-flex w-fit items-center gap-2 rounded border border-dashed border-muted-foreground/25 bg-muted/30 px-2 py-0.5 text-[11px] italic text-muted-foreground/70 hover:bg-muted/60 hover:text-foreground"
+          className="my-0.5 ml-2 inline-flex w-fit items-center gap-2 rounded border border-dashed border-muted-foreground/25 bg-muted/30 px-2 py-0.5 text-2xs italic text-muted-foreground/70 hover:bg-muted/60 hover:text-foreground"
         >
           <span>···</span>
           <span>
@@ -535,7 +535,7 @@ function GroupRows({
       <button
         type="button"
         onClick={onToggle}
-        className="my-0.5 ml-2 inline-flex w-fit items-center gap-2 rounded border border-dashed border-muted-foreground/25 px-2 py-0.5 text-[11px] italic text-muted-foreground/60 hover:text-foreground"
+        className="my-0.5 ml-2 inline-flex w-fit items-center gap-2 rounded border border-dashed border-muted-foreground/25 px-2 py-0.5 text-2xs italic text-muted-foreground/60 hover:text-foreground"
       >
         <span>···</span>
         <span>

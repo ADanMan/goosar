@@ -201,7 +201,7 @@ export function PropertiesTab() {
                     <PropertyIcon property={property} />
                     <span className="truncate text-sm font-medium">{property.name}</span>
                     {property.archived && (
-                      <Badge variant="outline" className="shrink-0 text-[10px]">
+                      <Badge variant="outline" className="shrink-0 text-2xs">
                         {t(($) => $.properties.archived_badge)}
                       </Badge>
                     )}

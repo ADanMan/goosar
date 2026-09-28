@@ -91,10 +91,10 @@ export function StepChooseRole({
           <div className="mb-2 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
             {t(($) => $.step_choose_role.eyebrow)}
           </div>
-          <h1 className="text-balance font-serif text-[36px] font-medium leading-[1.1] tracking-tight text-foreground">
+          <h1 className="text-balance font-serif text-2xl font-medium tracking-tight text-foreground">
             {t(($) => $.step_choose_role.headline)}
           </h1>
-          <p className="mt-4 text-[15.5px] leading-[1.55] text-foreground/80">
+          <p className="mt-4 text-base leading-relaxed text-foreground/80">
             {t(($) => $.step_choose_role.lede)}
           </p>
 
@@ -113,7 +113,7 @@ export function StepChooseRole({
                     className={cn('flex items-center gap-4 rounded-lg border bg-card p-4')}
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[14.5px] font-medium text-foreground">
+                      <div className="truncate text-sm font-medium text-foreground">
                         {target.name}
                       </div>
                       {target.description ? (

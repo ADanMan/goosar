@@ -71,12 +71,12 @@ export function ProvisioningReminder({
           <PackageCheck className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
         )}
         <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-medium text-foreground">
+          <p className="text-sm font-medium text-foreground">
             {t(($) => $.provisioning_reminder.title)}
           </p>
-          <p className="mt-0.5 text-[12px] leading-[1.5] text-muted-foreground">{body}</p>
+          <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{body}</p>
           {failedPackages.length > 0 ? (
-            <ul className="mt-1 list-disc pl-4 text-[12px] leading-[1.5] text-muted-foreground">
+            <ul className="mt-1 list-disc pl-4 text-xs leading-snug text-muted-foreground">
               {failedPackages.map((p) => (
                 <li key={`${p.type}:${p.name}`}>
                   {t(($) => $.provisioning_reminder.failed_package, {

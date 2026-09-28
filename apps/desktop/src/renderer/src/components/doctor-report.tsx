@@ -15,7 +15,7 @@ function rank(row: DoctorRow): number {
 
 function StatusIcon({ status }: { status: string }) {
   if (RED.has(status)) return <X className="size-3.5 text-destructive" aria-hidden />;
-  if (status === 'ok') return <Check className="size-3.5 text-emerald-600" aria-hidden />;
+  if (status === 'ok') return <Check className="size-3.5 text-success" aria-hidden />;
   if (status === 'skipped') return <Minus className="size-3.5 text-muted-foreground" aria-hidden />;
   return <CircleHelp className="size-3.5 text-muted-foreground" aria-hidden />;
 }
@@ -123,7 +123,7 @@ export function DoctorSection() {
             })}
           </ul>
           {report ? (
-            <p className="mt-1.5 text-[11px] text-muted-foreground">
+            <p className="mt-1.5 text-2xs text-muted-foreground">
               {t(($) => $.desktop.perimeter.doctor_checked_at, {
                 time: new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(
                   new Date(report.checkedAt),

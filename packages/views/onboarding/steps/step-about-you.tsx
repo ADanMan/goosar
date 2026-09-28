@@ -239,7 +239,7 @@ export function StepAboutYou({
           <div className="mb-2 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
             {t(($) => $.questions.eyebrow_about_you)}
           </div>
-          <h1 className="text-balance font-serif text-[34px] font-medium leading-[1.15] tracking-tight text-foreground">
+          <h1 className="text-balance font-serif text-2xl font-medium tracking-tight text-foreground">
             {t(($) => $.questions.about_you.question)}
           </h1>
 
@@ -322,7 +322,7 @@ function QuestionGroup({
         <span aria-hidden className="font-mono text-xs text-muted-foreground">
           {String(number).padStart(2, '0')}
         </span>
-        <h2 className="text-[17px] font-medium leading-snug text-foreground">{question}</h2>
+        <h2 className="text-base font-medium leading-snug text-foreground">{question}</h2>
       </div>
       <fieldset
         role={multiSelect ? 'group' : 'radiogroup'}

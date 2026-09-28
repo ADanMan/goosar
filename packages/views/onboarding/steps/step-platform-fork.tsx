@@ -97,10 +97,10 @@ export function StepPlatformFork({
             <div className="mb-2 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
               {t(($) => $.step_platform.eyebrow)}
             </div>
-            <h1 className="text-balance font-serif text-[36px] font-medium leading-[1.1] tracking-tight text-foreground">
+            <h1 className="text-balance font-serif text-2xl font-medium tracking-tight text-foreground">
               {t(($) => $.step_platform.headline)}
             </h1>
-            <p className="mt-4 max-w-[560px] text-[15.5px] leading-[1.55] text-muted-foreground">
+            <p className="mt-4 max-w-[560px] text-base leading-relaxed text-muted-foreground">
               {t(($) => $.step_platform.lede)}
             </p>
 
@@ -174,13 +174,13 @@ function ForkPrimary({ onClick, downloaded }: { onClick: () => void; downloaded:
       )}
     >
       <div className="min-w-0">
-        <div className="flex items-center gap-2 text-[17px] font-medium tracking-tight">
+        <div className="flex items-center gap-2 text-base font-medium tracking-tight">
           <Download className="h-4 w-4" aria-hidden />
           {downloaded
             ? t(($) => $.step_platform.download_title_after)
             : t(($) => $.step_platform.download_title)}
         </div>
-        <div className="mt-1 text-[13px] text-background/60">
+        <div className="mt-1 text-sm text-background/60">
           {downloaded
             ? t(($) => $.step_platform.download_subtitle_after)
             : t(($) => $.step_platform.download_subtitle)}
@@ -188,7 +188,7 @@ function ForkPrimary({ onClick, downloaded }: { onClick: () => void; downloaded:
       </div>
       <span
         aria-hidden
-        className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-background/10 px-4 py-2 text-[13px] font-medium transition-colors group-hover:bg-background/20"
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-background/10 px-4 py-2 text-sm font-medium transition-colors group-hover:bg-background/20"
       >
         {t(($) => $.step_platform.download_button)}
         <ArrowRight className="h-3.5 w-3.5" />
@@ -218,11 +218,11 @@ function ForkAlt({
       )}
     >
       <div className="min-w-0">
-        <div className="text-[14.5px] font-medium text-foreground">{title}</div>
-        <div className="mt-1 text-[12.5px] leading-[1.5] text-muted-foreground">{subtitle}</div>
+        <div className="text-sm font-medium text-foreground">{title}</div>
+        <div className="mt-1 text-xs leading-snug text-muted-foreground">{subtitle}</div>
       </div>
       {disabled ? (
-        <span className="shrink-0 rounded-full border bg-muted px-3 py-1 text-[12px] font-medium text-muted-foreground">
+        <span className="shrink-0 rounded-full border bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
           {actionLabel}
         </span>
       ) : (
@@ -365,7 +365,7 @@ function CliWaitingStatus({ dialogOpen }: { dialogOpen: boolean }) {
         </span>
       </div>
 
-      <p aria-live="polite" className="text-[12.5px] leading-[1.55] text-muted-foreground">
+      <p aria-live="polite" className="text-xs leading-snug text-muted-foreground">
         {stage === 'normal' && (
           <>
             {t(($) => $.step_platform.stage_normal_prefix)}

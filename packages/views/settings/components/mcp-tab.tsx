@@ -303,7 +303,7 @@ function McpServerRow({
         <p className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
           {mcpTransportLabel(server.transport)}
           {server.source === 'deployment' ? (
-            <Badge variant="outline" className="text-[10px]">
+            <Badge variant="outline" className="text-2xs">
               {t(($) => $.mcp.deployment_badge)}
             </Badge>
           ) : null}

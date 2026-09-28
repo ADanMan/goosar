@@ -340,7 +340,7 @@ function ShortcutRow({
             {errorText}
           </span>
         ) : recording ? (
-          <span className="text-right text-[11px] text-muted-foreground">
+          <span className="text-right text-2xs text-muted-foreground">
             {t(($) => $.shortcuts.record_hint)}
           </span>
         ) : null}

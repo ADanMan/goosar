@@ -131,10 +131,10 @@ export function WorkToolsCard({
     <section className="rounded-lg border bg-card p-5" aria-label={text.title}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="text-muted-foreground">{PRESET_ICONS[preset]}</span>
-        <h2 className="text-[14.5px] font-medium text-foreground">{text.title}</h2>
+        <h2 className="text-sm font-medium text-foreground">{text.title}</h2>
         {badge}
       </div>
-      <p className="mt-1.5 text-[12.5px] leading-[1.55] text-muted-foreground">
+      <p className="mt-1.5 text-xs leading-snug text-muted-foreground">
         {text.description}
       </p>
 
@@ -144,7 +144,7 @@ export function WorkToolsCard({
         type="button"
         onClick={() => setGuideOpen((open) => !open)}
         aria-expanded={guideOpen}
-        className="mt-4 flex items-center gap-1.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+        className="mt-4 flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
         {guideOpen ? (
           <ChevronUp className="h-3.5 w-3.5" aria-hidden />
@@ -191,10 +191,10 @@ WorkToolsCard.displayName = 'WorkToolsCard';
 function GuideSection({ heading, body }: { heading: string; body: string }) {
   return (
     <div>
-      <p className="text-[11px] font-medium uppercase tracking-[0.07em] text-muted-foreground/70">
+      <p className="text-2xs font-medium uppercase tracking-[0.07em] text-muted-foreground/70">
         {heading}
       </p>
-      <p className="mt-1 whitespace-pre-line text-[12.5px] leading-[1.6] text-muted-foreground">
+      <p className="mt-1 whitespace-pre-line text-xs leading-snug text-muted-foreground">
         {body}
       </p>
     </div>

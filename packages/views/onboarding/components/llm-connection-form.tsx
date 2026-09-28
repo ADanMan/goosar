@@ -169,10 +169,10 @@ export function LlmConnectionForm({
         className={cn('rounded-lg border bg-card p-5', className)}
         aria-labelledby="llm-connection-title"
       >
-        <h2 id="llm-connection-title" className="text-[14.5px] font-medium text-foreground">
+        <h2 id="llm-connection-title" className="text-sm font-medium text-foreground">
           {t(($) => $.step_runtime.llm.server_key_title)}
         </h2>
-        <p className="mt-1.5 flex items-start gap-1.5 text-[12.5px] leading-[1.55] text-muted-foreground">
+        <p className="mt-1.5 flex items-start gap-1.5 text-xs leading-snug text-muted-foreground">
           <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" aria-hidden />
           {t(($) => $.step_runtime.llm.server_key_body)}
         </p>
@@ -186,13 +186,13 @@ export function LlmConnectionForm({
         className={cn('rounded-lg border bg-card p-5', className)}
         aria-labelledby="llm-connection-title"
       >
-        <h2 id="llm-connection-title" className="text-[14.5px] font-medium text-foreground">
+        <h2 id="llm-connection-title" className="text-sm font-medium text-foreground">
           {t(($) => $.step_runtime.llm.existing_title)}
         </h2>
-        <p className="mt-1 text-[13px] text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           {t(($) => $.step_runtime.llm.existing_hint)}
         </p>
-        <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[13px]">
+        <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
           <dt className="text-muted-foreground">{t(($) => $.step_runtime.llm.base_url_label)}</dt>
           <dd className="break-all font-mono text-foreground">{existingConnection.apiBase}</dd>
           <dt className="text-muted-foreground">{t(($) => $.step_runtime.llm.model_label)}</dt>
@@ -209,7 +209,7 @@ export function LlmConnectionForm({
             {t(($) => $.step_runtime.llm.existing_change)}
           </Button>
         </div>
-        <p className="mt-2 text-[12px] text-muted-foreground">
+        <p className="mt-2 text-xs text-muted-foreground">
           {t(($) => $.step_runtime.llm.existing_keep_note)}
         </p>
       </section>
@@ -222,14 +222,14 @@ export function LlmConnectionForm({
       aria-labelledby="llm-connection-title"
     >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <h2 id="llm-connection-title" className="text-[14.5px] font-medium text-foreground">
+        <h2 id="llm-connection-title" className="text-sm font-medium text-foreground">
           {t(($) => $.step_runtime.llm.title)}
         </h2>
-        <span className="rounded-full border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+        <span className="rounded-full border px-2 py-0.5 text-2xs font-medium text-muted-foreground">
           {t(($) => $.step_runtime.llm.optional_badge)}
         </span>
       </div>
-      <p className="mt-1.5 text-[12.5px] leading-[1.55] text-muted-foreground">
+      <p className="mt-1.5 text-xs leading-snug text-muted-foreground">
         {t(($) => $.step_runtime.llm.subtitle)}
       </p>
 
@@ -240,7 +240,7 @@ export function LlmConnectionForm({
       {serverConnection != null && (
         <p
           data-testid="llm-server-origin"
-          className="mt-2.5 flex items-start gap-1.5 rounded-md border bg-muted/40 px-2.5 py-2 text-[11.5px] leading-[1.5] text-muted-foreground"
+          className="mt-2.5 flex items-start gap-1.5 rounded-md border bg-muted/40 px-2.5 py-2 text-xs leading-snug text-muted-foreground"
         >
           <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
           <span>
@@ -272,7 +272,7 @@ export function LlmConnectionForm({
             escape hatch. Selecting a preset hides the address/model fields
             entirely: the user's only job is the key. */}
         <div className="flex flex-col gap-1.5">
-          <span className="text-[13px] font-medium text-foreground">
+          <span className="text-sm font-medium text-foreground">
             {t(($) => $.step_runtime.llm.preset_label)}
           </span>
           <div
@@ -291,7 +291,7 @@ export function LlmConnectionForm({
                   disabled={saving}
                   onClick={() => selectChoice(id)}
                   className={cn(
-                    'rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-colors',
+                    'rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors',
                     active
                       ? 'border-foreground bg-foreground text-background'
                       : 'bg-background text-foreground hover:border-foreground/40',
@@ -306,7 +306,7 @@ export function LlmConnectionForm({
               shown, not hidden, so the values written to the runtime are
               never a mystery. */}
           {!isCustom && (
-            <p className="font-mono text-[11.5px] leading-[1.5] text-muted-foreground">
+            <p className="font-mono text-xs leading-snug text-muted-foreground">
               {values.apiBase}
               {' · '}
               {values.model}
@@ -320,7 +320,7 @@ export function LlmConnectionForm({
           {choice === 'perimeter' && perimeterCaMissing === true && (
             <p
               aria-live="polite"
-              className="flex items-start gap-1.5 text-[11.5px] leading-[1.5] text-warning"
+              className="flex items-start gap-1.5 text-xs leading-snug text-warning"
             >
               <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
               {t(($) => $.step_runtime.llm.ca_missing_hint)}
@@ -333,7 +333,7 @@ export function LlmConnectionForm({
             type="button"
             onClick={() => setGuideOpen((open) => !open)}
             aria-expanded={guideOpen}
-            className="mt-1 flex items-center gap-1.5 self-start text-[12.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="mt-1 flex items-center gap-1.5 self-start text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             {guideOpen ? (
               <ChevronUp className="h-3.5 w-3.5" aria-hidden />
@@ -345,7 +345,7 @@ export function LlmConnectionForm({
           {guideOpen && (
             <p
               data-testid="llm-key-guide"
-              className="whitespace-pre-line rounded-md bg-muted/40 p-3.5 text-[12.5px] leading-[1.6] text-muted-foreground"
+              className="whitespace-pre-line rounded-md bg-muted/40 p-3.5 text-xs leading-snug text-muted-foreground"
             >
               {presetGuide(choice)}
             </p>
@@ -440,7 +440,7 @@ export function LlmConnectionForm({
           {keyPresetHint && (
             <p
               aria-live="polite"
-              className="mt-1.5 flex items-start gap-1.5 text-[11.5px] leading-[1.5] text-warning"
+              className="mt-1.5 flex items-start gap-1.5 text-xs leading-snug text-warning"
             >
               <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
               {t(($) => $.step_runtime.llm.key_preset_hint, {
@@ -456,25 +456,25 @@ export function LlmConnectionForm({
             result of a save it cannot see. */}
         <div aria-live="polite" className="min-w-0 flex-1">
           {status.kind === 'saved' && (
-            <p className="flex items-center gap-1.5 text-[12.5px] text-success">
+            <p className="flex items-center gap-1.5 text-xs text-success">
               <Check className="h-3.5 w-3.5 shrink-0" aria-hidden />
               {t(($) => $.step_runtime.llm.saved)}
             </p>
           )}
           {status.kind === 'ineffective' && (
-            <p className="flex items-start gap-1.5 text-[12.5px] text-warning">
+            <p className="flex items-start gap-1.5 text-xs text-warning">
               <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
               {t(($) => $.step_runtime.llm.saved_ineffective)}
             </p>
           )}
           {status.kind === 'error' && (
-            <p className="flex items-start gap-1.5 text-[12.5px] text-destructive">
+            <p className="flex items-start gap-1.5 text-xs text-destructive">
               <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
               {status.message}
             </p>
           )}
           {(status.kind === 'idle' || status.kind === 'saving') && (
-            <p className="text-[12.5px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {complete
                 ? t(($) => $.step_runtime.llm.skip_note)
                 : isCustom
@@ -505,11 +505,11 @@ function Field({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id} className="text-[13px]">
+      <Label htmlFor={id} className="text-sm">
         {label}
       </Label>
       {children}
-      <p className="text-[11.5px] leading-[1.5] text-muted-foreground">{hint}</p>
+      <p className="text-xs leading-snug text-muted-foreground">{hint}</p>
     </div>
   );
 }

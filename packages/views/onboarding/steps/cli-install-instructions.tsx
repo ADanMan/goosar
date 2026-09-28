@@ -60,7 +60,7 @@ export function CliInstallInstructions() {
   return (
     <Card className="w-full">
       <CardContent className="space-y-4 pt-4">
-        <p className="text-xs leading-[1.55] text-muted-foreground">
+        <p className="text-xs leading-snug text-muted-foreground">
           {t(($) => $.cli_install.intro)}
         </p>
         <Step n={1} label={t(($) => $.cli_install.step1_label)} cmd={installCmd} />

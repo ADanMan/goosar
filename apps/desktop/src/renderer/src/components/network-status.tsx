@@ -51,7 +51,7 @@ type PerimeterT = ReturnType<typeof useT<'settings'>>['t'];
 function checkStateToneClass(state: PerimeterCheckState): string {
   switch (state) {
     case 'ok':
-      return 'text-emerald-500';
+      return 'text-success';
     case 'degraded':
       return 'text-warning';
     case 'fail':
@@ -254,7 +254,7 @@ function LiveCheckRow({
            *  rather than trusted, and the sign-in screen opens this panel by
            *  itself (#229), which is what turned that into a live exposure. */}
           {check.detail && (
-            <span className="break-all font-mono text-[11px] text-muted-foreground">
+            <span className="break-all font-mono text-2xs text-muted-foreground">
               {redactAddressCredentials(check.detail)}
             </span>
           )}
@@ -266,21 +266,21 @@ function LiveCheckRow({
       {check.id === 'kerberos' && (
         <div className="ml-5 flex flex-col gap-0.5">
           {state.kerberosCachePrincipal && (
-            <p className="break-all text-[11px] text-muted-foreground">
+            <p className="break-all text-2xs text-muted-foreground">
               {t(($) => $.desktop.perimeter.kerberos_cache_principal, {
                 principal: state.kerberosCachePrincipal,
               })}
             </p>
           )}
           {state.kerberosExpiresAt !== null && state.kerberosExpiresAt !== undefined && (
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">
               {t(($) => $.desktop.perimeter.kerberos_expires_at, {
                 time: formatTicketExpiry(state.kerberosExpiresAt, uiLocale),
               })}
             </p>
           )}
           {state.ticketSource && (
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-2xs text-muted-foreground">
               {ticketSourceLabel(t, state.ticketSource)}
             </p>
           )}
@@ -311,7 +311,7 @@ function LiveCheckRow({
               {t(($) => $.desktop.perimeter.provisioning_legacy_row_label)}
             </p>
             {check.preservedLegacyPaths.map((path) => (
-              <p key={path} className="break-all font-mono text-[11px] text-muted-foreground">
+              <p key={path} className="break-all font-mono text-2xs text-muted-foreground">
                 {path}
               </p>
             ))}
@@ -323,7 +323,7 @@ function LiveCheckRow({
             {t(($) => $.desktop.perimeter.provisioning_removed_row_label)}
           </p>
           {check.removedPackages.map((label) => (
-            <p key={label} className="break-all font-mono text-[11px] text-muted-foreground">
+            <p key={label} className="break-all font-mono text-2xs text-muted-foreground">
               {label}
             </p>
           ))}
