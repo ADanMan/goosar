@@ -154,6 +154,8 @@ export type LandingDict = {
       formatDeb: string;
       formatRpm: string;
       unavailable: string;
+      fileSizeUnits: { b: string; kb: string; mb: string; gb: string };
+      checksumsLabel: string;
     };
     cli: {
       title: string;

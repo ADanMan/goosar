@@ -343,6 +343,8 @@ export function createRuDict(allowSignup: boolean): LandingDict {
         formatDeb: '.deb',
         formatRpm: '.rpm',
         unavailable: 'Недоступно',
+        fileSizeUnits: { b: 'Б', kb: 'КБ', mb: 'МБ', gb: 'ГБ' },
+        checksumsLabel: 'Контрольные суммы SHA256',
       },
       cli: {
         title: 'Предпочитаете CLI?',

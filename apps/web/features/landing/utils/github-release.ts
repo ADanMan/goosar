@@ -1,10 +1,18 @@
-import { parseReleaseAssets, type DownloadAssets } from './parse-release-assets';
+import {
+  findChecksumsUrl,
+  parseReleaseAssets,
+  parseReleaseAssetSizes,
+  type DownloadAssets,
+  type DownloadAssetSizes,
+} from './parse-release-assets';
 
 export interface LatestRelease {
   version: string | null;
   publishedAt: string | null;
   htmlUrl: string | null;
   assets: DownloadAssets;
+  assetSizes: DownloadAssetSizes;
+  checksumsUrl: string | null;
 }
 
 const GITHUB_RELEASES_URL = 'https://api.github.com/repos/adanman/goosar/releases?per_page=2';
@@ -19,7 +27,7 @@ interface GitHubReleasePayload {
   html_url?: string;
   prerelease?: boolean;
   draft?: boolean;
-  assets?: Array<{ name: string; browser_download_url: string }>;
+  assets?: Array<{ name: string; browser_download_url: string; size?: number }>;
 }
 
 function isGithubReleaseFetchDisabled(): boolean {
@@ -53,11 +61,14 @@ export async function fetchLatestRelease(): Promise<LatestRelease> {
     const previous = stable[1];
     const chosen = previous && isWithinFreshWindow(latest) ? previous : latest;
 
+    const chosenAssets = chosen.assets ?? [];
     return {
       version: chosen.tag_name ?? null,
       publishedAt: chosen.published_at ?? null,
       htmlUrl: chosen.html_url ?? null,
-      assets: parseReleaseAssets(chosen.assets ?? []),
+      assets: parseReleaseAssets(chosenAssets),
+      assetSizes: parseReleaseAssetSizes(chosenAssets),
+      checksumsUrl: findChecksumsUrl(chosenAssets) ?? null,
     };
   } catch (err) {
     console.warn('[download] fetchLatestRelease failed:', err);
@@ -78,5 +89,7 @@ function emptyRelease(): LatestRelease {
     publishedAt: null,
     htmlUrl: null,
     assets: {},
+    assetSizes: {},
+    checksumsUrl: null,
   };
 }

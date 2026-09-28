@@ -435,3 +435,61 @@ jobs:
         # no-op here today; it documents the intended default explicitly
         # rather than relying on those envs staying unset by accident.
         run: node scripts/package.mjs --${{ matrix.target }} --x64 --arm64 --thin --publish always
+
+      # T-032: /download's "all platforms" list had no way to verify an
+      # installer after downloading it. electron-builder's own output
+      # (latest*.yml/.blockmap) isn't a user-facing checksums file, so this
+      # computes one per platform here; `desktop-checksums` below merges the
+      # Linux + Windows fragments into the SHA256SUMS.txt the release ships.
+      - name: Compute installer checksums (${{ matrix.target }})
+        shell: bash
+        working-directory: apps/desktop
+        run: |
+          set -euo pipefail
+          out="checksums-${{ matrix.target }}.txt"
+          : > "$out"
+          find dist -maxdepth 2 -type f \
+            \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' -o -name '*.exe' \) \
+            -print | sort | while IFS= read -r f; do
+            sha256sum "$f" | awk -v name="$(basename "$f")" '{ print $1"  "name }' >> "$out"
+          done
+          cat "$out"
+
+      - name: Upload checksum fragment
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-checksums-${{ matrix.target }}
+          path: apps/desktop/checksums-${{ matrix.target }}.txt
+          if-no-files-found: error
+          retention-days: 1
+
+  # Merges the per-platform SHA256 fragments the `desktop` matrix jobs above
+  # computed into a single SHA256SUMS.txt and publishes it as a release
+  # asset — the same build-in-parallel/merge-in-one-job shape as
+  # docker-backend-merge / docker-web-merge use for image digests. Only
+  # covers what this workflow builds (Linux + Windows); macOS installers
+  # ship separately via the manual release-desktop skill and are not part
+  # of this file, so they are not included here.
+  desktop-checksums:
+    needs: [verify, desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download checksum fragments
+        uses: actions/download-artifact@v4
+        with:
+          path: checksums
+          pattern: desktop-checksums-*
+          merge-multiple: true
+
+      - name: Merge into SHA256SUMS.txt
+        run: |
+          set -euo pipefail
+          sort -k2 checksums/*.txt > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload SHA256SUMS.txt to the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ needs.verify.outputs.tag_name }}" SHA256SUMS.txt \
+            --repo adanman/goosar --clobber

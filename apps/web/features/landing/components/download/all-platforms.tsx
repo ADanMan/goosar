@@ -1,16 +1,28 @@
 import Link from 'next/link';
 import { useLocale } from '../../i18n';
-import type { DownloadAssets } from '../../utils/parse-release-assets';
+import { formatFileSize } from '../../utils/format-file-size';
+import type {
+  DownloadAssetKey,
+  DownloadAssetSizes,
+  DownloadAssets,
+} from '../../utils/parse-release-assets';
 import { AppleIcon, LinuxIcon, WindowsIcon } from './os-icons';
 
 interface Props {
   assets: DownloadAssets;
+  assetSizes?: DownloadAssetSizes;
+  checksumsUrl?: string | null;
   fallbackHref: string;
 }
 
-export function AllPlatforms({ assets, fallbackHref }: Props) {
+export function AllPlatforms({ assets, assetSizes = {}, checksumsUrl, fallbackHref }: Props) {
   const { t } = useLocale();
   const d = t.download.allPlatforms;
+
+  const sizeFor = (key: DownloadAssetKey) => {
+    const bytes = assetSizes[key];
+    return bytes ? formatFileSize(bytes, d.fileSizeUnits) : null;
+  };
 
   return (
     <section id="all-platforms" className="bg-white py-20 text-[#1c1917] sm:py-24">
@@ -27,10 +39,12 @@ export function AllPlatforms({ assets, fallbackHref }: Props) {
               {
                 label: d.formatDmg,
                 href: assets.macArm64Dmg,
+                size: sizeFor('macArm64Dmg'),
               },
               {
                 label: d.formatZip,
                 href: assets.macArm64Zip,
+                size: sizeFor('macArm64Zip'),
               },
             ]}
             unavailable={d.unavailable}
@@ -42,10 +56,12 @@ export function AllPlatforms({ assets, fallbackHref }: Props) {
               {
                 label: d.formatDmg,
                 href: assets.macX64Dmg,
+                size: sizeFor('macX64Dmg'),
               },
               {
                 label: d.formatZip,
                 href: assets.macX64Zip,
+                size: sizeFor('macX64Zip'),
               },
             ]}
             unavailable={d.unavailable}
@@ -57,6 +73,7 @@ export function AllPlatforms({ assets, fallbackHref }: Props) {
               {
                 label: d.formatExe,
                 href: assets.winX64Exe,
+                size: sizeFor('winX64Exe'),
               },
             ]}
             unavailable={d.unavailable}
@@ -68,6 +85,7 @@ export function AllPlatforms({ assets, fallbackHref }: Props) {
               {
                 label: d.formatExe,
                 href: assets.winArm64Exe,
+                size: sizeFor('winArm64Exe'),
               },
             ]}
             unavailable={d.unavailable}
@@ -79,14 +97,17 @@ export function AllPlatforms({ assets, fallbackHref }: Props) {
               {
                 label: d.formatAppImage,
                 href: assets.linuxAmd64AppImage,
+                size: sizeFor('linuxAmd64AppImage'),
               },
               {
                 label: d.formatDeb,
                 href: assets.linuxAmd64Deb,
+                size: sizeFor('linuxAmd64Deb'),
               },
               {
                 label: d.formatRpm,
                 href: assets.linuxAmd64Rpm,
+                size: sizeFor('linuxAmd64Rpm'),
               },
             ]}
             unavailable={d.unavailable}
@@ -98,20 +119,36 @@ export function AllPlatforms({ assets, fallbackHref }: Props) {
               {
                 label: d.formatAppImage,
                 href: assets.linuxArm64AppImage,
+                size: sizeFor('linuxArm64AppImage'),
               },
               {
                 label: d.formatDeb,
                 href: assets.linuxArm64Deb,
+                size: sizeFor('linuxArm64Deb'),
               },
               {
                 label: d.formatRpm,
                 href: assets.linuxArm64Rpm,
+                size: sizeFor('linuxArm64Rpm'),
               },
             ]}
             unavailable={d.unavailable}
             isLast
           />
         </div>
+
+        {checksumsUrl ? (
+          <p className="mt-4 text-[13px] text-[#1c1917]/60">
+            <Link
+              href={checksumsUrl}
+              className="underline decoration-[#1c1917]/30 underline-offset-4 hover:text-[#1c1917] hover:decoration-[#1c1917]/70"
+              target="_blank"
+              rel="noreferrer"
+            >
+              {d.checksumsLabel}
+            </Link>
+          </p>
+        ) : null}
 
         {isFallbackNeeded(assets) ? (
           <p className="mt-6 text-[13px] text-[#1c1917]/60">
@@ -136,6 +173,7 @@ interface RowProps {
   formats: {
     label: string;
     href: string | undefined;
+    size?: string | null;
   }[];
   unavailable: string;
   isLast?: boolean;
@@ -161,6 +199,7 @@ function Row({ icon, label, formats, unavailable, isLast }: RowProps) {
               className="inline-flex items-center gap-1.5 rounded-lg border border-[#1c1917]/12 bg-white px-3 py-1.5 text-[13px] font-medium transition-colors hover:border-[#1c1917]/30 hover:bg-[#1c1917]/5"
             >
               {f.label}
+              {f.size ? <span className="text-[#1c1917]/40">{f.size}</span> : null}
             </a>
           ) : (
             <span

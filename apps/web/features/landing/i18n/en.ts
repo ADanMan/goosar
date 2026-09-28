@@ -338,6 +338,8 @@ export function createEnDict(allowSignup: boolean): LandingDict {
         formatDeb: '.deb',
         formatRpm: '.rpm',
         unavailable: 'Not available',
+        fileSizeUnits: { b: 'B', kb: 'KB', mb: 'MB', gb: 'GB' },
+        checksumsLabel: 'SHA256 checksums',
       },
       cli: {
         title: 'Prefer the CLI?',

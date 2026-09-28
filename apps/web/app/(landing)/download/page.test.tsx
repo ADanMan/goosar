@@ -33,6 +33,8 @@ describe('DownloadPage', () => {
       publishedAt: null,
       htmlUrl: null,
       assets: {},
+      assetSizes: {},
+      checksumsUrl: null,
     });
   });
 });

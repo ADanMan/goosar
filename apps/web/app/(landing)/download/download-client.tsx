@@ -57,7 +57,12 @@ export function DownloadClient({
         <DownloadHero detected={detected} assets={assets} versionUnavailable={versionUnavailable} />
       </div>
 
-      <AllPlatforms assets={assets} fallbackHref={ALL_RELEASES_URL} />
+      <AllPlatforms
+        assets={assets}
+        assetSizes={release.assetSizes}
+        checksumsUrl={release.checksumsUrl}
+        fallbackHref={ALL_RELEASES_URL}
+      />
       <CliSection />
       <CloudSection />
       <VersionInfoFooter version={release.version} releaseHtmlUrl={releaseHtmlUrl} />

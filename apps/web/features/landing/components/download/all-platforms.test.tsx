@@ -21,6 +21,8 @@ vi.mock('../../i18n', () => ({
           formatDeb: '.deb',
           formatRpm: '.rpm',
           unavailable: 'Not available',
+          fileSizeUnits: { b: 'B', kb: 'KB', mb: 'MB', gb: 'GB' },
+          checksumsLabel: 'SHA256 checksums',
         },
         footer: { allReleases: 'View all releases' },
       },
@@ -53,5 +55,51 @@ describe('AllPlatforms', () => {
       'href',
       'https://downloads.test/mac-x64.zip',
     );
+  });
+
+  it('shows a human-readable size next to a link when the asset size is known', () => {
+    render(
+      <AllPlatforms
+        assets={{ macArm64Dmg: 'https://downloads.test/mac-arm64.dmg' }}
+        assetSizes={{ macArm64Dmg: 104_857_600 }}
+        fallbackHref="https://github.test/releases"
+      />,
+    );
+
+    const link = screen.getByRole('link', { name: /\.dmg/ });
+    expect(link).toHaveTextContent('100 MB');
+  });
+
+  it('shows no size when it is unknown for an asset', () => {
+    render(
+      <AllPlatforms
+        assets={{ macArm64Dmg: 'https://downloads.test/mac-arm64.dmg' }}
+        fallbackHref="https://github.test/releases"
+      />,
+    );
+
+    const link = screen.getByRole('link', { name: '.dmg' });
+    expect(link).toHaveTextContent('.dmg');
+  });
+
+  it('links to the checksums asset when the release publishes one', () => {
+    render(
+      <AllPlatforms
+        assets={{}}
+        checksumsUrl="https://downloads.test/SHA256SUMS.txt"
+        fallbackHref="https://github.test/releases"
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: 'SHA256 checksums' })).toHaveAttribute(
+      'href',
+      'https://downloads.test/SHA256SUMS.txt',
+    );
+  });
+
+  it('shows no checksums link when the release does not publish one', () => {
+    render(<AllPlatforms assets={{}} fallbackHref="https://github.test/releases" />);
+
+    expect(screen.queryByRole('link', { name: 'SHA256 checksums' })).not.toBeInTheDocument();
   });
 });

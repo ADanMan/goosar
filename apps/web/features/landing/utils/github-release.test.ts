@@ -16,7 +16,8 @@ const SAMPLE_PREV_ASSET = {
 function releasePayload(overrides: {
   tag: string;
   publishedMinutesAgo?: number;
-  asset?: { name: string; browser_download_url: string };
+  asset?: { name: string; browser_download_url: string; size?: number };
+  assets?: Array<{ name: string; browser_download_url: string; size?: number }>;
   prerelease?: boolean;
   draft?: boolean;
 }) {
@@ -29,7 +30,7 @@ function releasePayload(overrides: {
     html_url: `https://github.com/adanman/goosar/releases/tag/${overrides.tag}`,
     prerelease: overrides.prerelease ?? false,
     draft: overrides.draft ?? false,
-    assets: overrides.asset ? [overrides.asset] : [],
+    assets: overrides.assets ?? (overrides.asset ? [overrides.asset] : []),
   };
 }
 
@@ -130,6 +131,8 @@ describe('fetchLatestRelease', () => {
       publishedAt: null,
       htmlUrl: null,
       assets: {},
+      assetSizes: {},
+      checksumsUrl: null,
     });
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
@@ -144,6 +147,43 @@ describe('fetchLatestRelease', () => {
     const result = await fetchLatestRelease();
     expect(result.version).toBeNull();
     expect(result.assets).toEqual({});
+  });
+
+  it('exposes the asset size and the checksums URL when the release publishes them', async () => {
+    mockFetchWithReleases([
+      releasePayload({
+        tag: 'v0.2.14',
+        publishedMinutesAgo: 120,
+        assets: [
+          { ...SAMPLE_LATEST_ASSET, size: 104_857_600 },
+          {
+            name: 'SHA256SUMS.txt',
+            browser_download_url:
+              'https://github.com/adanman/goosar/releases/download/v0.2.14/SHA256SUMS.txt',
+          },
+        ],
+      }),
+    ]);
+
+    const result = await fetchLatestRelease();
+    expect(result.assetSizes.macArm64Dmg).toBe(104_857_600);
+    expect(result.checksumsUrl).toBe(
+      'https://github.com/adanman/goosar/releases/download/v0.2.14/SHA256SUMS.txt',
+    );
+  });
+
+  it('leaves the checksums URL null when the release does not publish one', async () => {
+    mockFetchWithReleases([
+      releasePayload({
+        tag: 'v0.2.14',
+        publishedMinutesAgo: 120,
+        asset: SAMPLE_LATEST_ASSET,
+      }),
+    ]);
+
+    const result = await fetchLatestRelease();
+    expect(result.checksumsUrl).toBeNull();
+    expect(result.assetSizes).toEqual({});
   });
 
   it('never forwards GITHUB_TOKEN to api.github.com', async () => {
@@ -177,6 +217,8 @@ describe('fetchLatestRelease', () => {
       publishedAt: null,
       htmlUrl: null,
       assets: {},
+      assetSizes: {},
+      checksumsUrl: null,
     });
   });
 
