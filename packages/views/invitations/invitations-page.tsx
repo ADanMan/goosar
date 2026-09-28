@@ -16,6 +16,7 @@ import { useNavigation } from '../navigation';
 import { useLogout } from '../auth';
 import { DragStrip } from '../platform';
 import { useT } from '../i18n';
+import { describeServerFailure } from '../common/server-error';
 import { Button } from '@goosar/ui/components/ui/button';
 import { Card, CardContent } from '@goosar/ui/components/ui/card';
 import { Checkbox } from '@goosar/ui/components/ui/checkbox';
@@ -24,11 +25,15 @@ import { LogOut, Mail, Users } from 'lucide-react';
 
 export function InvitationsPage() {
   const { t } = useT('invite');
+  const { t: tCommon } = useT('common');
   const { push } = useNavigation();
   const qc = useQueryClient();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [joinedNames, setJoinedNames] = useState<string[]>([]);
+  const [remainingNames, setRemainingNames] = useState<string[]>([]);
+  const [joinedIds, setJoinedIds] = useState<Set<string>>(new Set());
 
   const {
     data: invitations,
@@ -46,8 +51,15 @@ export function InvitationsPage() {
     });
   };
 
+  const workspaceNameFor = (id: string) =>
+    invitations?.find((inv) => inv.id === id)?.workspace_name ??
+    t(($) => $.batch.row_workspace_fallback);
+
   const handleSubmit = async () => {
     setError(null);
+    setJoinedNames([]);
+    setRemainingNames([]);
+    setJoinedIds(new Set());
 
     if (selected.size === 0) {
       push(paths.onboarding());
@@ -82,8 +94,26 @@ export function InvitationsPage() {
 
       push(targetWs ? paths.workspace(targetWs.slug).issues() : paths.newWorkspace());
     } catch (e) {
-      setError(e instanceof Error ? e.message : t(($) => $.batch.error_generic));
+      const failure = describeServerFailure(
+        tCommon,
+        e,
+        t(($) => $.batch.error_generic),
+      );
+      setError(failure.text);
       if (acceptedIds.length > 0) {
+        // Some invitations in this batch already went through before the
+        // failure — surface which ones so the person doesn't re-submit
+        // them, and drop them from the selection so a retry only re-sends
+        // the ones that actually still need it.
+        setJoinedNames(acceptedIds.map(workspaceNameFor));
+        setJoinedIds(new Set(acceptedIds));
+        const stillPendingIds = [...selected].filter((id) => !acceptedIds.includes(id));
+        setRemainingNames(stillPendingIds.map(workspaceNameFor));
+        setSelected((prev) => {
+          const next = new Set(prev);
+          acceptedIds.forEach((id) => next.delete(id));
+          return next;
+        });
         await useAuthStore
           .getState()
           .refreshMe()
@@ -158,16 +188,32 @@ export function InvitationsPage() {
                 key={inv.id}
                 invitation={inv}
                 checked={selected.has(inv.id)}
+                joined={joinedIds.has(inv.id)}
                 onToggle={() => toggle(inv.id)}
               />
             ))}
           </ul>
 
+          {joinedNames.length > 0 && (
+            <p className="text-center text-sm text-muted-foreground">
+              {t(($) => $.batch.partial_joined, { workspaces: joinedNames.join(', ') })}
+            </p>
+          )}
+
           <Button className="w-full" onClick={handleSubmit} disabled={submitting}>
             {submitting ? t(($) => $.batch.joining) : submitLabel}
           </Button>
 
-          {error && <p className="text-sm text-destructive text-center">{error}</p>}
+          {error && (
+            <div className="text-center text-sm text-destructive">
+              <p>{error}</p>
+              {remainingNames.length > 0 && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t(($) => $.batch.partial_remaining, { workspaces: remainingNames.join(', ') })}
+                </p>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     </InvitationsShell>
@@ -177,10 +223,12 @@ export function InvitationsPage() {
 function InvitationRow({
   invitation,
   checked,
+  joined,
   onToggle,
 }: {
   invitation: Invitation;
   checked: boolean;
+  joined?: boolean;
   onToggle: () => void;
 }) {
   const { t } = useT('invite');
@@ -192,13 +240,25 @@ function InvitationRow({
       : t(($) => $.batch.row_invited_member, { inviter });
   return (
     <li>
-      <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border bg-card p-4 hover:bg-accent/40">
-        <Checkbox checked={checked} onCheckedChange={onToggle} className="mt-1" />
+      <label
+        className={
+          'flex items-start gap-3 rounded-md border border-border bg-card p-4' +
+          (joined ? ' opacity-60' : ' cursor-pointer hover:bg-accent/40')
+        }
+      >
+        <Checkbox
+          checked={joined ? true : checked}
+          disabled={joined}
+          onCheckedChange={onToggle}
+          className="mt-1"
+        />
         <div className="flex-1 min-w-0 space-y-1">
           <div className="font-medium truncate">
             {invitation.workspace_name ?? t(($) => $.batch.row_workspace_fallback)}
           </div>
-          <div className="text-xs text-muted-foreground truncate">{roleLine}</div>
+          <div className="text-xs text-muted-foreground truncate">
+            {joined ? t(($) => $.batch.row_already_joined) : roleLine}
+          </div>
         </div>
       </label>
     </li>

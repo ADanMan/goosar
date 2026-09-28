@@ -28,7 +28,11 @@
     "decline": "Отклонить",
     "declining": "Отклоняем...",
     "accept": "Принять и войти",
-    "joining": "Присоединяемся..."
+    "joining": "Присоединяемся...",
+    "decline_confirm_title": "Отклонить приглашение?",
+    "decline_confirm_description": "Это действие нельзя отменить. Если передумаете, придётся попросить пригласить вас снова.",
+    "decline_confirm_cancel": "Отмена",
+    "decline_confirm_action": "Отклонить"
   },
   "errors": {
     "accept_failed": "Не удалось принять приглашение",
@@ -51,6 +55,9 @@
     "row_workspace_fallback": "Рабочее пространство",
     "row_inviter_fallback": "Коллега",
     "row_invited_admin": "{{inviter}} приглашает вас с ролью admin",
-    "row_invited_member": "{{inviter}} приглашает вас с ролью member"
+    "row_invited_member": "{{inviter}} приглашает вас с ролью member",
+    "row_already_joined": "Уже присоединились",
+    "partial_joined": "Уже присоединились: {{workspaces}}",
+    "partial_remaining": "Не удалось присоединиться, попробуйте ещё раз: {{workspaces}}"
   }
 }

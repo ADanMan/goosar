@@ -28,7 +28,11 @@
     "decline": "Decline",
     "declining": "Declining...",
     "accept": "Accept & Join",
-    "joining": "Joining..."
+    "joining": "Joining...",
+    "decline_confirm_title": "Decline this invitation?",
+    "decline_confirm_description": "This can't be undone. If you change your mind, you'll need to be invited again.",
+    "decline_confirm_cancel": "Cancel",
+    "decline_confirm_action": "Decline"
   },
   "errors": {
     "accept_failed": "Failed to accept invitation",
@@ -49,6 +53,9 @@
     "row_workspace_fallback": "Workspace",
     "row_inviter_fallback": "Someone",
     "row_invited_admin": "{{inviter}} invited you as an admin",
-    "row_invited_member": "{{inviter}} invited you as a member"
+    "row_invited_member": "{{inviter}} invited you as a member",
+    "row_already_joined": "Already joined",
+    "partial_joined": "Already joined: {{workspaces}}",
+    "partial_remaining": "Still need to retry: {{workspaces}}"
   }
 }

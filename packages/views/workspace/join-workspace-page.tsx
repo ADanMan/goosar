@@ -12,29 +12,37 @@ import { useNavigation } from '../navigation';
 import { useLogout } from '../auth';
 import { DragStrip } from '../platform';
 import { useT } from '../i18n';
+import { describeServerFailure, type ServerFailureText } from '../common/server-error';
 
 export function JoinWorkspacePage({ onCreateInstead }: { onCreateInstead?: () => void }) {
   const { t } = useT('workspace');
+  const { t: tCommon } = useT('common');
   const nav = useNavigation();
   const logout = useLogout();
   const { data: targets = [], isLoading } = useQuery(joinTargetListOptions());
   const join = useJoinWorkspace();
   const [pendingId, setPendingId] = useState<string | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failure, setFailure] = useState<ServerFailureText | null>(null);
   const workspaceCreationDisabled = useConfigStore((s) => s.workspaceCreationDisabled);
   const showCreateInstead = !!onCreateInstead && !workspaceCreationDisabled;
 
   const onJoin = (id: string) => {
     setPendingId(id);
-    setFailed(false);
+    setFailure(null);
     join.mutate(id, {
       onSuccess: (result) => {
         setPendingId(null);
         nav.replace(result.slug ? paths.workspace(result.slug).issues() : paths.root());
       },
-      onError: () => {
+      onError: (error) => {
         setPendingId(null);
-        setFailed(true);
+        setFailure(
+          describeServerFailure(
+            tCommon,
+            error,
+            t(($) => $.join_page.failed),
+          ),
+        );
       },
     });
   };
@@ -98,8 +106,13 @@ export function JoinWorkspacePage({ onCreateInstead }: { onCreateInstead?: () =>
             </ul>
           )}
 
-          {failed ? (
-            <p className="text-center text-sm text-destructive">{t(($) => $.join_page.failed)}</p>
+          {failure ? (
+            <div className="text-center text-sm text-destructive">
+              <p>{failure.text}</p>
+              {failure.detail ? (
+                <p className="mt-1 text-xs text-muted-foreground">{failure.detail}</p>
+              ) : null}
+            </div>
           ) : null}
 
           {showCreateInstead ? (

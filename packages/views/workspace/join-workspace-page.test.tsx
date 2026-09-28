@@ -10,7 +10,8 @@ import { JoinWorkspacePage } from './join-workspace-page';
 
 const mockListJoinTargets = vi.fn<() => Promise<unknown[]>>(async () => []);
 const mockJoinTarget = vi.fn<(id: string) => Promise<unknown>>();
-vi.mock('@goosar/core/api', () => ({
+vi.mock('@goosar/core/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@goosar/core/api')>()),
   api: {
     listJoinTargets: () => mockListJoinTargets(),
     joinTarget: (id: string) => mockJoinTarget(id),

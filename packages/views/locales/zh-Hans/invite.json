@@ -28,7 +28,11 @@
     "decline": "拒绝",
     "declining": "拒绝中...",
     "accept": "接受并加入",
-    "joining": "加入中..."
+    "joining": "加入中...",
+    "decline_confirm_title": "要拒绝此邀请吗？",
+    "decline_confirm_description": "此操作无法撤销。如果改变主意，需要重新收到邀请。",
+    "decline_confirm_cancel": "取消",
+    "decline_confirm_action": "拒绝"
   },
   "errors": {
     "accept_failed": "接受邀请失败",
@@ -48,6 +52,9 @@
     "row_workspace_fallback": "工作区",
     "row_inviter_fallback": "某人",
     "row_invited_admin": "{{inviter}} 邀请你以管理员身份加入",
-    "row_invited_member": "{{inviter}} 邀请你以成员身份加入"
+    "row_invited_member": "{{inviter}} 邀请你以成员身份加入",
+    "row_already_joined": "已加入",
+    "partial_joined": "已加入：{{workspaces}}",
+    "partial_remaining": "未能加入，请重试：{{workspaces}}"
   }
 }

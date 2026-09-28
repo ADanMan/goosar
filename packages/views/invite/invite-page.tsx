@@ -14,6 +14,16 @@ import { describeServerFailure } from '../common/server-error';
 import { Button } from '@goosar/ui/components/ui/button';
 import { Card, CardContent } from '@goosar/ui/components/ui/card';
 import { Skeleton } from '@goosar/ui/components/ui/skeleton';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@goosar/ui/components/ui/alert-dialog';
 import { ArrowLeft, LogOut, Users, Check, X } from 'lucide-react';
 
 export interface InvitePageProps {
@@ -30,6 +40,7 @@ export function InvitePage({ invitationId, onBack }: InvitePageProps) {
   const [declining, setDeclining] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<'accepted' | 'declined' | null>(null);
+  const [confirmingDecline, setConfirmingDecline] = useState(false);
 
   const {
     data: invitation,
@@ -77,6 +88,7 @@ export function InvitePage({ invitationId, onBack }: InvitePageProps) {
   };
 
   const handleDecline = async () => {
+    setConfirmingDecline(false);
     setDeclining(true);
     setError(null);
     try {
@@ -205,7 +217,7 @@ export function InvitePage({ invitationId, onBack }: InvitePageProps) {
               <Button
                 variant="outline"
                 className="flex-1"
-                onClick={handleDecline}
+                onClick={() => setConfirmingDecline(true)}
                 disabled={accepting || declining}
               >
                 {declining ? t(($) => $.main.declining) : t(($) => $.main.decline)}
@@ -219,6 +231,34 @@ export function InvitePage({ invitationId, onBack }: InvitePageProps) {
           {error && <p className="text-sm text-destructive text-center">{error}</p>}
         </CardContent>
       </Card>
+
+      <AlertDialog
+        open={confirmingDecline}
+        onOpenChange={(open) => {
+          if (!declining) setConfirmingDecline(open);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t(($) => $.main.decline_confirm_title)}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t(($) => $.main.decline_confirm_description)}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={declining}>
+              {t(($) => $.main.decline_confirm_cancel)}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDecline}
+              disabled={declining}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {declining ? t(($) => $.main.declining) : t(($) => $.main.decline_confirm_action)}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </InviteShell>
   );
 }

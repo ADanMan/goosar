@@ -28,7 +28,11 @@
     "decline": "거절",
     "declining": "거절하는 중...",
     "accept": "수락하고 참가",
-    "joining": "참가하는 중..."
+    "joining": "참가하는 중...",
+    "decline_confirm_title": "이 초대를 거절하시겠어요?",
+    "decline_confirm_description": "이 작업은 되돌릴 수 없습니다. 나중에 마음이 바뀌면 다시 초대를 받아야 합니다.",
+    "decline_confirm_cancel": "취소",
+    "decline_confirm_action": "거절"
   },
   "errors": {
     "accept_failed": "초대를 수락하지 못했습니다",
@@ -48,6 +52,9 @@
     "row_workspace_fallback": "워크스페이스",
     "row_inviter_fallback": "누군가",
     "row_invited_admin": "{{inviter}}님이 관리자로 초대했습니다",
-    "row_invited_member": "{{inviter}}님이 멤버로 초대했습니다"
+    "row_invited_member": "{{inviter}}님이 멤버로 초대했습니다",
+    "row_already_joined": "이미 참가함",
+    "partial_joined": "이미 참가함: {{workspaces}}",
+    "partial_remaining": "참가하지 못함 (다시 시도하세요): {{workspaces}}"
   }
 }

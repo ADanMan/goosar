@@ -28,7 +28,11 @@
     "decline": "辞退",
     "declining": "辞退中...",
     "accept": "承認して参加",
-    "joining": "参加中..."
+    "joining": "参加中...",
+    "decline_confirm_title": "この招待を辞退しますか？",
+    "decline_confirm_description": "この操作は取り消せません。気が変わった場合は、再度招待してもらう必要があります。",
+    "decline_confirm_cancel": "キャンセル",
+    "decline_confirm_action": "辞退"
   },
   "errors": {
     "accept_failed": "招待を承認できませんでした",
@@ -48,6 +52,9 @@
     "row_workspace_fallback": "ワークスペース",
     "row_inviter_fallback": "誰か",
     "row_invited_admin": "{{inviter}}さんがあなたをadminとして招待しました",
-    "row_invited_member": "{{inviter}}さんがあなたをmemberとして招待しました"
+    "row_invited_member": "{{inviter}}さんがあなたをmemberとして招待しました",
+    "row_already_joined": "参加済み",
+    "partial_joined": "参加済み: {{workspaces}}",
+    "partial_remaining": "参加できませんでした（再試行してください）: {{workspaces}}"
   }
 }

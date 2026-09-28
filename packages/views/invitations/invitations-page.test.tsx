@@ -51,7 +51,8 @@ vi.mock('@goosar/core/auth', () => ({
   ),
 }));
 
-vi.mock('@goosar/core/api', () => ({
+vi.mock('@goosar/core/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@goosar/core/api')>()),
   api: {
     acceptInvitation,
     markOnboardingComplete,
@@ -189,6 +190,34 @@ describe('InvitationsPage', () => {
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/acme/issues'));
     expect(screen.queryByText(/failed to fetch/i)).toBeNull();
+  });
+
+  it('keeps track of workspaces already joined when a later one in the batch fails', async () => {
+    listMyInvitations.mockResolvedValue([
+      mkInvite('inv-1', 'ws-1', 'Acme'),
+      mkInvite('inv-2', 'ws-2', 'Beta'),
+    ]);
+    acceptInvitation.mockImplementation((id: string) =>
+      id === 'inv-1' ? Promise.resolve({}) : Promise.reject(new Error('nope')),
+    );
+    renderWithClient();
+
+    await waitFor(() => screen.getByText('Acme'));
+    fireEvent.click(screen.getByText('Acme'));
+    fireEvent.click(screen.getByText('Beta'));
+
+    fireEvent.click(screen.getByRole('button', { name: /join 2 workspaces/i }));
+
+    // The failure message is localized rather than the raw thrown error...
+    await waitFor(() => {
+      expect(screen.getByText(/failed to process invitations/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText('nope')).not.toBeInTheDocument();
+
+    // ...and the already-accepted workspace is called out by name, not lost.
+    expect(screen.getByText(/already joined:.*acme/i)).toBeInTheDocument();
+    expect(screen.getByText('Already joined')).toBeInTheDocument();
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it('empty list falls through to onboarding via Continue button', async () => {
