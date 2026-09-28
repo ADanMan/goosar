@@ -159,6 +159,23 @@ function SortableTabItem({
     closeTab(tab.id);
   };
 
+  // Middle-click is the standard desktop-browser shortcut for closing a tab.
+  // It must follow the same rule as the close button: a pinned tab (or the
+  // only remaining tab) has no close affordance, so middle-click on one is a
+  // no-op rather than an implicit close.
+  const handleAuxClick = (e: React.MouseEvent) => {
+    if (e.button !== 1) return;
+    e.preventDefault();
+    if (!showCloseButton) return;
+    closeTab(tab.id);
+  };
+
+  // The middle button's default action is autoscroll (the pan cursor); this
+  // tab strip has no use for it, so suppress it on press rather than on click.
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button === 1) e.preventDefault();
+  };
+
   const handleTogglePin = (e: React.MouseEvent) => {
     e.stopPropagation();
     togglePin(tab.id);
@@ -192,6 +209,8 @@ function SortableTabItem({
       {...attributes}
       {...listeners}
       onClick={handleClick}
+      onAuxClick={handleAuxClick}
+      onMouseDown={handleMouseDown}
       aria-label={tab.pinned ? t(($) => $.tab_bar.pinned_aria, { title }) : title}
       data-tab-active={isActive ? 'true' : undefined}
       data-tab-entering={isEntering ? 'true' : undefined}

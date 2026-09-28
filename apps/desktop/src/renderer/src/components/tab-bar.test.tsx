@@ -476,6 +476,56 @@ describe('TabBar new tab', () => {
   });
 });
 
+describe('TabBar middle-click close', () => {
+  it('closes an unpinned tab on middle-click (auxclick, button 1)', () => {
+    state.byWorkspace.acme.tabs = [
+      { id: 'tA', url: '/acme/issues', title: 'Issues', pinned: false },
+      { id: 'tB', url: '/acme/projects', title: 'Projects', pinned: false },
+    ];
+    const { getByLabelText } = render(<TabBar />);
+    const event = new MouseEvent('auxclick', { bubbles: true, button: 1, cancelable: true });
+    getByLabelText('Projects').dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(state.closeTab).toHaveBeenCalledWith('tB');
+  });
+
+  it('does not close a pinned tab on middle-click (no close affordance for pinned tabs)', () => {
+    state.byWorkspace.acme.tabs = [
+      { id: 'tA', url: '/acme/issues', title: 'Issues', pinned: true },
+      { id: 'tB', url: '/acme/projects', title: 'Projects', pinned: false },
+    ];
+    const { getByLabelText } = render(<TabBar />);
+    const event = new MouseEvent('auxclick', { bubbles: true, button: 1, cancelable: true });
+    getByLabelText('Issues (pinned)').dispatchEvent(event);
+
+    expect(state.closeTab).not.toHaveBeenCalled();
+  });
+
+  it('does not close the only remaining tab on middle-click', () => {
+    state.byWorkspace.acme.tabs = [
+      { id: 'tA', url: '/acme/issues', title: 'Issues', pinned: false },
+    ];
+    const { getByLabelText } = render(<TabBar />);
+    const event = new MouseEvent('auxclick', { bubbles: true, button: 1, cancelable: true });
+    getByLabelText('Issues').dispatchEvent(event);
+
+    expect(state.closeTab).not.toHaveBeenCalled();
+  });
+
+  it('ignores other auxclick buttons (e.g. right-click reported via auxclick)', () => {
+    state.byWorkspace.acme.tabs = [
+      { id: 'tA', url: '/acme/issues', title: 'Issues', pinned: false },
+      { id: 'tB', url: '/acme/projects', title: 'Projects', pinned: false },
+    ];
+    const { getByLabelText } = render(<TabBar />);
+    const event = new MouseEvent('auxclick', { bubbles: true, button: 2, cancelable: true });
+    getByLabelText('Projects').dispatchEvent(event);
+
+    expect(state.closeTab).not.toHaveBeenCalled();
+  });
+});
+
 describe('TabBar context menu', () => {
   it('opens an issue-detail tab as a dedicated window', async () => {
     state.byWorkspace.acme.tabs = [

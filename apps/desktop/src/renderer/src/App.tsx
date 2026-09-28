@@ -58,6 +58,11 @@ function useCmdWCloseTab() {
         window.desktopAPI.closeWindow();
         return;
       }
+      // The tab strip has no close affordance on a pinned tab (button and
+      // context-menu item are both disabled), so ⌘W/Ctrl+W must not close
+      // one either -- matches the HIG "pinned tabs are not closed" rule.
+      const activeTab = group.tabs.find((t) => t.id === group.activeTabId);
+      if (activeTab?.pinned) return;
       store.closeActiveTab();
     });
   }, []);
