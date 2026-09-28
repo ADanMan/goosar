@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertCircle, Copy, MoreHorizontal, RotateCcw, Square, Trash2 } from 'lucide-react';
+import { AlertCircle, Archive, Copy, MoreHorizontal, RotateCcw, Square } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import type { Agent } from '@goosar/core/types';
@@ -133,8 +133,8 @@ export function AgentRowActions({ agent, presence, canManage, onDuplicate }: Age
           {showArchive && (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" onClick={() => setConfirmArchive(true)}>
-                <Trash2 className="h-3.5 w-3.5" />
+              <DropdownMenuItem onClick={() => setConfirmArchive(true)}>
+                <Archive className="h-3.5 w-3.5" />
                 {t(($) => $.row_actions.archive)}
               </DropdownMenuItem>
             </>

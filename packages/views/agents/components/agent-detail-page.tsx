@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import {
   AlertCircle,
+  Archive,
   ArrowLeft,
   Bot,
   Clock3,
@@ -11,7 +12,6 @@ import {
   MoreHorizontal,
   Plus,
   Server,
-  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -405,8 +405,8 @@ function DetailHeader({
                   <MoreHorizontal className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-auto">
-                  <DropdownMenuItem variant="destructive" onClick={onArchive}>
-                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  <DropdownMenuItem onClick={onArchive}>
+                    <Archive className="h-3.5 w-3.5" aria-hidden="true" />
                     {t(($) => $.detail.more_archive)}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
