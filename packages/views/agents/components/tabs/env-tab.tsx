@@ -221,11 +221,11 @@ export function EnvTab({
       <div className="flex items-start justify-between gap-3">
         <p className="text-xs text-muted-foreground">
           {t(($) => $.tab_body.env.intro_prefix)}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
+          <code className="rounded bg-muted px-1 py-0.5 font-mono text-2xs">
             {'ANTHROPIC_API_KEY'}
           </code>
           {t(($) => $.tab_body.env.intro_separator)}
-          <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
+          <code className="rounded bg-muted px-1 py-0.5 font-mono text-2xs">
             {'ANTHROPIC_BASE_URL'}
           </code>
           {t(($) => $.tab_body.env.intro_suffix)}

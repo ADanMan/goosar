@@ -547,7 +547,7 @@ export function ScheduleEditor({
                   }}
                   className={cn(
                     'inline-flex h-6.5 min-w-0 flex-1 items-center justify-center rounded-md',
-                    'text-[11px] font-medium leading-none transition-colors',
+                    'text-2xs font-medium leading-none transition-colors',
                     selected
                       ? 'bg-foreground text-background'
                       : 'bg-muted text-muted-foreground hover:text-foreground',
@@ -657,7 +657,7 @@ export function ScheduleEditor({
               </p>
               {/* The parser's own words, verbatim — untranslated, but it is the
                   only text that says which field is wrong. */}
-              <p className="font-mono text-[11px] text-destructive/70">{cronErrorDetail}</p>
+              <p className="font-mono text-2xs text-destructive/70">{cronErrorDetail}</p>
             </div>
           ) : advanced ? (
             <p>
@@ -722,7 +722,7 @@ export function ScheduleEditor({
         )}
       </div>
       {disabled === true && disabledReason !== undefined && (
-        <p className="mt-2 text-[11px] text-muted-foreground">{disabledReason}</p>
+        <p className="mt-2 text-2xs text-muted-foreground">{disabledReason}</p>
       )}
     </div>
   );

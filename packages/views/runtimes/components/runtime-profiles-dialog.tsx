@@ -417,7 +417,7 @@ function CatalogRow({
         )}
       </span>
       {isBuiltin && (
-        <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        <span className="shrink-0 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
           {t(($) => $.profiles.builtin_reference)}
         </span>
       )}
@@ -590,7 +590,7 @@ function ProfileFormView({
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
             {t(($) => $.profiles.form.step_progress, { current: 1, total: 2 })}
           </p>
           <h3 className="text-sm font-medium">{t(($) => $.profiles.form.step_family_label)}</h3>
@@ -767,7 +767,7 @@ function ProfileDetailsForm({
         className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5"
       >
         {mode === 'create' && (
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
             {t(($) => $.profiles.form.step_progress, { current: 2, total: 2 })}
           </p>
         )}
@@ -787,7 +787,7 @@ function ProfileDetailsForm({
             <ProviderLogo provider={family} className="h-4 w-4 shrink-0" />
             <span className="text-sm capitalize">{family}</span>
           </div>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-2xs text-muted-foreground">
             {t(($) => $.profiles.form.family_locked_hint)}
           </p>
         </div>
@@ -845,7 +845,7 @@ function ProfileDetailsForm({
             </p>
           )}
           {parsedCommand.ok && (
-            <div className="space-y-1 rounded-md border bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
+            <div className="space-y-1 rounded-md border bg-muted/20 px-3 py-2 text-2xs text-muted-foreground">
               <div className="flex min-w-0 gap-1">
                 <span>{t(($) => $.profiles.form.command_preview_executable)}</span>
                 <span className="truncate font-mono text-foreground">

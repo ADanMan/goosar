@@ -73,7 +73,7 @@ export function SquadProfileCard({ squadId }: SquadProfileCardProps) {
           <div className="flex items-center gap-1.5">
             <p className="truncate text-sm font-semibold">{squad.name}</p>
             {isArchived && (
-              <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              <span className="rounded-md bg-muted px-1.5 py-0.5 text-2xs font-medium text-muted-foreground">
                 {t(($) => $.profile_card.archived)}
               </span>
             )}

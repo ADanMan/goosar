@@ -214,7 +214,7 @@ function Metric({
       >
         {value}
       </div>
-      <div className="truncate text-[11px] text-muted-foreground">{label}</div>
+      <div className="truncate text-2xs text-muted-foreground">{label}</div>
     </div>
   );
 }
@@ -536,7 +536,7 @@ function TaskRow({
                 }
               />
               <TooltipContent className="max-w-md">
-                <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
+                <div className="text-2xs font-medium uppercase tracking-wider text-muted-foreground/80">
                   {t(($) => $.tab_body.activity.triggered_by)}
                 </div>
                 <div className="mt-0.5 whitespace-pre-wrap text-xs">{task.trigger_summary}</div>
@@ -649,7 +649,7 @@ function Section({
     <section className="flex flex-col gap-3 border-b pb-6 last:border-b-0 last:pb-0">
       <div className="flex items-baseline gap-2">
         <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-        <span className="text-[11px] text-muted-foreground/70">{subtitle}</span>
+        <span className="text-2xs text-muted-foreground/70">{subtitle}</span>
       </div>
       {children}
     </section>

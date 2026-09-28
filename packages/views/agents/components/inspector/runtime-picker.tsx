@@ -395,7 +395,7 @@ export function RuntimePicker({
                         <ProviderLogo key={provider} provider={provider} className="h-3 w-3" />
                       ))}
                       {extraProviders > 0 && (
-                        <span className="text-[10px] tabular-nums">+{extraProviders}</span>
+                        <span className="text-2xs tabular-nums">+{extraProviders}</span>
                       )}
                     </span>
                   )}

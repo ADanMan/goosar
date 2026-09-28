@@ -400,7 +400,7 @@ function TriggerRow({
               {trigger.timezone && ` (${trigger.timezone})`}
             </div>
             {scheduleDescription !== null && scheduleConfig !== null && (
-              <div className="font-mono text-[11px] text-muted-foreground/60">
+              <div className="font-mono text-2xs text-muted-foreground/60">
                 {cronFields(scheduleConfig)}
               </div>
             )}

@@ -101,7 +101,7 @@ function RuntimeMachineFilterMenu({
       />
       {grouped.map((group) => (
         <div key={group.section}>
-          <div className="flex items-center gap-2 px-3 pb-1 pt-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          <div className="flex items-center gap-2 px-3 pb-1 pt-3 text-2xs font-medium uppercase tracking-wider text-muted-foreground">
             <span>{t(($) => $.runtime_filter[`section_${group.section}`])}</span>
             <span className="h-px flex-1 bg-border" />
           </div>
@@ -154,7 +154,7 @@ function RuntimeMachineFilterItem({
       <span className="min-w-0 flex-1 truncate">
         <span className="block truncate font-medium">{label}</span>
         {subtitle && (
-          <span className="block truncate text-[11px] font-normal text-muted-foreground">
+          <span className="block truncate text-2xs font-normal text-muted-foreground">
             {subtitle}
           </span>
         )}

@@ -97,7 +97,7 @@ export function ModelPicker({
     }
     return (
       <span
-        className="min-w-0 truncate px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
+        className="min-w-0 truncate px-1.5 py-0.5 font-mono text-2xs text-muted-foreground"
         title={triggerTitle}
       >
         {triggerLabel}
@@ -136,7 +136,7 @@ export function ModelPicker({
             className={
               variant === 'field'
                 ? 'min-w-0 flex-1 truncate font-mono'
-                : 'min-w-0 truncate font-mono text-[11px]'
+                : 'min-w-0 truncate font-mono text-2xs'
             }
           >
             {triggerLabel}
@@ -189,9 +189,9 @@ export function ModelPicker({
                 `<span block text-left>` to keep layout deterministic —
                 matches the fix already applied in thinking-picker.tsx. */}
             <span className="block min-w-0 flex-1 text-left">
-              <span className="block truncate text-[13px] font-medium">{m.label}</span>
+              <span className="block truncate text-sm font-medium">{m.label}</span>
               {m.label !== m.id && (
-                <span className="mt-0.5 block truncate font-mono text-[10px] leading-snug text-muted-foreground">
+                <span className="mt-0.5 block truncate font-mono text-2xs leading-snug text-muted-foreground">
                   {m.id}
                 </span>
               )}

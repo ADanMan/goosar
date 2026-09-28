@@ -68,10 +68,10 @@ export function SampleTasksSection({
 
   return (
     <section className="mt-10" aria-label={t(($) => $.capabilities.sample_tasks_heading)}>
-      <h2 className="text-[15px] font-medium text-foreground">
+      <h2 className="text-base font-medium text-foreground">
         {t(($) => $.capabilities.sample_tasks_heading)}
       </h2>
-      <p className="mt-1 max-w-[600px] text-[12.5px] leading-relaxed text-muted-foreground">
+      <p className="mt-1 max-w-[600px] text-xs leading-relaxed text-muted-foreground">
         {t(($) => $.capabilities.sample_tasks_lede)}
       </p>
       <ul className="mt-4 flex flex-col gap-3">
@@ -121,24 +121,24 @@ function SampleTaskCard({
 
   return (
     <li className="rounded-lg border bg-card p-4">
-      <p className="text-[14px] font-medium text-foreground">{task.title}</p>
-      <p className="mt-1 line-clamp-3 text-[12.5px] leading-[1.55] text-muted-foreground">
+      <p className="text-sm font-medium text-foreground">{task.title}</p>
+      <p className="mt-1 line-clamp-3 text-xs leading-relaxed text-muted-foreground">
         {task.prompt}
       </p>
 
       {blocked ? (
         <div className="mt-3 rounded-md border border-warning/40 bg-warning/5 p-3">
-          <p className="flex items-center gap-2 text-[12.5px] font-medium text-foreground">
+          <p className="flex items-center gap-2 text-xs font-medium text-foreground">
             <KeyRound className="h-3.5 w-3.5 text-warning" aria-hidden />
             {t(($) => $.capabilities.sample_task_needs_key, { services })}
           </p>
-          <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             {t(($) => $.capabilities.sample_task_needs_key_body)}
           </p>
           {onOpenSetup ? (
             <button
               type="button"
-              className="mt-2 text-[12.5px] font-medium text-primary underline-offset-4 hover:underline"
+              className="mt-2 text-xs font-medium text-primary underline-offset-4 hover:underline"
               onClick={onOpenSetup}
             >
               {t(($) => $.capabilities.open_setup)}
@@ -146,7 +146,7 @@ function SampleTaskCard({
           ) : null}
         </div>
       ) : !helperReady ? (
-        <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">
+        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
           {t(($) => $.capabilities.sample_task_no_helper)}
         </p>
       ) : (
@@ -162,14 +162,14 @@ function SampleTaskCard({
               : t(($) => $.capabilities.sample_task_run)}
           </Button>
           {state.kind === 'done' ? (
-            <span className="text-[12px] text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               {t(($) => $.capabilities.sample_task_created, {
                 identifier: state.identifier,
               })}
             </span>
           ) : null}
           {state.kind === 'error' ? (
-            <span className="flex items-center gap-1.5 text-[12px] text-destructive">
+            <span className="flex items-center gap-1.5 text-xs text-destructive">
               <TriangleAlert className="h-3.5 w-3.5" aria-hidden />
               {t(($) => $.capabilities.sample_task_failed)}
             </span>

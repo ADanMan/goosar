@@ -343,7 +343,7 @@ export function CostCell({ runtimeId }: { runtimeId: string }) {
         aria-label={fmt}
         className="text-sm font-medium"
       />
-      {deltaLabel && <span className={`text-[11px] tabular-nums ${deltaTone}`}>{deltaLabel}</span>}
+      {deltaLabel && <span className={`text-2xs tabular-nums ${deltaTone}`}>{deltaLabel}</span>}
     </div>
   );
 }

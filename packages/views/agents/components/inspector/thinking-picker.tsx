@@ -55,7 +55,7 @@ export function ThinkingPicker({
     }
     return (
       <span
-        className="min-w-0 truncate px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground"
+        className="min-w-0 truncate px-1.5 py-0.5 font-mono text-2xs text-muted-foreground"
         title={triggerTitle}
       >
         {triggerLabel}
@@ -94,7 +94,7 @@ export function ThinkingPicker({
             className={
               variant === 'field'
                 ? 'min-w-0 flex-1 truncate'
-                : 'min-w-0 truncate font-mono text-[11px]'
+                : 'min-w-0 truncate font-mono text-2xs'
             }
           >
             {triggerLabel}
@@ -124,9 +124,9 @@ export function ThinkingPicker({
               factory default is irrelevant to what actually fires, so
               flagging one option as "default" was misleading. */}
           <span className="block min-w-0 flex-1 text-left">
-            <span className="truncate text-[13px] font-medium">{l.label}</span>
+            <span className="truncate text-sm font-medium">{l.label}</span>
             {l.description && (
-              <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+              <span className="mt-0.5 block text-2xs leading-snug text-muted-foreground">
                 {l.description}
               </span>
             )}

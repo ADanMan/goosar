@@ -190,7 +190,7 @@ export function RuntimePicker({
                       single-machine workspace narrows it to one group — so the
                       grouping stays consistent instead of collapsing to a flat
                       list. */}
-                  <div className="flex items-center justify-between gap-2 px-2 pb-0.5 pt-2 text-[11px] font-medium text-muted-foreground">
+                  <div className="flex items-center justify-between gap-2 px-2 pb-0.5 pt-2 text-2xs font-medium text-muted-foreground">
                     <span className="truncate">{machine.title}</span>
                     <span className="shrink-0 tabular-nums">
                       {t(($) => $.create_dialog.runtime_group_online, {

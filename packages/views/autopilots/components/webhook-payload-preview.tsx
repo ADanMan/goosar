@@ -80,7 +80,7 @@ export function WebhookPayloadPreview({
       </button>
       {open && (
         <div className="border-t">
-          <div className="flex items-center justify-between px-3 py-1.5 text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between px-3 py-1.5 text-2xs text-muted-foreground">
             <span>
               {contentType
                 ? t(($) => $.webhook_payload.content_type, { type: contentType })

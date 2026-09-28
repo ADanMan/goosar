@@ -144,7 +144,7 @@ export function KpiCard({
   const valueClass = accent === 'brand' ? 'text-brand' : accent === 'success' ? 'text-success' : '';
   return (
     <div className="flex flex-col gap-2 p-5">
-      <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+      <div className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
         {label}
       </div>
       <div className={`text-2xl font-semibold leading-none tabular-nums ${valueClass}`}>

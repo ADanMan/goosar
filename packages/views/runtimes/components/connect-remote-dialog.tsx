@@ -204,7 +204,7 @@ function InstructionsStep({ onClose }: { onClose: () => void }) {
               cmd={setupCmd}
               copyAria={t(($) => $.connect.copy_aria)}
             />
-            <p className="mt-1.5 text-[11px] leading-[1.55] text-muted-foreground">
+            <p className="mt-1.5 text-2xs leading-relaxed text-muted-foreground">
               {t(($) => $.connect.step2_hint)}
             </p>
           </div>
@@ -232,7 +232,7 @@ function TroubleshootingDetails({ tokenCmd }: { tokenCmd: string }) {
         <ChevronRight className="h-3 w-3 transition-transform group-open:rotate-90" aria-hidden />
         {t(($) => $.connect.troubleshooting)}
       </summary>
-      <div className="space-y-2 border-t px-3 pt-2.5 pb-3 text-[11px] leading-[1.55] text-muted-foreground">
+      <div className="space-y-2 border-t px-3 pt-2.5 pb-3 text-2xs leading-relaxed text-muted-foreground">
         <p>{t(($) => $.connect.trouble_intro)}</p>
         <CommandStep
           n={2}
@@ -253,7 +253,7 @@ function TroubleshootingDetails({ tokenCmd }: { tokenCmd: string }) {
             {/* CLI command — literal shell string, not i18n content. */}
             <code
               className={cn(
-                'rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground',
+                'rounded bg-muted px-1.5 py-0.5 font-mono text-2xs text-foreground',
                 CODE_LIGATURE_CLASS,
               )}
             >
@@ -265,7 +265,7 @@ function TroubleshootingDetails({ tokenCmd }: { tokenCmd: string }) {
             {/* CLI command — literal shell string, not i18n content. */}
             <code
               className={cn(
-                'rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-foreground',
+                'rounded bg-muted px-1.5 py-0.5 font-mono text-2xs text-foreground',
                 CODE_LIGATURE_CLASS,
               )}
             >

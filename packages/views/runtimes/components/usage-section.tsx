@@ -424,8 +424,8 @@ function EmptyChartState({ usage }: { usage: RuntimeUsage[] }) {
       ) : unmapped.length > 0 ? (
         <>
           <p className="text-xs text-muted-foreground">{t(($) => $.usage.empty_pricing_missing)}</p>
-          <p className="font-mono text-[11px] text-foreground">{unmapped.join(', ')}</p>
-          <p className="text-[11px] text-muted-foreground/70">
+          <p className="font-mono text-2xs text-foreground">{unmapped.join(', ')}</p>
+          <p className="text-2xs text-muted-foreground/70">
             {t(($) => $.usage.empty_pricing_hint)}
           </p>
         </>
@@ -459,7 +459,7 @@ function CustomPricingBar({ usage }: { usage: RuntimeUsage[] }) {
             <p className="text-foreground">
               {t(($) => $.usage.unmapped_notice, { count: unmapped.length })}
             </p>
-            <p className="truncate font-mono text-[11px] text-muted-foreground">
+            <p className="truncate font-mono text-2xs text-muted-foreground">
               {unmapped.join(', ')}
             </p>
           </div>

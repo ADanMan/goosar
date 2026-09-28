@@ -105,7 +105,7 @@ export function CapabilitiesPage({ workToolsExtras }: CapabilitiesPageProps = {}
               <p className="text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
                 {t(($) => $.capabilities.role_eyebrow)}
               </p>
-              <h2 className="mt-1 font-serif text-[26px] font-medium leading-tight text-foreground">
+              <h2 className="mt-1 font-serif text-xl font-medium leading-tight text-foreground">
                 {roleName}
               </h2>
               {role?.role_summary ? (
@@ -117,21 +117,21 @@ export function CapabilitiesPage({ workToolsExtras }: CapabilitiesPageProps = {}
                 <ul className="mt-5 grid gap-3 sm:grid-cols-2">
                   {roleCapabilities.map((capability) => (
                     <li key={capability.key} className="rounded-lg border bg-card p-4">
-                      <p className="text-[14px] font-medium text-foreground">{capability.title}</p>
-                      <p className="mt-1 text-[12.5px] leading-[1.55] text-muted-foreground">
+                      <p className="text-sm font-medium text-foreground">{capability.title}</p>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                         {capability.body}
                       </p>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="mt-4 text-[12.5px] leading-relaxed text-muted-foreground">
+                <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
                   {t(($) => $.capabilities.role_no_detail_note)}
                 </p>
               )}
             </section>
           ) : hasNoRole ? (
-            <p className="mt-6 rounded-lg border border-dashed bg-muted/30 p-4 text-[12.5px] leading-relaxed text-muted-foreground">
+            <p className="mt-6 rounded-lg border border-dashed bg-muted/30 p-4 text-xs leading-relaxed text-muted-foreground">
               {t(($) => $.capabilities.no_role_note)}
             </p>
           ) : null}
@@ -146,14 +146,14 @@ export function CapabilitiesPage({ workToolsExtras }: CapabilitiesPageProps = {}
 
           {/* --- The baseline: what every role gets. --- */}
           <section className="mt-10" aria-label={t(($) => $.capabilities.baseline_heading)}>
-            <h2 className="text-[15px] font-medium text-foreground">
+            <h2 className="text-base font-medium text-foreground">
               {t(($) => $.capabilities.baseline_heading)}
             </h2>
             <ul className="mt-4 grid gap-3 sm:grid-cols-2">
               {baseline.map((item) => (
                 <li key={item.key} className="rounded-lg border bg-card p-4">
-                  <p className="text-[14px] font-medium text-foreground">{item.title}</p>
-                  <p className="mt-1 text-[12.5px] leading-[1.55] text-muted-foreground">
+                  <p className="text-sm font-medium text-foreground">{item.title}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                     {item.body}
                   </p>
                 </li>
@@ -165,33 +165,33 @@ export function CapabilitiesPage({ workToolsExtras }: CapabilitiesPageProps = {}
                   service list below reads as information rather than as a
                   list of chores. --- */}
           <section className="mt-10" aria-label={t(($) => $.capabilities.boundary_heading)}>
-            <h2 className="text-[15px] font-medium text-foreground">
+            <h2 className="text-base font-medium text-foreground">
               {t(($) => $.capabilities.boundary_heading)}
             </h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <div className="rounded-lg border bg-card p-4">
-                <p className="flex items-center gap-2 text-[14px] font-medium text-foreground">
+                <p className="flex items-center gap-2 text-sm font-medium text-foreground">
                   <ShieldCheck className="h-4 w-4 text-muted-foreground" aria-hidden />
                   {t(($) => $.capabilities.boundary_admin_title)}
                 </p>
-                <p className="mt-1.5 text-[12.5px] leading-[1.55] text-muted-foreground">
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
                   {adminWorkVisible
                     ? t(($) => $.capabilities.boundary_admin_body)
                     : t(($) => $.capabilities.boundary_admin_body_unconfirmed)}
                 </p>
                 {!effectivePending && llmReady ? (
-                  <p className="mt-3 flex items-center gap-1.5 text-[12px] text-success">
+                  <p className="mt-3 flex items-center gap-1.5 text-xs text-success">
                     <Check className="h-3.5 w-3.5" aria-hidden />
                     {t(($) => $.capabilities.llm_ready)}
                   </p>
                 ) : null}
               </div>
               <div className="rounded-lg border bg-card p-4">
-                <p className="flex items-center gap-2 text-[14px] font-medium text-foreground">
+                <p className="flex items-center gap-2 text-sm font-medium text-foreground">
                   <KeyRound className="h-4 w-4 text-muted-foreground" aria-hidden />
                   {t(($) => $.capabilities.boundary_you_title)}
                 </p>
-                <p className="mt-1.5 text-[12.5px] leading-[1.55] text-muted-foreground">
+                <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
                   {t(($) => $.capabilities.boundary_you_body)}
                 </p>
               </div>
@@ -214,7 +214,7 @@ export function CapabilitiesPage({ workToolsExtras }: CapabilitiesPageProps = {}
               className="mt-10 scroll-mt-6"
               aria-label={t(($) => $.capabilities.services_heading)}
             >
-              <h2 className="text-[15px] font-medium text-foreground">
+              <h2 className="text-base font-medium text-foreground">
                 {t(($) => $.capabilities.services_heading)}
               </h2>
               <div className="mt-4 flex flex-col gap-4">
@@ -229,7 +229,7 @@ export function CapabilitiesPage({ workToolsExtras }: CapabilitiesPageProps = {}
                       status.admin !== 'off' ? (
                         <button
                           type="button"
-                          className="text-[12.5px] font-medium text-primary underline-offset-4 hover:underline"
+                          className="text-xs font-medium text-primary underline-offset-4 hover:underline"
                           onClick={() =>
                             navigation.push(
                               `${paths.agentDetail(credentials.helper!.id)}?view=mcp_config`,
@@ -243,7 +243,7 @@ export function CapabilitiesPage({ workToolsExtras }: CapabilitiesPageProps = {}
                   />
                 ))}
               </div>
-              <p className="mt-4 text-[12px] leading-relaxed text-muted-foreground/80">
+              <p className="mt-4 text-xs leading-relaxed text-muted-foreground/80">
                 {t(($) => $.capabilities.saved_not_verified)}
               </p>
             </section>

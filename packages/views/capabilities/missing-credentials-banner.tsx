@@ -73,10 +73,10 @@ export function MissingCredentialsBanner() {
       <div className="pointer-events-auto flex w-full max-w-[560px] items-start gap-3 rounded-lg border bg-card p-4 shadow-lg">
         <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
         <div className="min-w-0 flex-1">
-          <p className="text-[13.5px] font-medium text-foreground">
+          <p className="text-sm font-medium text-foreground">
             {t(($) => $.credentials_banner.title)}
           </p>
-          <p className="mt-1 text-[12.5px] leading-[1.55] text-muted-foreground">
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             {t(($) => $.credentials_banner.body, { services })}
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">

@@ -39,7 +39,7 @@ export function WebhookEventFilterSection({ filters, onChange }: WebhookEventFil
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
+      <div className="flex items-center gap-1.5 text-2xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
         <Filter className="size-3" />
         {t(($) => $.dialog.event_filter_label)}
         <a
@@ -118,7 +118,7 @@ export function WebhookEventFilterSection({ filters, onChange }: WebhookEventFil
           <Plus className="size-3.5" />
         </button>
       </div>
-      <p className="text-[10px] text-muted-foreground">{t(($) => $.dialog.event_filter_hint)}</p>
+      <p className="text-2xs text-muted-foreground">{t(($) => $.dialog.event_filter_hint)}</p>
     </div>
   );
 }

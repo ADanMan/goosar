@@ -377,7 +377,7 @@ function AgentPlanTable({
 
   return (
     <div className="mt-3 overflow-hidden rounded-md border">
-      <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,1fr)] gap-3 border-b bg-muted/40 px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+      <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,1fr)] gap-3 border-b bg-muted/40 px-3 py-2 text-2xs uppercase tracking-wide text-muted-foreground">
         <span>{t(($) => $.detail.delete_dialog.cascade.table.header_agent)}</span>
         <span>{t(($) => $.detail.delete_dialog.cascade.table.header_owner)}</span>
         <span>{t(($) => $.detail.delete_dialog.cascade.table.header_status)}</span>

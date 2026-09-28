@@ -161,8 +161,8 @@ function Row({
           {icon}
         </span>
         <div className="min-w-0">
-          <div className="text-[14.5px] font-medium text-foreground">{title}</div>
-          <p className="mt-1 text-[13px] leading-[1.55] text-muted-foreground">{body}</p>
+          <div className="text-sm font-medium text-foreground">{title}</div>
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{body}</p>
         </div>
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}

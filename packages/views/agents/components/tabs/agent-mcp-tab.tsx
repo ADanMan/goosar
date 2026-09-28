@@ -136,7 +136,7 @@ export function AgentMcpTab({ agent }: { agent: Agent }) {
                 <ComposioToolkitLogo slug={slug} name={name} fallbackLogo={tk?.logo} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{name}</p>
-                  <p className="truncate text-[10px] uppercase tracking-wide text-success">
+                  <p className="truncate text-2xs uppercase tracking-wide text-success">
                     {t(($) => $.tab_body.composio_mcp.connected)}
                   </p>
                 </div>

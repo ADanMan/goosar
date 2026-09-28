@@ -868,7 +868,7 @@ function SquadDetailInspector({
 
       {/* Details — read-only */}
       <div className="border-b px-5 py-4">
-        <div className="mb-1 -mx-2 px-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        <div className="mb-1 -mx-2 px-2 text-2xs font-medium uppercase tracking-wider text-muted-foreground">
           {t(($) => $.inspector.details_section)}
         </div>
         <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5">
@@ -1301,12 +1301,12 @@ function SquadMembersTab({
                       href={p.issueDetail(primaryIssue.issue_id)}
                       className="inline-flex items-center gap-1 min-w-0 hover:text-foreground transition-colors"
                     >
-                      <span className="font-mono text-[10px] uppercase shrink-0">
+                      <span className="font-mono text-2xs uppercase shrink-0">
                         {primaryIssue.identifier}
                       </span>
                       <span className="truncate">{primaryIssue.title}</span>
                       {primaryIssue.issue_status === 'blocked' && (
-                        <span className="shrink-0 inline-flex items-center text-[10px] uppercase tracking-wide text-warning">
+                        <span className="shrink-0 inline-flex items-center text-2xs uppercase tracking-wide text-warning">
                           {t(($) => $.members_tab.issue_status_blocked)}
                         </span>
                       )}

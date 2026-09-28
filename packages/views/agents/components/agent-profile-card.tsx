@@ -172,7 +172,7 @@ function ModelRow({ model, thinkingLevel }: { model: string; thinkingLevel?: str
         {t(($) => $.profile_card.model_label)}
       </span>
       {hasModel ? (
-        <span className="min-w-0 truncate font-mono text-[11px]" title={model}>
+        <span className="min-w-0 truncate font-mono text-2xs" title={model}>
           {model}
         </span>
       ) : (
@@ -181,7 +181,7 @@ function ModelRow({ model, thinkingLevel }: { model: string; thinkingLevel?: str
         </span>
       )}
       {effort && (
-        <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+        <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-2xs font-medium text-muted-foreground">
           {effort}
         </span>
       )}
@@ -193,7 +193,7 @@ function MetaRow({ label, value, mono }: { label: string; value: string; mono?: 
   return (
     <div className="flex items-center gap-1.5">
       <span className="w-12 shrink-0 text-muted-foreground">{label}</span>
-      <span className={`truncate ${mono ? 'font-mono text-[11px]' : ''}`} title={value}>
+      <span className={`truncate ${mono ? 'font-mono text-2xs' : ''}`} title={value}>
         {value}
       </span>
     </div>
@@ -213,14 +213,14 @@ function SkillsRow({ skills }: { skills: string[] }) {
         {visible.map((s) => (
           <span
             key={s}
-            className="max-w-full truncate rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+            className="max-w-full truncate rounded-md bg-muted px-1.5 py-0.5 text-2xs font-medium text-muted-foreground"
             title={s}
           >
             {s}
           </span>
         ))}
         {overflow > 0 && (
-          <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+          <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-2xs font-medium text-muted-foreground">
             +{overflow}
           </span>
         )}

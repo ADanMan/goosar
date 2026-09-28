@@ -101,9 +101,9 @@ function ServiceTierPicker({
       {tiers.map((tier) => (
         <PickerItem key={tier.id} selected={tier.id === value} onClick={() => void select(tier.id)}>
           <span className="block min-w-0 flex-1 text-left">
-            <span className="truncate text-[13px] font-medium">{tier.name}</span>
+            <span className="truncate text-sm font-medium">{tier.name}</span>
             {tier.description ? (
-              <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+              <span className="mt-0.5 block text-2xs leading-snug text-muted-foreground">
                 {tier.description}
               </span>
             ) : null}

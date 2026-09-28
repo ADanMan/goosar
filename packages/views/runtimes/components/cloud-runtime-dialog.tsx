@@ -325,7 +325,7 @@ function CloudRuntimeNodeRow({ node, wsId }: { node: CloudRuntimeNode; wsId: str
         </Button>
       </div>
       {node.instance_id && (
-        <div className="mt-2 truncate font-mono text-[11px] text-muted-foreground/80">
+        <div className="mt-2 truncate font-mono text-2xs text-muted-foreground/80">
           {node.instance_id}
         </div>
       )}
@@ -349,7 +349,7 @@ function CloudRuntimeStatusBadge({ status }: { status: string }) {
     <Badge
       variant="secondary"
       className={cn(
-        'h-5 rounded-md px-1.5 font-mono text-[10px]',
+        'h-5 rounded-md px-1.5 font-mono text-2xs',
         active.has(normalized) && 'bg-success/10 text-success',
         pending.has(normalized) && 'bg-warning/10 text-warning',
         failed.has(normalized) && 'bg-destructive/10 text-destructive',

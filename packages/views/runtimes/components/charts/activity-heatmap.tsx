@@ -218,12 +218,12 @@ export function ActivityHeatmap({ usage, tz }: { usage: RuntimeUsage[]; tz: stri
             ))}
           </svg>
         </div>
-        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+        <div className="flex items-center gap-1 text-2xs text-muted-foreground">
           <span>{t(($) => $.charts.heatmap_less)}</span>
           {[0, 1, 2, 3, 4].map((level) => (
             <div
               key={level}
-              className="h-[10px] w-[10px] rounded-[2px]"
+              className="h-[10px] w-[10px] rounded-sm"
               style={{ backgroundColor: getHeatmapColor(level) }}
             />
           ))}
@@ -268,7 +268,7 @@ function InsightsRow({ insights }: { insights: Insights }) {
 function Insight({ label, value, sub }: { label: string; value: string; sub?: string | null }) {
   return (
     <div className="min-w-0">
-      <dt className="truncate text-[11px] uppercase tracking-wider text-muted-foreground">
+      <dt className="truncate text-2xs uppercase tracking-wider text-muted-foreground">
         {label}
       </dt>
       <dd className="mt-0.5 truncate text-sm font-medium tabular-nums">

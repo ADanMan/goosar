@@ -464,7 +464,7 @@ export function AutopilotDialog(props: AutopilotDialogProps) {
                 </div>
 
                 <div className="px-6 pb-2 shrink-0 flex items-baseline gap-2">
-                  <span className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase">
+                  <span className="text-2xs font-semibold tracking-[0.08em] text-muted-foreground uppercase">
                     {t(($) => $.dialog.runbook_label)}
                   </span>
                   <span className="text-xs text-muted-foreground/80">
@@ -573,7 +573,7 @@ export function AutopilotDialog(props: AutopilotDialogProps) {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase mb-2">
+    <div className="text-2xs font-semibold tracking-[0.08em] text-muted-foreground uppercase mb-2">
       {children}
     </div>
   );
@@ -748,7 +748,7 @@ function SubscribersSection({
   return (
     <div>
       <SectionLabel>{t(($) => $.dialog.section_subscribers)}</SectionLabel>
-      <p className="mb-2 text-[11px] text-muted-foreground">
+      <p className="mb-2 text-2xs text-muted-foreground">
         {t(($) => $.dialog.subscribers_hint)}
       </p>
       <SubscriberMultiSelect selectedIds={selectedUserIds} onChange={onChange} />
@@ -848,7 +848,7 @@ function WebhookCreatedPanel({
           </p>
 
           <div>
-            <div className="text-[11px] font-semibold tracking-[0.08em] text-muted-foreground uppercase mb-2">
+            <div className="text-2xs font-semibold tracking-[0.08em] text-muted-foreground uppercase mb-2">
               {t(($) => $.trigger_row.webhook_url_label)}
             </div>
             <WebhookUrlField url={url} size="md" />

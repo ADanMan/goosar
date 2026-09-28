@@ -381,7 +381,7 @@ function Fact({
 }) {
   return (
     <div className={`min-w-0 ${compact ? '' : 'px-4 py-3'}`}>
-      <dt className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</dt>
+      <dt className="text-2xs uppercase tracking-wider text-muted-foreground">{label}</dt>
       <dd className={`mt-1 ${mono ? 'font-mono text-xs' : ''}`}>{children}</dd>
     </div>
   );
@@ -492,7 +492,7 @@ function DiagnosticsCard({
       </div>
       <div className="space-y-3 p-4">
         <div>
-          <div className="mb-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+          <div className="mb-1.5 text-2xs uppercase tracking-wide text-muted-foreground">
             {t(($) => $.detail.diagnostics_visibility)}
           </div>
           {canEdit ? (

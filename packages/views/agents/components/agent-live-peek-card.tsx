@@ -162,7 +162,7 @@ function CurrentIssueRow({
             className="min-w-0 truncate text-brand hover:underline"
             title={`${issue.identifier} ${issue.title}`}
           >
-            <span className="mr-1 font-mono text-[11px]">{issue.identifier}</span>
+            <span className="mr-1 font-mono text-2xs">{issue.identifier}</span>
             <span>{issue.title}</span>
           </AppLink>
         ) : (

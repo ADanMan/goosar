@@ -161,7 +161,7 @@ export function CustomPricingDialog({ open, onOpenChange, unmappedModels }: Prop
               );
             })
           )}
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-2xs text-muted-foreground">
             {t(($) => $.usage.custom_pricing.unit_hint)}
           </p>
         </div>
@@ -188,7 +188,7 @@ function PriceField({
 }) {
   return (
     <div className="space-y-1">
-      <Label className="text-[11px] text-muted-foreground">{label}</Label>
+      <Label className="text-2xs text-muted-foreground">{label}</Label>
       <Input
         type="number"
         inputMode="decimal"

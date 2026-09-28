@@ -154,7 +154,7 @@ export function WorkspaceAgentActivityHoverContent({
         {issues.map((issue) => (
           <div key={issue.id} className="flex flex-col gap-1.5">
             <div className="flex items-baseline gap-1.5 text-xs">
-              <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+              <span className="shrink-0 font-mono text-2xs text-muted-foreground">
                 {issue.identifier}
               </span>
               <span className="truncate">{issue.title}</span>

@@ -937,7 +937,7 @@ export function ModeChooser({ onBlank, onAI }: { onBlank: () => void; onAI: () =
                 )}
               >
                 {recommended && (
-                  <span className="absolute right-4 top-4 rounded-full bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary">
+                  <span className="absolute right-4 top-4 rounded-full bg-primary/10 px-2 py-1 text-2xs font-medium text-primary">
                     {t(($) => $.creation_studio.recommended)}
                   </span>
                 )}
@@ -1037,7 +1037,7 @@ function TemplateChooser({
                     <span className="flex items-center gap-2">
                       <span className="truncate text-sm font-medium">{template.name}</span>
                       {template.category && (
-                        <span className="ml-auto shrink-0 text-[10px] text-muted-foreground">
+                        <span className="ml-auto shrink-0 text-2xs text-muted-foreground">
                           {template.category}
                         </span>
                       )}
@@ -1229,7 +1229,7 @@ function ConfigurationPanel({
               onChange={(event) => set('instructions', event.target.value)}
               placeholder={t(($) => $.create_dialog.instructions.editor_placeholder)}
               rows={compact ? 9 : 12}
-              className="min-h-44 resize-y font-mono text-[13px] leading-6"
+              className="min-h-44 resize-y font-mono text-sm leading-relaxed"
             />
           </DraftFieldRow>
           <div className="px-4 py-4">
