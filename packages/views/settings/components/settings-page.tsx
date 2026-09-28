@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@goosar/ui/components/ui/tabs';
+import { Skeleton } from '@goosar/ui/components/ui/skeleton';
 import { useIsMobile } from '@goosar/ui/hooks/use-mobile';
 import { useAuthStore } from '@goosar/core/auth';
 import { useCurrentWorkspace } from '@goosar/core/paths';
@@ -45,6 +46,7 @@ import { LabelsTab } from './labels-tab';
 import { PropertiesTab } from './properties-tab';
 import { KeyboardShortcutsTab } from './keyboard-shortcuts-tab';
 import { DeploymentTab } from './deployment-tab';
+import { SettingsTab } from './settings-layout';
 import { useT } from '../../i18n';
 
 const ACCOUNT_TAB_KEYS = [
@@ -143,7 +145,9 @@ export function SettingsPage({
   const viewerRole = members.find((m) => m.user_id === user?.id)?.role;
   const canManageWorkspace = viewerRole === 'owner' || viewerRole === 'admin';
 
-  const { data: deploymentAdmins } = useQuery(deploymentAdminsOptions());
+  const { data: deploymentAdmins, isLoading: isDeploymentAdminsLoading } = useQuery(
+    deploymentAdminsOptions(),
+  );
   const isDeploymentAdmin = Array.isArray(deploymentAdmins);
 
   const workspaceTabKeys = React.useMemo(
@@ -151,15 +155,19 @@ export function SettingsPage({
     [canManageWorkspace],
   );
 
+  // 'deployment' stays a known destination even before the admin check has
+  // resolved or when it comes back negative: the content pane below then
+  // shows a loading state or an explicit "no access" message instead of the
+  // tab silently vanishing into a fallback to Profile (T-032).
   const validTabs = React.useMemo(
     () =>
       new Set<string>([
         ...ACCOUNT_TAB_KEYS,
         ...workspaceTabKeys.map((key) => WORKSPACE_TAB_VALUES[key]),
-        ...(isDeploymentAdmin ? ['deployment'] : []),
+        'deployment',
         ...(extraAccountTabs?.map((tab) => tab.value) ?? []),
       ]),
-    [extraAccountTabs, workspaceTabKeys, isDeploymentAdmin],
+    [extraAccountTabs, workspaceTabKeys],
   );
 
   const tabFromUrl = navigation.searchParams.get(TAB_QUERY_KEY);
@@ -313,9 +321,18 @@ export function SettingsPage({
               <AdminTab />
             </TabsContent>
           )}
-          {isDeploymentAdmin && (
+          {/* Mounted whenever 'deployment' is the active tab (see validTabs
+              above), not only for a confirmed admin: it is what shows the
+              loading and no-access states instead of a silent fallback. */}
+          {activeTab === 'deployment' && (
             <TabsContent value="deployment">
-              <DeploymentTab />
+              {isDeploymentAdminsLoading ? (
+                <DeploymentTabSkeleton />
+              ) : isDeploymentAdmin ? (
+                <DeploymentTab />
+              ) : (
+                <DeploymentNoAccess />
+              )}
             </TabsContent>
           )}
           {extraAccountTabs?.map((tab) => (
@@ -326,5 +343,27 @@ export function SettingsPage({
         </div>
       </div>
     </Tabs>
+  );
+}
+
+function DeploymentTabSkeleton() {
+  return (
+    <div className="space-y-6">
+      <Skeleton className="h-7 w-48" />
+      <Skeleton className="h-4 w-full max-w-xl" />
+      <Skeleton className="h-40 w-full rounded-xl" />
+      <Skeleton className="h-40 w-full rounded-xl" />
+    </div>
+  );
+}
+
+function DeploymentNoAccess() {
+  const { t } = useT('settings');
+  return (
+    <SettingsTab title={t(($) => $.deployment.no_access_title)}>
+      <p className="text-sm text-muted-foreground">
+        {t(($) => $.deployment.no_access_description)}
+      </p>
+    </SettingsTab>
   );
 }

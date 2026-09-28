@@ -1274,6 +1274,8 @@
   "deployment": {
     "tab_title": "Deployment",
     "description": "Deployment-level administration: the deployment admin role and the policy layer every workspace inherits. The policy never carries credentials.",
+    "no_access_description": "This section is visible only to people with the deployment admin role. If you need access, ask someone who already has it.",
+    "no_access_title": "No deployment admin access",
     "admins": {
       "title": "Deployment administrators",
       "description": "Composition changes are filed as pending requests and take effect only after an operator confirms them on the server.",
