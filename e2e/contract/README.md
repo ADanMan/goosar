@@ -19,8 +19,7 @@ go test ./e2e/contract/... -v
   normal `go test ./...` run of the repo.
 - `GOOSAR_DEV_VERIFICATION_CODE` (required to run anything past `auth`) —
   the fixed 6-digit login code the server accepts for any email when
-  `APP_ENV` is not `production` (see `server/internal/handler/auth.go`,
-  `devVerificationCodeEnv`). Must match the value the server was started
+  `APP_ENV` is not `production`. Must match the value the server was started
   with.
 - `DATABASE_URL` (optional) — the server's own database, read by this suite
   only for context/diagnostics; the suite talks to the server over HTTP, it
