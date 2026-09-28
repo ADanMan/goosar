@@ -45,20 +45,28 @@ func (d *Deps) publicConfig() map[string]any {
 			deploymentHosts[k] = v
 		}
 	}
-	return map[string]any{
+	out := map[string]any{
 		"allow_signup":                d.Config.AllowSignup,
 		"workspace_creation_disabled": d.Config.DisableWorkspaceCreation,
 		"server_version":              d.Config.ServerVersion,
 		"delivery_profile":            d.Config.DeliveryProfile,
 		"vcs_integration_available":   d.Config.VCSIntegrationEnabled && d.Config.VCSSecretKey != "",
 		"email_transport":             emailTransport,
-		"external_images":             d.Config.ExternalImages,
 		"feature_flags":               map[string]bool{},
 		"skill_sources":               skillSources,
 		"allowed_providers":           allowedProviders,
 		"image_hosts":                 imageHosts,
 		"deployment_hosts":            deploymentHosts,
 	}
+	// components/schemas/AppConfig.external_images: enum ["block","allowlist"]
+	// — "allow" (без ограничений, дефолт GOOSAR_EXTERNAL_IMAGES) не входит в
+	// перечисление; поле необязательное, так что этот режим отражается его
+	// отсутствием, а не значением вне enum (server2/docs/decisions.md,
+	// «Пробелы спецификации»).
+	if d.Config.ExternalImages == "block" || d.Config.ExternalImages == "allowlist" {
+		out["external_images"] = d.Config.ExternalImages
+	}
+	return out
 }
 
 func (d *Deps) handleGetPublicConfig(w http.ResponseWriter, r *http.Request) {

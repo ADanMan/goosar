@@ -268,6 +268,10 @@ func (d *Deps) handleConnectVCS(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !d.Cfg.VCSIntegrationEnabled {
+		httpapi.WriteError(w, http.StatusNotFound, "VCS-интеграция выключена на этом деплое", "vcs_disabled")
+		return
+	}
 	if !d.vcsAvailable() {
 		httpapi.WriteError(w, http.StatusServiceUnavailable, "VCS-интеграция не настроена на деплое (нет ключа шифрования)", "vcs_not_configured")
 		return

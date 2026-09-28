@@ -432,25 +432,66 @@ func (s *Store) AssigneeFrequency(ctx context.Context, workspaceID, callerType, 
 }
 
 // PullRequestLink — schemas.IssuePullRequestLink (только чтение — привязка
-// пишется вебхук-обработчиком GitHub, вне области этого домена).
+// пишется вебхук-обработчиком GitHub/VCS, вне области этого домена).
+// docs/50-api-contract-changes.md п.3: полная "карточка" PR, а не голая
+// связь issue↔PR. Часть полей (checks_*, snapshot_*, additions/deletions/
+// changed_files, mergeable*) — задокументированный пробел (см.
+// internal/integration/webhooks.go про check_suite/check_run,
+// server2/docs/decisions.md): вебхуки пока не разбирают эти события и
+// не запрашивают diff-статистику у провайдера, поэтому эти поля остаются
+// null, пока такая обработка не появится.
 type PullRequestLink struct {
-	IssueID   string    `json:"issue_id"`
-	Provider  string    `json:"provider"`
-	URL       string    `json:"url"`
-	Number    int       `json:"number"`
-	Title     *string   `json:"title"`
-	State     *string   `json:"state"`
-	CreatedAt time.Time `json:"created_at"`
+	ID                string     `json:"id"`
+	Provider          string     `json:"provider"`
+	WorkspaceID       string     `json:"workspace_id"`
+	RepoOwner         *string    `json:"repo_owner"`
+	RepoName          *string    `json:"repo_name"`
+	Number            int        `json:"number"`
+	Title             *string    `json:"title"`
+	State             *string    `json:"state"`
+	HTMLURL           string     `json:"html_url"`
+	Branch            *string    `json:"branch"`
+	AuthorLogin       *string    `json:"author_login"`
+	AuthorAvatarURL   *string    `json:"author_avatar_url"`
+	MergedAt          *time.Time `json:"merged_at"`
+	ClosedAt          *time.Time `json:"closed_at"`
+	PRCreatedAt       time.Time  `json:"pr_created_at"`
+	PRUpdatedAt       time.Time  `json:"pr_updated_at"`
+	MergeableState    *string    `json:"mergeable_state"`
+	Mergeable         *string    `json:"mergeable"`
+	MergeStateStatus  *string    `json:"merge_state_status"`
+	SnapshotAvailable bool       `json:"snapshot_available"`
+	ChecksRollup      *string    `json:"checks_rollup"`
+	ChecksConclusion  *string    `json:"checks_conclusion"`
+	ChecksTotal       *int       `json:"checks_total"`
+	ChecksPassed      *int       `json:"checks_passed"`
+	ChecksFailed      *int       `json:"checks_failed"`
+	ChecksRunning     *int       `json:"checks_running"`
+	ChecksPending     *int       `json:"checks_pending"`
+	FailedCheckNames  []string   `json:"failed_check_names"`
+	SnapshotStale     *bool      `json:"snapshot_stale"`
+	SnapshotFetchedAt *time.Time `json:"snapshot_fetched_at"`
+	Additions         *int       `json:"additions"`
+	Deletions         *int       `json:"deletions"`
+	ChangedFiles      *int       `json:"changed_files"`
 }
 
-// PullRequests — listIssuePullRequests.
+// PullRequests — listIssuePullRequests. Ответ оборачивается вызывающим
+// хендлером в {"pull_requests": [...]} (contract-changes п.3).
 func (s *Store) PullRequests(ctx context.Context, workspaceID, issueID string) ([]PullRequestLink, error) {
 	if _, err := s.GetIssue(ctx, workspaceID, issueID); err != nil {
 		return nil, err
 	}
 	rows, err := s.db.Pool.Query(ctx, `
-		SELECT ticket_id, tpr_provider, tpr_url, tpr_number, tpr_title, tpr_state, created_at
-		FROM ticket_pr_links WHERE ticket_id = $1 ORDER BY created_at`, issueID)
+		SELECT l.id, l.tpr_provider, t.workspace_id, l.tpr_repo_owner, l.tpr_repo_name, l.tpr_number, l.tpr_title, l.tpr_state,
+		       l.tpr_url, l.tpr_branch, l.tpr_author_login, l.tpr_author_avatar_url, l.tpr_merged_at, l.tpr_closed_at,
+		       COALESCE(l.tpr_pr_created_at, l.created_at), COALESCE(l.tpr_pr_updated_at, l.created_at),
+		       l.tpr_mergeable_state, l.tpr_mergeable, l.tpr_merge_state_status, l.tpr_snapshot_available,
+		       l.tpr_checks_rollup, l.tpr_checks_conclusion, l.tpr_checks_total, l.tpr_checks_passed, l.tpr_checks_failed,
+		       l.tpr_checks_running, l.tpr_checks_pending, l.tpr_failed_check_names, l.tpr_snapshot_stale,
+		       l.tpr_snapshot_fetched_at, l.tpr_additions, l.tpr_deletions, l.tpr_changed_files
+		FROM ticket_pr_links l JOIN tickets t ON t.id = l.ticket_id
+		WHERE l.ticket_id = $1 ORDER BY l.created_at`, issueID)
 	if err != nil {
 		return nil, fmt.Errorf("task: связанные pull request'ы: %w", err)
 	}
@@ -458,7 +499,13 @@ func (s *Store) PullRequests(ctx context.Context, workspaceID, issueID string) (
 	var out []PullRequestLink
 	for rows.Next() {
 		var l PullRequestLink
-		if err := rows.Scan(&l.IssueID, &l.Provider, &l.URL, &l.Number, &l.Title, &l.State, &l.CreatedAt); err != nil {
+		if err := rows.Scan(&l.ID, &l.Provider, &l.WorkspaceID, &l.RepoOwner, &l.RepoName, &l.Number, &l.Title, &l.State,
+			&l.HTMLURL, &l.Branch, &l.AuthorLogin, &l.AuthorAvatarURL, &l.MergedAt, &l.ClosedAt,
+			&l.PRCreatedAt, &l.PRUpdatedAt,
+			&l.MergeableState, &l.Mergeable, &l.MergeStateStatus, &l.SnapshotAvailable,
+			&l.ChecksRollup, &l.ChecksConclusion, &l.ChecksTotal, &l.ChecksPassed, &l.ChecksFailed,
+			&l.ChecksRunning, &l.ChecksPending, &l.FailedCheckNames, &l.SnapshotStale,
+			&l.SnapshotFetchedAt, &l.Additions, &l.Deletions, &l.ChangedFiles); err != nil {
 			return nil, err
 		}
 		out = append(out, l)

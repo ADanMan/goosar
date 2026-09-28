@@ -160,6 +160,12 @@ func (d *Deps) handleRedeemSlackBinding(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
+	if d.Cfg.SlackSecretKey == "" {
+		// docs/50-api-contract-changes.md п.6: та же форма, что у остальных
+		// slack/*-ручек — 503, когда интеграция не настроена на деплое.
+		httpapi.WriteError(w, http.StatusServiceUnavailable, "Slack-интеграция не настроена", "slack_not_configured")
+		return
+	}
 	var req redeemSlackBindingRequest
 	if err := httpapi.DecodeJSON(r, &req); err != nil || req.Token == "" {
 		httpapi.BadRequest(w, "token is required")

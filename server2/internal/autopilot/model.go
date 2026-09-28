@@ -225,32 +225,40 @@ type Run struct {
 func (r Run) Full() Run { r.full = true; return r }
 
 type runJSON struct {
-	ID             string          `json:"id"`
-	AutopilotID    string          `json:"autopilot_id"`
-	TriggerID      *string         `json:"trigger_id"`
-	Source         string          `json:"source"`
-	Status         string          `json:"status"`
-	IssueID        *string         `json:"issue_id"`
-	TaskID         *string         `json:"task_id"`
-	TriggeredAt    time.Time       `json:"triggered_at"`
-	CompletedAt    *time.Time      `json:"completed_at"`
-	FailureReason  *string         `json:"failure_reason"`
-	ReasonCode     *string         `json:"reason_code"`
-	TriggerPayload json.RawMessage `json:"trigger_payload,omitempty"`
-	Result         json.RawMessage `json:"result,omitempty"`
-	CreatedAt      time.Time       `json:"created_at"`
+	ID            string     `json:"id"`
+	AutopilotID   string     `json:"autopilot_id"`
+	TriggerID     *string    `json:"trigger_id"`
+	Source        string     `json:"source"`
+	Status        string     `json:"status"`
+	IssueID       *string    `json:"issue_id"`
+	TaskID        *string    `json:"task_id"`
+	TriggeredAt   time.Time  `json:"triggered_at"`
+	CompletedAt   *time.Time `json:"completed_at"`
+	FailureReason *string    `json:"failure_reason"`
+	ReasonCode    *string    `json:"reason_code"`
+	CreatedAt     time.Time  `json:"created_at"`
+}
+
+// runFullJSON — сериализация getAutopilotRun (full=true): trigger_payload/
+// result присутствуют всегда, как эталон (docs/50-api-contract-changes.md
+// п.4) — явным null (json.RawMessage(nil).MarshalJSON() даёт "null"), а не
+// отсутствующим ключом, если сохранённого payload/result нет ещё.
+type runFullJSON struct {
+	runJSON
+	TriggerPayload json.RawMessage `json:"trigger_payload"`
+	Result         json.RawMessage `json:"result"`
 }
 
 func (r Run) MarshalJSON() ([]byte, error) {
-	out := runJSON{
+	base := runJSON{
 		ID: r.ID, AutopilotID: r.AutopilotID, TriggerID: r.TriggerID, Source: r.Source, Status: r.Status,
 		IssueID: r.IssueID, TaskID: r.TaskID, TriggeredAt: r.TriggeredAt, CompletedAt: r.CompletedAt,
 		FailureReason: r.FailureReason, ReasonCode: r.ReasonCode, CreatedAt: r.CreatedAt,
 	}
-	if r.full {
-		out.TriggerPayload, out.Result = r.TriggerPayload, r.Result
+	if !r.full {
+		return json.Marshal(base)
 	}
-	return json.Marshal(out)
+	return json.Marshal(runFullJSON{runJSON: base, TriggerPayload: r.TriggerPayload, Result: r.Result})
 }
 
 // Delivery — components/schemas/WebhookDelivery (webhook_events).

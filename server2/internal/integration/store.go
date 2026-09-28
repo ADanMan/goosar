@@ -521,14 +521,34 @@ func upperAll(in []string) []string {
 	return out
 }
 
+// PRLinkFields — поля вебхук-карточки PR, известные на момент приёма
+// pull_request/merge_request события (остальные поля IssuePullRequestLink —
+// checks_*/snapshot_*/additions-deletions-changed_files/mergeable* —
+// заполняются отдельным пересчётом снапшота, который вне области этой
+// сессии — см. internal/integration/webhooks.go про check_suite/check_run).
+type PRLinkFields struct {
+	RepoOwner       string
+	RepoName        string
+	Branch          string
+	AuthorLogin     string
+	AuthorAvatarURL string
+}
+
 // UpsertPRLink апсертит ticket_pr_links (005_tasks.up.sql, домен task) по
 // (ticket_id, tpr_url) и публикует pull_request:updated самим вызывающим
 // кодом (не здесь — этот метод только пишет строку).
-func (s *Store) UpsertPRLink(ctx context.Context, ticketID, provider, url string, number int, title, prState *string) error {
+func (s *Store) UpsertPRLink(ctx context.Context, ticketID, provider, url string, number int, title, prState *string, extra PRLinkFields) error {
 	_, err := s.db.Pool.Exec(ctx, `
-		INSERT INTO ticket_pr_links (ticket_id, tpr_provider, tpr_url, tpr_number, tpr_title, tpr_state)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		ON CONFLICT (ticket_id, tpr_url) DO UPDATE SET tpr_title = EXCLUDED.tpr_title, tpr_state = EXCLUDED.tpr_state`,
-		ticketID, provider, url, number, title, prState)
+		INSERT INTO ticket_pr_links (ticket_id, tpr_provider, tpr_url, tpr_number, tpr_title, tpr_state,
+		                              tpr_repo_owner, tpr_repo_name, tpr_branch, tpr_author_login, tpr_author_avatar_url,
+		                              tpr_pr_updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), NULLIF($8, ''), NULLIF($9, ''), NULLIF($10, ''), NULLIF($11, ''), now())
+		ON CONFLICT (ticket_id, tpr_url) DO UPDATE SET
+		    tpr_title = EXCLUDED.tpr_title, tpr_state = EXCLUDED.tpr_state,
+		    tpr_repo_owner = EXCLUDED.tpr_repo_owner, tpr_repo_name = EXCLUDED.tpr_repo_name,
+		    tpr_branch = EXCLUDED.tpr_branch, tpr_author_login = EXCLUDED.tpr_author_login,
+		    tpr_author_avatar_url = EXCLUDED.tpr_author_avatar_url, tpr_pr_updated_at = now()`,
+		ticketID, provider, url, number, title, prState,
+		extra.RepoOwner, extra.RepoName, extra.Branch, extra.AuthorLogin, extra.AuthorAvatarURL)
 	return err
 }

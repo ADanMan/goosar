@@ -88,8 +88,9 @@ func (d *Deps) handleDeleteFile(w http.ResponseWriter, r *http.Request) {
 		httpapi.WriteError(w, http.StatusInternalServerError, "internal error", "internal_error")
 		return
 	}
-	// contract: 200 с пустым JSON-объектом, не 204 (T-029 доводка).
-	httpapi.WriteJSON(w, http.StatusOK, map[string]any{})
+	// docs/50-api-contract-changes.md п.5: 204 без тела, как остальные
+	// операции удаления в контракте (removeAgent, deleteWorkspace, deleteSkill...).
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // --- метки навыка -------------------------------------------------------------

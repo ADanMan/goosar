@@ -2987,3 +2987,129 @@ server2 (без чтения server/**):
   построчно в `git diff` этой сессии — не дублируются здесь).
 
 `server/**` и `packages/core/**` не открывались.
+
+## Синхронизация с журналом правок контракта (docs/50-api-contract-changes.md)
+
+Задача — не новый домен, а точечная синхронизация server2 с записями
+`docs/50-api-contract-changes.md` (v1.2.0, 6 правок спецификации + 4 правки
+самого набора `e2e/contract`, последние не требуют изменений в server2).
+Миграция `402_task_pr_link_fields`, тестовая БД `goosar2_sync`, порт 8460.
+
+### 1. `connectVcs`: 404 (флаг деплоя выключен) отдельно от 503 (нет ключа)
+
+`internal/integration/connections.go`, `handleConnectVCS`: добавлена
+отдельная проверка `!d.Cfg.VCSIntegrationEnabled` → `404 vcs_disabled` перед
+существующей проверкой `vcsAvailable()` (флаг включён, но `VCSSecretKey`
+пуст) → `503 vcs_not_configured`. `handleListVCSConnections` не менялся —
+контракт не документирует для него отдельный `404` (там `available: false`
+в теле `200`). Тест — `TestConnectVCSDisabledVsNotConfigured`.
+
+### 2. `meBootstrapOnboardingWithRuntime`: пункт про `500` — без изменений в коде
+
+Контракт документирует `500` как замороженное легаси-поведение эталона на
+не полностью учитываемом внутреннем состоянии (создание встроенного
+агента-ассистента). Явно воспроизводить эту ошибку не требовалось
+(задание) — достаточно, что server2 отвечает одним из уже документированных
+кодов (`200/400/403/401`); реализация этого пути не трогалась.
+
+### 3. `listIssuePullRequests`: обёртка `{"pull_requests": [...]}` и полная схема `IssuePullRequestLink`
+
+Было — голый массив 6 полей из `ticket_pr_links` (`internal/task/filters.go`,
+`internal/task/handlers.go`). Стало — `internal/task/handlers.go` оборачивает
+ответ в объект; `PullRequestLink` (`internal/task/filters.go`) расширен до
+полного набора полей контракта. Хранение: миграция
+`402_task_pr_link_fields.{up,down}.sql` добавляет в `ticket_pr_links`
+нужные nullable-колонки (`tpr_repo_owner`, `tpr_repo_name`, `tpr_branch`,
+`tpr_author_login`, `tpr_author_avatar_url`, `tpr_merged_at`, `tpr_closed_at`,
+`tpr_pr_created_at`, `tpr_pr_updated_at`, `tpr_mergeable*`,
+`tpr_snapshot_available` (`NOT NULL DEFAULT false`), `tpr_checks_*`,
+`tpr_failed_check_names`, `tpr_snapshot_*`, `tpr_additions/deletions/
+changed_files`) — `workspace_id` намеренно НЕ денормализован отдельной
+колонкой, читается через `JOIN tickets` в `Store.PullRequests`, чтобы не
+трогать `internal/importer` (пишет в эту же таблицу по старой схеме
+источника, вне области этой задачи).
+
+**Пробел спецификации, оставленный явно**: `checks_rollup`/`checks_*`/
+`snapshot_*`/`additions`/`deletions`/`changed_files`/`mergeable*` остаются
+`null` — их заполнение требует разбора `check_suite`/`check_run`-вебхуков и
+вызова API провайдера за diff-статистикой, что уже отмечено как
+незакрытый пробел в `internal/integration/webhooks.go` (комментарий у
+`case "check_suite", "check_run", "status":`) прошлой сессией (T-029). Эта
+сессия лишь довела схему и обёртку ответа до контракта и заполнила то, что
+уже есть в теле вебхука `pull_request`/`merge_request`
+(`repo_owner`/`repo_name`/`branch`/`author_login`/`author_avatar_url`) —
+`internal/integration/store.go` (`UpsertPRLink` получил параметр
+`PRLinkFields`), `internal/integration/webhooks.go` (оба вызывающих места:
+GitHub `pull_request` и VCS `merge_request`). Тест —
+`TestPullRequestsReturnsFullCard` (`internal/task/pull_requests_test.go`).
+
+### 4. `AutopilotRun.{trigger_payload,result}`: явный `null`, не отсутствие ключа
+
+`internal/autopilot/model.go`: `Run.MarshalJSON` раньше использовал один
+`runJSON` с `omitempty` на обоих полях — для списковой формы это давало
+отсутствие ключа (верно), но для `getAutopilotRun` (`full=true`) тоже давало
+отсутствие ключа при `nil`, а не `null`, как отвечает эталон. Разделено на
+`runJSON` (без этих полей, для списков) и `runFullJSON` (embeds `runJSON` +
+`TriggerPayload`/`Result` без `omitempty`) — `json.RawMessage(nil)` штатно
+сериализуется в `null` через собственный `MarshalJSON`. Схема
+`docs/50-api-contract.yaml` уже была помечена `nullable: true` — правка
+только в server2.
+
+### 5. `deleteSkillFile`: `204` без тела
+
+`internal/skill/handlers_extras.go`, `handleDeleteFile`: было `200` с
+`{}` (с комментарием «contract: 200 с пустым JSON-объектом, не 204» — этот
+комментарий был устаревшим, контракт сам изменился), стало
+`w.WriteHeader(http.StatusNoContent)` — как у прочих `DELETE` в контракте.
+
+### 6. `redeemSlackBindingToken`: `503`, когда Slack не настроен на деплое
+
+`internal/integration/slack.go`, `handleRedeemSlackBinding`: добавлена
+проверка `d.Cfg.SlackSecretKey == ""` → `503 slack_not_configured` перед
+декодированием тела — та же форма и код ошибки, что у соседних
+`slack/*`-ручек (`handleListSlackInstallations`,
+`handleRegisterSlackBotBYO`). Тест —
+`TestSlackBindingRedeemNotConfigured`.
+
+### Найдено попутно при полном прогоне (не из журнала, но контракт нарушался)
+
+`GET /api/config` (`configGetPublic`, `internal/app/configapi.go`):
+`external_images` отдавался как `"allow"` (дефолт `GOOSAR_EXTERNAL_IMAGES`),
+а схема `AppConfig.external_images` в `docs/50-api-contract.yaml` объявляет
+`enum: [block, allowlist]` — без `"allow"`. Поле необязательное (не входит
+в `required` у `AppConfig`), так что решение — не добавлять `"allow"` в
+контракт (документ ведёт координатор, не эта сессия), а отражать
+неограниченный режим отсутствием поля, а не значением вне enum:
+`publicConfig()` теперь кладёт `external_images` в ответ только когда
+значение — `"block"` или `"allowlist"`. `docs/50-api-contract.md`
+(приложение по переменным окружения) по-прежнему документирует `"allow"`
+как валидное значение самой переменной `GOOSAR_EXTERNAL_IMAGES` — это не
+противоречит: расхождение было только в публичном API-поле, отражающем
+её.
+
+### Итог
+
+- `cd server2 && go vet ./... && go build ./... && go test ./...` — все
+  пакеты `ok`, включая новые/изменённые
+  `internal/integration.{TestConnectVCSDisabledVsNotConfigured,
+  TestSlackBindingRedeemNotConfigured}` и
+  `internal/task.TestPullRequestsReturnsFullCard`.
+- Сервер (`MIGRATE=true`, `MIGRATIONS_DIR=.../server2/migrations`,
+  `ALLOW_SIGNUP=true`, `GOOSAR_DEV_VERIFICATION_CODE=424242`,
+  `GOOSAR_MCP_SECRET_KEY=0123456789abcdef0123456789abcdef`, `JWT_SECRET=dev`,
+  `PORT=8460`, свежая БД `goosar2_sync`) +
+  `cd e2e/contract && BASE_URL=http://localhost:8460
+  GOOSAR_DEV_VERIFICATION_CODE=424242 go test ./... -v` (свежий прогон,
+  `-count=1`): **0 FAIL**, покрытие **378/406** документированных операций
+  (непокрытые — операции, требующие инфраструктуры, которую набор сознательно
+  не поднимает, тот же класс, что и в исходном прогоне против эталона,
+  описанном в `docs/50-api-contract-changes.md`; расхождение с 365/406 там —
+  другой набор тестов/среда, не регрессия).
+- Повторный прогон сразу вслед за первым на том же поднятом сервере уже
+  упирается в лимит частоты `/auth/send-code` (`429`) — то же самое отмечено
+  в `docs/50-api-contract-changes.md` («Итог») как известное ограничение
+  самого эталона/сервера на количество запросов кода за окно времени, не
+  связанное с состоянием, которое оставляют тесты; повтор после пересоздания
+  БД и рестарта сервера снова даёт 0 FAIL.
+- `python3 scripts/similarity-check.py` — 0 нарушений (максимум 29.9%,
+  порог 30%).

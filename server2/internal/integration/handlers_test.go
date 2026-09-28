@@ -164,6 +164,37 @@ func TestVCSConnectionsListUnavailableWhenNotConfigured(t *testing.T) {
 	}
 }
 
+// TestConnectVCSDisabledVsNotConfigured — docs/50-api-contract-changes.md
+// п.1: 404, когда фиче-флаг деплоя выключен целиком, и отдельно 503, когда
+// флаг включён, но не настроен ключ шифрования.
+func TestConnectVCSDisabledVsNotConfigured(t *testing.T) {
+	body := `{"provider":"gitlab","instance_url":"https://example.com","access_token":"tok"}`
+
+	t.Run("integration disabled -> 404", func(t *testing.T) {
+		d := testDeps(t, config.Config{}) // VCSIntegrationEnabled: false (zero value)
+		accountID, workspaceID := seedWorkspace(t, d.Store.db, "owner")
+		req := withActor(httptest.NewRequest(http.MethodPost, "/x", strings.NewReader(body)), accountID)
+		req.SetPathValue("id", workspaceID)
+		rec := httptest.NewRecorder()
+		d.handleConnectVCS(rec, req)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("enabled but no secret key -> 503", func(t *testing.T) {
+		d := testDeps(t, config.Config{VCSIntegrationEnabled: true})
+		accountID, workspaceID := seedWorkspace(t, d.Store.db, "owner")
+		req := withActor(httptest.NewRequest(http.MethodPost, "/x", strings.NewReader(body)), accountID)
+		req.SetPathValue("id", workspaceID)
+		rec := httptest.NewRecorder()
+		d.handleConnectVCS(rec, req)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
+		}
+	})
+}
+
 func TestVCSConnectAndRotateAndDelete(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("PRIVATE-TOKEN") != "tok123" {
@@ -252,6 +283,20 @@ func TestSlackBindingRedeemFlow(t *testing.T) {
 	d.handleRedeemSlackBinding(rec, req)
 	if rec.Code != http.StatusGone {
 		t.Fatalf("expected 410 for unknown token, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestSlackBindingRedeemNotConfigured — docs/50-api-contract-changes.md п.6:
+// 503, когда Slack-интеграция не настроена на деплое (нет ключа шифрования),
+// та же форма, что у соседних slack/*-ручек.
+func TestSlackBindingRedeemNotConfigured(t *testing.T) {
+	d := testDeps(t, config.Config{}) // SlackSecretKey empty
+	accountID, _ := seedWorkspace(t, d.Store.db, "owner")
+	req := withActor(httptest.NewRequest(http.MethodPost, "/api/slack/binding/redeem", strings.NewReader(`{"token":"whatever"}`)), accountID)
+	rec := httptest.NewRecorder()
+	d.handleRedeemSlackBinding(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

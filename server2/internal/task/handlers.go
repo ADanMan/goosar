@@ -647,5 +647,6 @@ func (d *Deps) handlePullRequests(w http.ResponseWriter, r *http.Request) {
 		writeStoreErr(w, err)
 		return
 	}
-	httpapi.WriteJSON(w, http.StatusOK, links)
+	// docs/50-api-contract-changes.md п.3: ответ — объект {"pull_requests": [...]}, не голый массив.
+	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"pull_requests": links})
 }

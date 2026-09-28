@@ -119,6 +119,10 @@ type githubPullRequestPayload struct {
 		Head    struct {
 			Ref string `json:"ref"`
 		} `json:"head"`
+		User struct {
+			Login     string `json:"login"`
+			AvatarURL string `json:"avatar_url"`
+		} `json:"user"`
 	} `json:"pull_request"`
 }
 
@@ -137,8 +141,13 @@ func (d *Deps) handleGitHubPullRequestEvent(r *http.Request, body []byte) {
 		return
 	}
 	prState := p.PullRequest.State
+	repoOwner, repoName, _ := strings.Cut(p.Repository.FullName, "/")
+	extra := PRLinkFields{
+		RepoOwner: repoOwner, RepoName: repoName, Branch: p.PullRequest.Head.Ref,
+		AuthorLogin: p.PullRequest.User.Login, AuthorAvatarURL: p.PullRequest.User.AvatarURL,
+	}
 	for _, t := range tickets {
-		if err := d.Store.UpsertPRLink(r.Context(), t.ID, "github", p.PullRequest.HTMLURL, p.Number, &p.PullRequest.Title, &prState); err == nil {
+		if err := d.Store.UpsertPRLink(r.Context(), t.ID, "github", p.PullRequest.HTMLURL, p.Number, &p.PullRequest.Title, &prState, extra); err == nil {
 			d.publish(t.WorkspaceID, "pull_request:updated", map[string]any{
 				"issue_id": t.ID, "provider": "github", "url": p.PullRequest.HTMLURL, "number": p.Number, "state": prState,
 			})
@@ -213,6 +222,14 @@ type vcsMergeRequestPayload struct {
 		State        string `json:"state"`
 		SourceBranch string `json:"source_branch"`
 	} `json:"object_attributes"`
+	User struct {
+		Username  string `json:"username"`
+		AvatarURL string `json:"avatar_url"`
+	} `json:"user"`
+	Project struct {
+		Namespace string `json:"namespace"`
+		Name      string `json:"name"`
+	} `json:"project"`
 }
 
 func (d *Deps) handleVCSPullRequestPayload(r *http.Request, conn VCSConnectionSecret, body []byte) {
@@ -226,8 +243,12 @@ func (d *Deps) handleVCSPullRequestPayload(r *http.Request, conn VCSConnectionSe
 		return
 	}
 	state := p.ObjectAttributes.State
+	extra := PRLinkFields{
+		RepoOwner: p.Project.Namespace, RepoName: p.Project.Name, Branch: p.ObjectAttributes.SourceBranch,
+		AuthorLogin: p.User.Username, AuthorAvatarURL: p.User.AvatarURL,
+	}
 	for _, t := range tickets {
-		if err := d.Store.UpsertPRLink(r.Context(), t.ID, conn.Provider, p.ObjectAttributes.URL, p.ObjectAttributes.IID, &p.ObjectAttributes.Title, &state); err == nil {
+		if err := d.Store.UpsertPRLink(r.Context(), t.ID, conn.Provider, p.ObjectAttributes.URL, p.ObjectAttributes.IID, &p.ObjectAttributes.Title, &state, extra); err == nil {
 			d.publish(t.WorkspaceID, "pull_request:updated", map[string]any{
 				"issue_id": t.ID, "provider": conn.Provider, "url": p.ObjectAttributes.URL, "number": p.ObjectAttributes.IID, "state": state,
 			})
