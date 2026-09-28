@@ -68,6 +68,7 @@
   },
   "shared": {
     "request_failed": "요청 실패",
+    "cloud_runtime_not_configured": "클라우드 환경이 구성되지 않았습니다 — 배포 관리자에게 문의하세요",
     "refresh": "새로고침",
     "paging": "{{page}} / {{totalPages}} 페이지 · 총 {{total}}개",
     "date_dash": "—"

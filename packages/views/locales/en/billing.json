@@ -68,6 +68,7 @@
   },
   "shared": {
     "request_failed": "Request failed",
+    "cloud_runtime_not_configured": "The cloud environment is not configured — contact your deployment administrator",
     "refresh": "Refresh",
     "paging": "page {{page}} / {{totalPages}} · {{total}} total",
     "date_dash": "—"

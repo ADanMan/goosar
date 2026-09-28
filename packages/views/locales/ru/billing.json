@@ -68,6 +68,7 @@
   },
   "shared": {
     "request_failed": "Не удалось выполнить запрос",
+    "cloud_runtime_not_configured": "Облачная среда не настроена — обратитесь к администратору деплоя",
     "refresh": "Обновить",
     "paging": "стр. {{page}} / {{totalPages}} · всего {{total}}",
     "date_dash": "—"

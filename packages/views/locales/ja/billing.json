@@ -68,6 +68,7 @@
   },
   "shared": {
     "request_failed": "リクエストに失敗しました",
+    "cloud_runtime_not_configured": "クラウド環境が設定されていません。デプロイ管理者にお問い合わせください",
     "refresh": "更新",
     "paging": "{{page}} / {{totalPages}} ページ · 合計 {{total}}件",
     "date_dash": "—"

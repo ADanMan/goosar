@@ -21,6 +21,8 @@ import type {
   BillingTopup,
   BillingTransaction,
 } from '@goosar/core/types';
+import { ApiError } from '@goosar/core/api';
+import { createLogger } from '@goosar/core/logger';
 import { Button } from '@goosar/ui/components/ui/button';
 import {
   Card,
@@ -29,8 +31,11 @@ import {
   CardHeader,
   CardTitle,
 } from '@goosar/ui/components/ui/card';
+import { describeServerFailure } from '../common/server-error';
 import { useT } from '../i18n';
 import { useNavigation } from '../navigation';
+
+const uiLogger = createLogger('billing.ui');
 
 const MICRO_PER_CREDIT = 1_000_000;
 const CENTS_PER_DOLLAR = 100;
@@ -575,11 +580,32 @@ function RefreshButton({ isLoading, onClick }: { isLoading: boolean; onClick: ()
   );
 }
 
+// Каждая карточка биллинга проксирует /api/v1/billing/* из goosar-cloud; пока
+// облачная среда не настроена, все они падают одинаковым 503 без машинного
+// кода (proxyCloudRuntime в server/internal/handler/cloud_runtime.go отдаёт
+// только текст "cloud runtime is not configured" на английском). Это самый
+// частый сбой на этой странице, поэтому статус 503 — единственный надёжный
+// признак, по которому его можно отличить от прочих ошибок и показать
+// понятный текст с шагом восстановления вместо сырой строки от backend
+// (T-032 §3.2, Critical). Сырое сообщение остаётся в title и в консоли.
 function ErrorText({ error }: { error: unknown }) {
   const { t } = useT('billing');
+  const { t: tCommon } = useT('common');
+  const isCloudRuntimeNotConfigured = error instanceof ApiError && error.status === 503;
+  const failure = describeServerFailure(tCommon, error, t(($) => $.shared.request_failed));
+  const text = isCloudRuntimeNotConfigured
+    ? t(($) => $.shared.cloud_runtime_not_configured)
+    : failure.text;
+  const rawDetail = error instanceof Error ? error.message : undefined;
+
+  useEffect(() => {
+    if (!rawDetail) return;
+    uiLogger.error('billing request failed', { rawDetail, isCloudRuntimeNotConfigured });
+  }, [rawDetail, isCloudRuntimeNotConfigured]);
+
   return (
-    <p className="text-xs text-destructive">
-      {error instanceof Error ? error.message : t(($) => $.shared.request_failed)}
+    <p className="text-xs text-destructive" title={rawDetail}>
+      {text}
     </p>
   );
 }

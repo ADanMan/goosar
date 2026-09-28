@@ -68,6 +68,7 @@
   },
   "shared": {
     "request_failed": "请求失败",
+    "cloud_runtime_not_configured": "云端环境尚未配置 — 请联系部署管理员",
     "refresh": "刷新",
     "paging": "第 {{page}} / {{totalPages}} 页 · 共 {{total}} 条",
     "date_dash": "—"
