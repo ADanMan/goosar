@@ -2292,3 +2292,241 @@ GOOSAR_DEV_VERIFICATION_CODE=424242 go test ./... -run
   (диагностика, не порог приёмки, см. п. 16).
 
 `server/**` и `packages/core/**` не открывались.
+
+## T-029 (mail/auth/ratelimit): пробелы спецификации и решения
+
+Реализатор этой сессии отвечал за `internal/{mail,authn,httpapi}` — почта
+(Resend/SMTP), оставшуюся часть Auth/MFA/Sessions (magic-link, OIDC, LDAP,
+MFA TOTP enroll/confirm/disable/recovery-codes, вход вторым фактором) и
+rate limiting по контракту. Деплой/админ/интеграции — сосед A
+(`internal/{deployment,integration,billing}`), биллинг/экспорт — сосед B
+(`internal/export`).
+
+### Почта (`internal/mail`)
+
+1. **Имена переменных окружения Resend/SMTP — не в контракте, придуманы
+   этой сессией.** `docs/50-api-contract.md`/`.yaml` не называют ни одной
+   переменной почтового транспорта (только `GOOSAR_MCP_SECRET_KEY`/
+   `GOOSAR_TOTP_ISSUER` для MFA — они есть). Решение: `MAIL_PROVIDER`
+   (`""`/`resend`/`smtp`), `MAIL_FROM_EMAIL`, `MAIL_FROM_NAME`,
+   `RESEND_API_KEY`, `SMTP_HOST`/`SMTP_PORT`/`SMTP_USERNAME`/
+   `SMTP_PASSWORD`/`SMTP_SECURITY` (`starttls`/`tls`/`none`) —
+   без `GOOSAR_`-префикса, как остальные универсальные (`DATABASE_URL`,
+   `JWT_SECRET`), а не платформенно-специфичные переменные. `internal/config`
+   не даёт значений по умолчанию для провайдера — пусто означает
+   dev-логгер, ровно как задокументировал T-026/ADR 0001.
+2. **`FromConfig(cfg, logger) mail.Sender` заменила
+   `mail.NewLoggerSender(logger)` в `internal/app/deps.go` (общий файл,
+   правка в одну строку).** Реальный транспорт всегда завёрнут в `Fanout` с
+   dev-логгером — письмо видно в логе процесса даже когда настроен Resend/
+   SMTP (без этого локальная отладка требовала бы второй почтовый ящик).
+3. **`/auth/send-code` вне dev-режима теперь честно отвечает `503
+   email_delivery_unavailable`, если транспорт не настроен или реальная
+   отправка провалилась** — раньше (T-026) ошибка отправки только
+   логировалась, а ответ оставался `200 "code sent"`, хотя контракт прямо
+   документирует `503 "email delivery not configured on this instance"`
+   для этой ручки. Код по-прежнему сохраняется в БД до похода в
+   `Mailer.Send` (не после) — гонка "код сохранён, но письмо не дошло"
+   безвредна: `verify-code` с этим кодом просто никогда не позовут.
+4. **Magic-link реализован через ту же таблицу `login_codes`, без новой
+   миграции.** `POST /auth/send-code` теперь дополнительно генерирует токен
+   (`randomToken("", 20)`) и сохраняет его туда же с `lc_purpose =
+   "login_link"` — тот же TTL (10 минут), тот же `digest()`. Новый метод
+   `Store.ConsumeLinkToken(ctx, token, purpose)` ищет строку **только по
+   отпечатку токена**, не требуя email заранее (`POST /auth/verify-link`
+   по контракту принимает только `link_token`) — этим и отличается от
+   `ConsumeCode`. Ссылка в письме — `{FRONTEND_ORIGIN}/login/verify?
+   token=<token>` (путь фронтенда контракт не называет — решение сессии).
+   Письмо без ссылки (`FRONTEND_ORIGIN` пуст) ограничивается кодом.
+5. **Шаблоны писем — `internal/mail/templates.go`, `Locale` = `ru`/`en`.**
+   `docs/51-data-model.md` ограничивает `accounts.acct_locale` набором
+   `{en, zh-Hans, ko, ja, ru}` — только `ru` получает отдельный перевод,
+   остальные (включая ещё не выбранный `""`) попадают в английский
+   фолбэк, не в машинный перевод. `internal/workspace.sendInviteEmail`
+   (чужой домен, T-026) по-прежнему шлёт свой захардкоженный короткий текст
+   через тот же `mail.Sender` — не переведён на `mail.InviteMessage` этой
+   сессией (не в списке пакетов T-029; `InviteMessage` заведён как готовый
+   шаблон и протестирован для будущей унификации).
+6. **Тесты транспортов — без сети.** Resend — `httptest.Server`
+   (`resend_test.go`: заголовок `Authorization`, тело запроса, проброс
+   ошибки API). SMTP — свой фейковый сервер на `net.Listener`
+   (`smtp_test.go`): EHLO/STARTTLS (с одноразовым самоподписанным
+   сертификатом)/AUTH PLAIN/MAIL FROM/RCPT TO/DATA, проверка тела письма
+   (UTF-8 тема в RFC 2047 `=?UTF-8?B?...?=`) и AUTH.
+
+### Rate limiting (`internal/httpapi`, подключение — `internal/authn`,
+`internal/app`)
+
+7. **`Limiter` (T-026, фиксированное окно) переписан на скользящее окно
+   (sliding window log)**, публичный API не изменился
+   (`NewLimiter`/`Allow`), добавлен `RetryAfter(key) time.Duration` и метод
+   `Enforce(w, key, message) bool` (Allow + запись 429+Retry-After одним
+   вызовом — устраняет четырёхстрочный повтор перед каждой лимитируемой
+   ручкой). Интерфейс `RateLimiter` (`Allow`/`RetryAfter`) — точка
+   расширения на будущий Redis-бэкенд (contract §1.5: "Бэкенд лимитера
+   настраивается через Redis, если он подключён, иначе — in-process
+   fallback"); T-029 реализует только in-process часть, Redis — не в
+   объёме этой сессии.
+8. **Одна переменная окружения `RATE_LIMIT_*` — один `*httpapi.Limiter` на
+   несколько операций, если контракт цитирует одну и ту же переменную для
+   нескольких ручек** (а не отдельный лимитер на каждую с тем же числом):
+   `AuthIPLimiter` (`RATE_LIMIT_AUTH`) — `send-code`+`ldap-login`, по IP;
+   `AuthEmailLimiter` (`RATE_LIMIT_AUTH_EMAIL`) — `send-code`+`verify-code`+
+   `ldap-login`, по email/username; `AuthVerifyIPLimiter`
+   (`RATE_LIMIT_AUTH_VERIFY`) — `verify-code`+`verify-link`+`methods`+
+   `oidc/start`+`oidc/callback`+`mfa/verify`, по IP — ровно так контракт и
+   группирует их в таблице §1.5 ("Проверка кода/ссылки/OIDC
+   start-callback/MFA verify | RATE_LIMIT_AUTH_VERIFY"). `TokenOpsLimiter`
+   (`RATE_LIMIT_TOKEN`, час, по user) — общий на все 4 MFA-ручки
+   enroll/confirm/disable/recovery-codes (не на `cli-token` — другой пакет,
+   `internal/identity`, вне списка файлов этой сессии; та же переменная
+   `cfg.RateLimits.Token` ему доступна напрямую, если понадобится).
+   `MfaVerifyTokenLimiter` (`RATE_LIMIT_MFA_VERIFY`, 5 минут, по хэшу
+   `mfa_token`) — уникальная переменная, один потребитель.
+9. **Общий `RATE_LIMIT_API` (600/мин, по user иначе по IP) подключён одной
+   новой миддлварью `httpapi.WithAPIRateLimit`, поверх `/api/**`, в
+   `internal/app.BuildHandler`** (общий файл, правка аддитивна: новый шаг
+   `stages` после `d.Authn.Middleware`, чтобы actor уже был в контексте для
+   ключа "по user"). Инстанс лимитера — `app.Deps.APILimiter` (новое поле,
+   общий `deps.go`). `/auth/*` (без префикса `/api/`) в этот лимит не
+   попадает — у него свои специфичные лимиты выше.
+10. **`RATE_LIMIT_CONTACT_SALES`/`RATE_LIMIT_EXPORT`/`RATE_LIMIT_JOIN` —
+    заведены в `config.RateLimits` (имена и умолчания по таблице §1.5), но
+    **не подключены ни к одной ручке этой сессией**: `/api/contact-sales`
+    всё ещё 501-заглушка (никто не реализовал в этой ветке на момент T-029),
+    `/api/me/export` и `/api/workspaces/{id}/members`(join) —
+    `internal/export`/`internal/workspace`, чужие пакеты, вне списка файлов
+    T-029. Когда эти ручки появятся/будут доработаны, лимитер строится тем
+    же приёмом (`httpapi.NewLimiter(cfg.RateLimits.Export, time.Hour)` и
+    т.п.) — плюс расчёт ключа уже есть готовым (`httpapi.KeyForRequest`).
+11. **429 всегда несёт `Retry-After`** (`TooManyRequestsRetryAfter`,
+    округление вверх до целой секунды) — contract §1.5: "заголовком
+    Retry-After (секунды)". Единственное исключение по духу контракта —
+    `codeResendWindow` (1 код в 60с на email, отдельная проверка внутри
+    `handleSendCode`, не через `Limiter`): она осталась без `Retry-After`,
+    как и в T-026, — точное время до следующего разрешённого кода потребовало
+    бы читать `LastCodeSentAt` ещё раз только ради заголовка.
+
+### Вход: magic-link, OIDC, LDAP, MFA (`internal/authn`)
+
+12. **`completeLoginToken`/`completeLogin` — общий MFA-гейт для всех путей
+    входа** (email-код, magic-link, LDAP — JSON-ответ; OIDC —
+    HTTP-редирект через `finishExternalLogin`): если у аккаунта есть
+    включённый `mfa_factors`, вместо сессии выдаётся `mfa_token`
+    (`mfa_pending_logins`, новая миграция `340_authn_mfa_pending.up/down.sql`
+    — единственная миграция этой сессии, в выделенном диапазоне 340–359).
+    5 минут TTL — то же число, что `RATE_LIMIT_MFA_VERIFY`'s "TTL
+    pending-токена" в контракте.
+13. **`ALLOW_SIGNUP` гейтит только email-вход (код/magic-link), не
+    OIDC/LDAP.** `authLoginLdap`/`authOidcCallback` не документируют `403`
+    "signup disabled" в `docs/50-api-contract.yaml` (только 401/404/503 и
+    302/404 — оба списка проверены построчно), в отличие от
+    `authSendCode`/`authVerifyCode`, у которых `403` есть явно. Решение:
+    успешный вход через корпоративный каталог/IdP сам по себе — предъявленное
+    право на аккаунт (пользователь уже прошёл аутентификацию у стороннего,
+    доверенного администратором сервера); `ALLOW_SIGNUP` защищает только
+    публичный вход по произвольному email от анонимной регистрации из
+    интернета. `loginOrLinkExternal` (OIDC/LDAP) и `signupOrFind`
+    (email-код/magic-link) поэтому — разные функции, не один путь с флагом.
+14. **MFA `code`-поле (`MFACodeRequest`) для disable/regenerate-recovery-
+    codes проверяется и как TOTP, и как recovery-код** (`verifyCurrentFactor`):
+    контрактная проза говорит "Требует текущий код/recovery-код", но схема
+    `MFACodeRequest` заводит единственное поле `code` (в отличие от
+    `MFAVerifyRequest`, где `code`/`recovery_code` разделены) — решение:
+    сперва пробовать как TOTP, при неудаче — как recovery-код тем же
+    значением.
+15. **TOTP: без anti-replay на использованный код в разрешённом окне ±1
+    шаг.** RFC 6238 сам по себе не запрещает повторно предъявить один и тот
+    же валидный код дважды подряд в пределах 90 секунд (`±1` шаг × 30с);
+    полноценная защита потребовала бы хранить "последний использованный
+    шаг" на аккаунт (новая колонка). Признанный пробел — не блокирует
+    приёмку (контрактные тесты его не проверяют), задел для T-030+.
+16. **OIDC: только `alg: RS256`, discovery+JWKS с TTL-кэшем 10 минут, своя
+    реализация (`internal/authn/oidc.go`), без `github.com/coreos/go-oidc`.**
+    State/nonce — подписанная HMAC-cookie (`JWT_SECRET`, тот же секрет
+    процесса, отдельного под 10-минутный CSRF-токен контракт не заводит),
+    не строка в БД — протокол укладывается в discovery+JWKS+один POST
+    token endpoint, отдельная таблица не оправдана. Имена
+    `OIDC_ISSUER_URL`/`OIDC_CLIENT_ID`/`OIDC_CLIENT_SECRET`/
+    `OIDC_REDIRECT_URL`/`OIDC_DISPLAY_NAME` — контракт называет только
+    факт существования этих переменных (`corpauth`, вне читаемых файлов),
+    не имена. Обоснование "почему без библиотеки" — `server2/docs/adr/
+    0002-auth-providers.md`.
+17. **LDAP: собственный минимальный клиент на своём BER
+    (`ldap_ber.go`+`ldap.go`), `github.com/go-ldap/ldap` не подключён.**
+    Полное обоснование, включая явные ограничения (только простой
+    equality-фильтр `LDAP_USER_FILTER`, `ldaps://`/`ldap://`, не
+    `StartTLS`) — `server2/docs/adr/0002-auth-providers.md`. Имена
+    `LDAP_URL`/`LDAP_BIND_DN`/`LDAP_BIND_PASSWORD`/`LDAP_BASE_DN`/
+    `LDAP_USER_FILTER`/`LDAP_EMAIL_ATTRIBUTE`/`LDAP_NAME_ATTRIBUTE`/
+    `LDAP_DISPLAY_NAME` — та же ситуация, что и OIDC (контракт не называет
+    их явно).
+18. **`AuthMethodsResponse.methods`/`oidc_display_name`/`ldap_display_name`
+    честно отражают конфигурацию** (`IssuerURL`/`URL` не пусты), а не
+    статичный `["email"]` из T-026.
+
+### Проверено вживую
+
+19. **Полный прогон `e2e/contract`** (`BASE_URL=http://localhost:8433`,
+    своя БД `goosar2_t029c`) — все 18 разделов, включая `auth`, зелёные;
+    покрытие 125/406 операций контракта. Rate limiting не потребовал
+    отключения: фикстура зовёт `send-code`/`verify-code` по одному разу за
+    весь прогон (кэш через `sync.Once`), лимиты (`RATE_LIMIT_AUTH=5/мин` и
+    т.д.) не задеты. Логи сервера за прогон — 0 ответов `429`.
+20. **MFA enroll→confirm→login-with-MFA→verify(recovery_code)→повторное
+    использование того же recovery-кода отклонено** — прогнано вручную
+    через `curl` с настоящим TOTP-кодом, вычисленным на стороне клиента
+    (Python, HMAC-SHA1/RFC 4226) по секрету из ответа `enroll`; ответ
+    `confirm` содержит 10 recovery-кодов, один погашен через `mfa/verify`,
+    повторная попытка тем же кодом отвечает `401 mfa_code_invalid` —
+    подтверждает одноразовость (`mrc_used_at`).
+21. **Обнаруженный вживую (не своим тестовым прогоном) блокер, уже
+    исправленный соседями до конца этой сессии** — panic
+    `httpapi: маршрут уже зарегистрирован: GET /api/me/export`
+    (`internal/identity` и `internal/export` оба регистрировали этот путь
+    через `router.Handle`); правка — общая, соседская (см. запись выше,
+    "Общая правка `internal/identity`"), эта сессия её не вносила, только
+    столкнулась с ней при первом запуске `cmd/server` и дождалась исправления.
+
+### Прочитанные файлы (кроме общих для сессии и уже перечисленных в T-026/
+T-027/T-028)
+
+- `docs/50-api-contract.md` §1.3 (аутентификация/`X-Actor-Source`), §1.5
+  (rate limiting), §3.3/§3.4 (Auth — публичные/для людей).
+- `docs/50-api-contract.yaml` — все операции тега `Auth` целиком (пути,
+  request/response схемы: `LoginResult`, `MFAVerifyRequest`,
+  `AuthMethodsResponse`, `MFAStatusResponse`, `MFAEnrollResponse`,
+  `MFACodeRequest`, `MFAConfirmResponse`, `SessionResponse`).
+- `docs/31-backlog.md` — раздел T-029 (эпик E8).
+- `server2/internal/authn/{cookies,crypto,daemon_token,deps,handlers,jwt,
+  jwt_test,middleware,register,store,userview}.go` (T-026, не читался ранее
+  в этой сессии — прочитан целиком перед правкой, дальше правился
+  аддитивно).
+- `server2/internal/mail/mail.go` (T-026, интерфейс `Sender`/`Validating`/
+  `Fanout`/`NewLoggerSender` — переиспользован без изменений).
+- `server2/internal/httpapi/{ratelimit,ratelimit_test,router,respond,
+  actor,middleware,workspace}.go` (T-026).
+- `server2/internal/config/config.go`, `server2/internal/app/{deps,routes}.go`
+  (общие файлы, куда внесены аддитивные правки).
+- `server2/migrations/001_identity.up.sql` (схема `accounts`/
+  `auth_bindings`/`mfa_factors`/`mfa_recovery_codes`/`login_sessions`/
+  `access_keys`/`login_codes`).
+- `e2e/contract/{README.md,client.go,harness.go,contract_test.go}` — раздел
+  `testAuth` (что реально проверяется) и общие `call`/`ensureAuth`.
+- `scripts/similarity-check.py` — алгоритм проверки.
+
+`server/**` и `packages/core/**` не открывались.
+
+### Координация с соседом A (`cmd/admin mfa-reset`)
+
+Задача этой сессии просила как можно раньше дать соседу A (деплой/`cmd/admin`)
+функцию `authn.ResetMFA(ctx, q, accountID)` для команды `mfa-reset`. К
+моменту, когда эта сессия дошла до MFA, `cmd/admin/commands.go` уже
+реализовывал `mfa-reset` самостоятельно, прямым SQL по `mfa_factors`/
+`mfa_recovery_codes` (те же таблицы, зафиксированные ещё в `001_identity.up.sql`,
+T-026 — схема этой сессией не менялась) плюс `authnStore.RevokeAllSessions`
+(уже существовавший экспортированный метод `authn.Store`). Отдельная функция
+`authn.ResetMFA` не потребовалась — реализация соседа корректна и покрыта
+`cmd/admin`'s интеграционным тестом (`go test ./cmd/admin/...` зелёный);
+экспортированная обёртка не добавлялась, чтобы не плодить два способа сделать
+одно и то же в одном месте.

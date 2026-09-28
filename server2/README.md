@@ -71,6 +71,14 @@ PORT=8080 \
 | `GOOSAR_SLACK_SECRET_KEY`(`_PREVIOUS`) | нет | Slack BYO-установка (T-029); без ключа — `configured:false` |
 | `GOOSAR_GITHUB_API_BASE_URL`/`GOOSAR_SLACK_API_BASE_URL`/`GOOSAR_COMPOSIO_API_BASE_URL` | нет | базовые URL внешних API интеграций — переопределяются в юнит-тестах (`httptest.Server`), в проде пусто = реальный хост |
 | `RATE_LIMIT_CONTACT_SALES`/`RATE_LIMIT_EXPORT` | нет | см. таблицу T-029 в `server2/docs/decisions.md` |
+| `MAIL_PROVIDER` | нет (`""`) | `resend`/`smtp`; пусто — только dev-логгер (T-029, `internal/mail`) |
+| `MAIL_FROM_EMAIL`/`MAIL_FROM_NAME` | нет | адрес/имя отправителя для Resend/SMTP |
+| `RESEND_API_KEY` | нет | ключ Resend (`MAIL_PROVIDER=resend`) |
+| `SMTP_HOST`/`SMTP_PORT`(`587`)/`SMTP_USERNAME`/`SMTP_PASSWORD`/`SMTP_SECURITY`(`starttls`) | нет | SMTP-транспорт (`MAIL_PROVIDER=smtp`); `SMTP_SECURITY`: `starttls`/`tls`/`none` |
+| `GOOSAR_TOTP_ISSUER` | нет (`Goosar`) | издатель в `otpauth://` URI и приложениях-аутентификаторах (T-029, MFA) |
+| `OIDC_ISSUER_URL`/`OIDC_CLIENT_ID`/`OIDC_CLIENT_SECRET`/`OIDC_REDIRECT_URL`/`OIDC_DISPLAY_NAME` | нет | корпоративный OIDC (T-029); без `OIDC_ISSUER_URL` — `404` на `/api/auth/oidc/**`, "oidc" не входит в `AuthMethodsResponse.methods` |
+| `LDAP_URL`/`LDAP_BIND_DN`/`LDAP_BIND_PASSWORD`/`LDAP_BASE_DN`/`LDAP_USER_FILTER`(`(uid=%s)`)/`LDAP_EMAIL_ATTRIBUTE`(`mail`)/`LDAP_NAME_ATTRIBUTE`(`cn`)/`LDAP_DISPLAY_NAME` | нет | корпоративный LDAP/AD (T-029); без `LDAP_URL` — `404` на `/api/auth/ldap/login` |
+| `RATE_LIMIT_AUTH`/`RATE_LIMIT_AUTH_VERIFY`/`RATE_LIMIT_AUTH_EMAIL`/`RATE_LIMIT_TOKEN`/`RATE_LIMIT_MFA_VERIFY`/`RATE_LIMIT_API`/`RATE_LIMIT_JOIN` | нет | остальные лимиты contract §1.5 (T-029, `internal/{authn,httpapi,app}`); умолчания и группировка по ручкам — таблица T-029 в `server2/docs/decisions.md` |
 
 ### Раскладка (`internal/`)
 
@@ -79,10 +87,12 @@ PORT=8080 \
 - `httpapi` — маршрутизатор поверх `net/http.ServeMux` (Go 1.22+ шаблоны
   путей), формат JSON-ответов/ошибок контракта, `httpapi.Actor` в контексте
   запроса, резолв воркспейса по `X-Workspace-Slug`/`X-Workspace-ID`, роли,
-  простой rate limit.
-- `authn` — коды входа по email, сессии, cookie+CSRF, JWT, PAT, daemon-токены
-  (заготовка), статус MFA.
-- `mail` — интерфейс отправки писем + dev-реализация (лог).
+  rate limit (скользящее окно, `Limiter`/`RateLimiter`, T-029).
+- `authn` — коды входа по email, magic-link, OIDC, LDAP (T-029, свои
+  discovery+JWKS+BER-клиент — см. `docs/adr/0002-auth-providers.md`),
+  сессии, cookie+CSRF, JWT, PAT, daemon-токены (заготовка), MFA TOTP
+  (enroll/confirm/disable/recovery-codes, вход вторым фактором — T-029).
+- `mail` — интерфейс отправки писем, dev-логгер, Resend/SMTP (T-029).
 - `realtime` — хаб `/ws`, интерфейс `Publisher` для доменов.
 - `identity` — `/api/me`, онбординг, `/api/cli-token`, `/api/tokens`.
 - `workspace` — `/api/workspaces/**`, `/api/invitations/**`, runtime-profiles.
