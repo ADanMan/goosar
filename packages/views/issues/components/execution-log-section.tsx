@@ -281,12 +281,14 @@ export function ActiveTaskRow({ task, issueId }: { task: AgentTask; issueId: str
 
 function PastRow({ task, issueId }: { task: AgentTask; issueId: string }) {
   const { t } = useT('issues');
+  const { t: tAgents } = useT('agents');
   const timeAgo = useTimeAgo();
   const [retrying, setRetrying] = useState(false);
   const label = useStatusLabel(task.status);
   const trigger = useTriggerText(task);
   const time = task.completed_at ? timeAgo(task.completed_at) : '—';
-  const failureLabel = task.status === 'failed' ? failureReasonLabel(task.failure_reason) : null;
+  const failureLabel =
+    task.status === 'failed' ? failureReasonLabel(task.failure_reason, tAgents) : null;
 
   const canRetry = task.status === 'failed' || task.status === 'cancelled';
 
