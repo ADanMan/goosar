@@ -1,5 +1,15 @@
 import type { WorkspacePaths } from '@goosar/core/paths';
 
+// /billing (тестовая страница биллинга, T-032 §3.2) пока не входит в
+// центральный построитель путей packages/core/paths — эта зона правки не
+// затрагивает core/paths, поэтому префикс воркспейса берём из уже
+// существующего метода, а не заводим отдельный `billing()` там же. Как
+// только биллинг получит готовый UI и собственный путь в paths.ts, эту
+// функцию стоит заменить на него.
+export function workspaceBillingPath(p: WorkspacePaths): string {
+  return `${p.usage().slice(0, -'/usage'.length)}/billing`;
+}
+
 // Семь разделов рельсы (ADR-0002, T-019, docs/20-architecture.md §4.2).
 // Порядок здесь = порядок кнопок в NavRail и порядок вкладок в ContextPanel.
 export type NavSection =
@@ -53,7 +63,13 @@ export function navSectionForPath(p: WorkspacePaths, pathname: string): NavSecti
   if (isUnder(p.projects())) return 'projects';
   if (isUnder(p.agents()) || isUnder(p.squads())) return 'crew';
   if (isUnder(p.autopilots())) return 'autopilot';
-  if (isUnder(p.settings()) || isUnder(p.runtimes()) || isUnder(p.skills()) || isUnder(p.usage()))
+  if (
+    isUnder(p.settings()) ||
+    isUnder(p.runtimes()) ||
+    isUnder(p.skills()) ||
+    isUnder(p.usage()) ||
+    isUnder(workspaceBillingPath(p))
+  )
     return 'settings';
   return null;
 }

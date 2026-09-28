@@ -21,9 +21,20 @@ interface DashboardLayoutProps {
   children: ReactNode;
   extra?: ReactNode;
   loadingIndicator?: ReactNode;
+  // Тестовая страница биллинга (T-032 §3.2) — читается из
+  // NEXT_PUBLIC_ENABLE_BILLING_TEST_PAGE в host-приложении (сейчас только
+  // apps/web) и прокидывается сюда пропом, как и cloudRuntimeEnabled для
+  // /runtimes: DashboardLayout — общий для web и desktop, а флаг —
+  // web-only, поэтому читать process.env здесь нельзя.
+  billingEnabled?: boolean;
 }
 
-export function DashboardLayout({ children, extra, loadingIndicator }: DashboardLayoutProps) {
+export function DashboardLayout({
+  children,
+  extra,
+  loadingIndicator,
+  billingEnabled,
+}: DashboardLayoutProps) {
   const { pathname } = useNavigation();
   const p = useWorkspacePaths();
   const activeSection = navSectionForPath(p, pathname);
@@ -47,7 +58,7 @@ export function DashboardLayout({ children, extra, loadingIndicator }: Dashboard
         <div className="flex min-w-0 flex-1 flex-col">
           <CommandBar activeSection={activeSection} />
           <div className="flex min-h-0 flex-1">
-            <ContextPanel activeSection={activeSection} />
+            <ContextPanel activeSection={activeSection} billingEnabled={billingEnabled} />
             <SidebarInset className="relative overflow-hidden">
               <NavigationProgress />
               {children}

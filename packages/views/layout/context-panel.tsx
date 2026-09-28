@@ -24,7 +24,7 @@ import {
   SidebarMenuItem,
 } from '@goosar/ui/components/ui/sidebar';
 import { useT } from '../i18n';
-import type { NavSection } from './nav-sections';
+import { workspaceBillingPath, type NavSection } from './nav-sections';
 import { useContextPanelState } from './use-context-panel-state';
 
 const EMPTY_PINS: PinnedItem[] = [];
@@ -134,10 +134,11 @@ function CrewSection() {
   );
 }
 
-function SettingsSection() {
+function SettingsSection({ billingEnabled }: { billingEnabled?: boolean }) {
   const { t } = useT('layout');
   const p = useWorkspacePaths();
   const { pathname } = useNavigation();
+  const billingHref = workspaceBillingPath(p);
   return (
     <SidebarGroup>
       <SidebarGroupContent>
@@ -151,6 +152,14 @@ function SettingsSection() {
           <PanelLink href={p.usage()} isActive={pathname === p.usage()}>
             <span>{t(($) => $.nav.usage)}</span>
           </PanelLink>
+          {/* Тестовая страница биллинга (T-032 §3.2) — пункт виден только
+              когда включён NEXT_PUBLIC_ENABLE_BILLING_TEST_PAGE, иначе
+              /billing отдаёт notFound(). */}
+          {billingEnabled && (
+            <PanelLink href={billingHref} isActive={pathname === billingHref}>
+              <span>{t(($) => $.nav.billing)}</span>
+            </PanelLink>
+          )}
           <PanelLink href={p.settings()} isActive={pathname === p.settings()}>
             <span>{t(($) => $.nav.settings)}</span>
           </PanelLink>
@@ -202,6 +211,7 @@ function EmptySection({ titleKey }: { titleKey: 'projects' | 'autopilots' }) {
 interface ContextPanelProps {
   activeSection: NavSection | null;
   onCollapsedChange?: (collapsed: boolean) => void;
+  billingEnabled?: boolean;
 }
 
 // Контекстная панель (ADR-0002): содержимое зависит от активного раздела
@@ -209,7 +219,11 @@ interface ContextPanelProps {
 // `[`, состояние переживает перезагрузку через localStorage и общий хук
 // `useContextPanelState` (T-005, T-020) — тот же хук использует десктопный
 // `WindowToolbar`, чтобы его `SidebarTrigger` переключал именно эту панель.
-export function ContextPanel({ activeSection, onCollapsedChange }: ContextPanelProps) {
+export function ContextPanel({
+  activeSection,
+  onCollapsedChange,
+  billingEnabled,
+}: ContextPanelProps) {
   const { t } = useT('layout');
   const { collapsed, setCollapsed, toggle } = useContextPanelState();
 
@@ -262,7 +276,7 @@ export function ContextPanel({ activeSection, onCollapsedChange }: ContextPanelP
         {activeSection === 'chat' && <ChatSection />}
         {activeSection === 'tasks' && <TasksSection />}
         {activeSection === 'crew' && <CrewSection />}
-        {activeSection === 'settings' && <SettingsSection />}
+        {activeSection === 'settings' && <SettingsSection billingEnabled={billingEnabled} />}
         {activeSection === 'projects' && <EmptySection titleKey="projects" />}
         {activeSection === 'autopilot' && <EmptySection titleKey="autopilots" />}
       </SidebarContent>

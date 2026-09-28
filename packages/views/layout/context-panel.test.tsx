@@ -128,3 +128,19 @@ describe('ContextPanel collapse toggle (T-020)', () => {
     expect(screen.queryByText(ruLayout.nav.inbox)).not.toBeInTheDocument();
   });
 });
+
+describe('ContextPanel settings section billing item (T-032 §3.2)', () => {
+  it('hides the billing item when the test-page flag is off', async () => {
+    const { ContextPanel } = await import('./context-panel');
+    render(<ContextPanel activeSection="settings" />);
+    expect(screen.getByText(ruLayout.nav.runtimes)).toBeInTheDocument();
+    expect(screen.queryByText(ruLayout.nav.billing)).not.toBeInTheDocument();
+  });
+
+  it('shows the billing item, linked under the workspace, when the flag is on', async () => {
+    const { ContextPanel } = await import('./context-panel');
+    render(<ContextPanel activeSection="settings" billingEnabled />);
+    const billingLink = screen.getByText(ruLayout.nav.billing).closest('a');
+    expect(billingLink).toHaveAttribute('href', '/acme/billing');
+  });
+});

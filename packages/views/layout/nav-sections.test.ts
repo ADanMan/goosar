@@ -1,8 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import { paths } from '@goosar/core/paths';
-import { navSectionForPath, navBreadcrumbLabelKey } from './nav-sections';
+import { navSectionForPath, navBreadcrumbLabelKey, workspaceBillingPath } from './nav-sections';
 
 const p = paths.workspace('acme');
+
+describe('workspaceBillingPath (T-032 §3.2)', () => {
+  it('puts /billing directly under the workspace, like /usage and /runtimes', () => {
+    expect(workspaceBillingPath(p)).toBe('/acme/billing');
+  });
+
+  it('is recognized as the settings section, same as /usage and /runtimes', () => {
+    expect(navSectionForPath(p, workspaceBillingPath(p))).toBe('settings');
+  });
+});
 
 describe('navBreadcrumbLabelKey (T-032 §3.2)', () => {
   it('labels the agents page with the shared crew section label', () => {
