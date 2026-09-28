@@ -31,6 +31,7 @@
   "confirm": "확인",
   "delete": "삭제",
   "loading": "로딩 중...",
+  "new_tab": "새 탭 ⌘T",
   "save": "저장",
   "server_errors": {
     "account_deactivated": "이 계정은 비활성화되었습니다. 워크스페이스 관리자에게 문의하세요.",

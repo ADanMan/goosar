@@ -518,6 +518,7 @@
     "pin_to_sidebar": "사이드바에 고정",
     "unpin_from_sidebar": "사이드바 고정 해제",
     "copy_link": "링크 복사",
+    "open_in_new_tab": "새 탭에서 열기",
     "copy_workdir_path": "로컬 작업 디렉터리 경로 복사",
     "relations": "관계",
     "create_sub_issue": "하위 작업 만들기",

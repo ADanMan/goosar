@@ -8,6 +8,7 @@ import {
   ArrowUp,
   Calendar,
   CalendarClock,
+  ExternalLink,
   FolderOpen,
   Link2,
   Network,
@@ -88,6 +89,7 @@ export function IssueActionsMenuItems({
     updateField,
     togglePin,
     copyLink,
+    openInNewTab,
     openCreateSubIssue,
     openSetParent,
     removeParent,
@@ -226,6 +228,10 @@ export function IssueActionsMenuItems({
       <P.Item onClick={togglePin}>
         {isPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
         {isPinned ? t(($) => $.actions.unpin_from_sidebar) : t(($) => $.actions.pin_to_sidebar)}
+      </P.Item>
+      <P.Item onClick={openInNewTab}>
+        <ExternalLink className="h-3.5 w-3.5" />
+        {t(($) => $.actions.open_in_new_tab)}
       </P.Item>
       <P.Item onClick={copyLink}>
         <Link2 className="h-3.5 w-3.5" />

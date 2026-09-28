@@ -78,6 +78,10 @@ vi.mock('@goosar/core/paths', async () => {
   };
 });
 
+const navMocks = vi.hoisted(() => ({
+  openInNewTab: undefined as ((path: string, title?: string, opts?: object) => void) | undefined,
+}));
+
 vi.mock('../../../navigation', () => ({
   useNavigation: () => ({
     push: vi.fn(),
@@ -85,6 +89,8 @@ vi.mock('../../../navigation', () => ({
     searchParams: new URLSearchParams(),
     back: vi.fn(),
     replace: vi.fn(),
+    getShareableUrl: (path: string) => `https://app.example${path}`,
+    openInNewTab: navMocks.openInNewTab,
   }),
 }));
 
@@ -133,6 +139,7 @@ function wrap(ui: React.ReactNode) {
 
 beforeEach(() => {
   mockOpenModal.mockReset();
+  navMocks.openInNewTab = undefined;
 });
 
 describe('IssueActionsDropdown', () => {
@@ -152,12 +159,54 @@ describe('IssueActionsDropdown', () => {
     expect(screen.getByText('Priority')).toBeInTheDocument();
     expect(screen.getByText('Assignee')).toBeInTheDocument();
     expect(screen.getByText('Due date')).toBeInTheDocument();
+    expect(screen.getByText('Open in new tab')).toBeInTheDocument();
     expect(screen.getByText('Copy link')).toBeInTheDocument();
     expect(screen.getByText('Relations')).toBeInTheDocument();
     expect(screen.getByText('Delete task')).toBeInTheDocument();
     expect(screen.queryByText('Create sub-issue')).not.toBeInTheDocument();
     expect(screen.queryByText('Set parent task...')).not.toBeInTheDocument();
     expect(screen.queryByText('Add sub-issue...')).not.toBeInTheDocument();
+  });
+
+  it("clicking 'Open in new tab' delegates to the navigation adapter (desktop)", async () => {
+    navMocks.openInNewTab = vi.fn();
+    render(
+      wrap(
+        <IssueActionsDropdown
+          issue={mockIssue}
+          trigger={<button data-testid="trigger">Menu</button>}
+        />,
+      ),
+    );
+
+    fireEvent.click(screen.getByTestId('trigger'));
+    fireEvent.click(await screen.findByText('Open in new tab'));
+
+    expect(navMocks.openInNewTab).toHaveBeenCalledWith('/test/issues/issue-1', 'TES-1', {
+      activate: true,
+    });
+  });
+
+  it("clicking 'Open in new tab' falls back to a real browser tab when the adapter has no openInNewTab (web)", async () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    render(
+      wrap(
+        <IssueActionsDropdown
+          issue={mockIssue}
+          trigger={<button data-testid="trigger">Menu</button>}
+        />,
+      ),
+    );
+
+    fireEvent.click(screen.getByTestId('trigger'));
+    fireEvent.click(await screen.findByText('Open in new tab'));
+
+    expect(openSpy).toHaveBeenCalledWith(
+      'https://app.example/test/issues/issue-1',
+      '_blank',
+      'noopener,noreferrer',
+    );
+    openSpy.mockRestore();
   });
 
   it('clicking the Assignee item opens the shared AssigneePicker popover', async () => {

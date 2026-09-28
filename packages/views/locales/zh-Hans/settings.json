@@ -1230,7 +1230,19 @@
       "pending_status": "待确认",
       "pending_grant": "向 {{target}} 授予角色",
       "pending_revoke": "撤销 {{target}} 的角色",
-      "confirm_instruction": "要使其生效，请在服务器上确认："
+      "confirm_instruction": "要使其生效，请在服务器上确认：",
+      "col_name": "姓名",
+      "col_email": "邮箱",
+      "row_actions_aria": "{{name}} 的操作",
+      "search_placeholder": "搜索管理员",
+      "no_matches": "没有匹配搜索的管理员。",
+      "empty_title": "暂无部署管理员",
+      "grant_filed": "已提交授予申请，服务器确认后生效。",
+      "revoke_filed": "已提交撤销 {{name}} 的申请，服务器确认后生效。",
+      "confirm_remove_title": "要申请撤销 {{name}} 的角色吗？",
+      "confirm_remove_description": "将提交待确认的撤销申请；在运维于服务器上确认之前，{{name}} 仍保留该角色。",
+      "confirm_cancel": "取消",
+      "notice_dismiss": "关闭"
     },
     "audit": {
       "title": "审计日志",
@@ -1238,7 +1250,13 @@
       "empty": "暂无审计记录。",
       "failed": "无法加载审计日志。",
       "row": "操作者 {{actor}} → {{target}}",
-      "actor_server": "服务端通道"
+      "actor_server": "服务端通道",
+      "col_action": "操作",
+      "col_summary": "摘要",
+      "col_when": "时间",
+      "empty_title": "暂无审计记录",
+      "search_placeholder": "搜索审计日志",
+      "no_matches": "没有匹配搜索的记录。"
     },
     "policy": {
       "title": "部署策略",

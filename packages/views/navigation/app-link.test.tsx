@@ -90,6 +90,37 @@ describe('AppLink', () => {
     expect(push).not.toHaveBeenCalled();
   });
 
+  it('middle click (auxclick, button 1) delegates to openInNewTab, prevents default, and does NOT push', () => {
+    const push = vi.fn();
+    const openInNewTab = vi.fn();
+    const adapter = makeAdapter({ push, openInNewTab });
+
+    renderLink(adapter);
+    const event = new MouseEvent('auxclick', { bubbles: true, button: 1, cancelable: true });
+    screen.getByText('go').dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(openInNewTab).toHaveBeenCalledWith('/issues', undefined);
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('middle click is a no-op (no throw, native browser handling left alone) when adapter has no openInNewTab', () => {
+    const adapter = makeAdapter();
+    renderLink(adapter);
+    const event = new MouseEvent('auxclick', { bubbles: true, button: 1, cancelable: true });
+    expect(() => screen.getByText('go').dispatchEvent(event)).not.toThrow();
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('ignores other auxclick buttons (e.g. right-click reported via auxclick)', () => {
+    const openInNewTab = vi.fn();
+    const adapter = makeAdapter({ openInNewTab });
+    renderLink(adapter);
+    const event = new MouseEvent('auxclick', { bubbles: true, button: 2, cancelable: true });
+    screen.getByText('go').dispatchEvent(event);
+    expect(openInNewTab).not.toHaveBeenCalled();
+  });
+
   it('modifier-click passes newTabTitle through as the tab label', () => {
     const openInNewTab = vi.fn();
     const adapter = makeAdapter({ openInNewTab });

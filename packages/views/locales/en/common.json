@@ -31,6 +31,7 @@
   "confirm": "Confirm",
   "delete": "Delete",
   "loading": "Loading...",
+  "new_tab": "New tab ⌘T",
   "save": "Save",
   "server_errors": {
     "account_deactivated": "This account is deactivated. Contact your workspace administrator.",

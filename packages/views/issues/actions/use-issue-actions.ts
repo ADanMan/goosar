@@ -20,6 +20,7 @@ export interface UseIssueActionsResult {
   updateField: (updates: Partial<UpdateIssueRequest>) => void;
   togglePin: () => void;
   copyLink: () => Promise<void>;
+  openInNewTab: () => void;
   openCreateSubIssue: () => void;
   openSetParent: () => void;
   removeParent: () => void;
@@ -110,6 +111,17 @@ export function useIssueActions(issue: Issue | null): UseIssueActionsResult {
     }
   }, [paths, issueId, navigation, t]);
 
+  const openInNewTab = useCallback(() => {
+    if (!issueId) return;
+    const path = paths.issueDetail(issueId);
+    if (navigation.openInNewTab) {
+      navigation.openInNewTab(path, issueIdentifier ?? undefined, { activate: true });
+      return;
+    }
+    // No tab-aware adapter (web): fall back to a real browser tab.
+    window.open(navigation.getShareableUrl(path), '_blank', 'noopener,noreferrer');
+  }, [paths, issueId, issueIdentifier, navigation]);
+
   const openCreateSubIssue = useCallback(() => {
     if (!issueId) return;
     openModal('create-issue', {
@@ -171,6 +183,7 @@ export function useIssueActions(issue: Issue | null): UseIssueActionsResult {
     updateField,
     togglePin,
     copyLink,
+    openInNewTab,
     openCreateSubIssue,
     openSetParent,
     removeParent,

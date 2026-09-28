@@ -35,6 +35,13 @@ export const AppLink = forwardRef<HTMLAnchorElement, AppLinkProps>(function AppL
     push(href);
   };
 
+  const handleAuxClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (e.button !== 1) return;
+    if (!openInNewTab) return;
+    e.preventDefault();
+    openInNewTab(href, newTabTitle);
+  };
+
   const handleMouseEnter = (e: React.MouseEvent<HTMLAnchorElement>) => {
     prefetch?.(href);
     onMouseEnter?.(e);
@@ -53,6 +60,7 @@ export const AppLink = forwardRef<HTMLAnchorElement, AppLinkProps>(function AppL
       rel={target === '_blank' ? 'noopener noreferrer' : undefined}
       {...props}
       onClick={handleClick}
+      onAuxClick={handleAuxClick}
       onMouseEnter={handleMouseEnter}
       onFocus={handleFocus}
     >

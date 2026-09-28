@@ -21,7 +21,8 @@ import {
 } from '@goosar/ui/components/ui/context-menu';
 import { useScrollFade } from '@goosar/ui/hooks/use-scroll-fade';
 import { cn } from '@goosar/ui/lib/utils';
-import { useTabStore, useActiveGroup, type Tab } from '@/stores/tab-store';
+import { useT } from '@goosar/views/i18n';
+import { useTabStore, useActiveGroup, getActiveTab, type Tab } from '@/stores/tab-store';
 import { paths } from '@goosar/core/paths';
 import { useTabPresentation, ResourceLeadingVisual } from '@goosar/views/layout';
 import { parseIssueWindowPath } from '../../../shared/issue-window';
@@ -401,24 +402,42 @@ function NewTabEdgeFeedback({
   );
 }
 
-function NewTabButton() {
-  const addTab = useTabStore((s) => s.addTab);
-  const setActiveTab = useTabStore((s) => s.setActiveTab);
+// Opens a new tab seeded with the active tab's current route (falling back
+// to the workspace's default Issues page when there is no active tab yet),
+// then focuses it. Shared by the "+" button and the ⌘T/Ctrl+T shortcut.
+export function openNewTabFromCurrentRoute() {
+  const store = useTabStore.getState();
+  const { activeWorkspaceSlug } = store;
+  if (!activeWorkspaceSlug) return;
+  const active = getActiveTab(store);
+  const path = active?.url ?? paths.workspace(activeWorkspaceSlug).issues();
+  const tabId = store.addTab(path, active?.title ?? 'Issues');
+  if (tabId) store.setActiveTab(tabId);
+}
 
-  const handleClick = () => {
-    const activeSlug = useTabStore.getState().activeWorkspaceSlug;
-    if (!activeSlug) return;
-    const path = paths.workspace(activeSlug).issues();
-    const tabId = addTab(path, 'Issues');
-    if (tabId) setActiveTab(tabId);
-  };
+function useNewTabShortcut() {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 't') {
+        e.preventDefault();
+        openNewTabFromCurrentRoute();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+}
+
+function NewTabButton() {
+  const { t } = useT('common');
+  const label = t(($) => $.new_tab);
 
   return (
     <button
       type="button"
-      onClick={handleClick}
-      aria-label="New tab"
-      title="New tab"
+      onClick={openNewTabFromCurrentRoute}
+      aria-label={label}
+      title={label}
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
       className="mb-1 flex size-7 shrink-0 items-center justify-center self-end rounded-md text-muted-foreground/70 transition-colors hover:bg-muted/50 hover:text-muted-foreground"
     >
@@ -428,6 +447,7 @@ function NewTabButton() {
 }
 
 export function TabBar() {
+  useNewTabShortcut();
   const group = useActiveGroup();
   const moveTab = useTabStore((s) => s.moveTab);
   const activeWorkspaceSlug = useTabStore((s) => s.activeWorkspaceSlug);

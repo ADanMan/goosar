@@ -1230,7 +1230,19 @@
       "pending_status": "保留中",
       "pending_grant": "{{target}} にロールを付与",
       "pending_revoke": "{{target}} からロールを取り消し",
-      "confirm_instruction": "適用するには、サーバー上で確認してください："
+      "confirm_instruction": "適用するには、サーバー上で確認してください：",
+      "col_name": "名前",
+      "col_email": "メール",
+      "row_actions_aria": "{{name}} の操作",
+      "search_placeholder": "管理者を検索",
+      "no_matches": "検索条件に一致する管理者はいません。",
+      "empty_title": "デプロイ管理者はいません",
+      "grant_filed": "付与リクエストを登録しました。サーバーで確認されると有効になります。",
+      "revoke_filed": "{{name}} の取り消しリクエストを登録しました。サーバーで確認されると有効になります。",
+      "confirm_remove_title": "{{name}} からロールの取り消しをリクエストしますか？",
+      "confirm_remove_description": "保留中の取り消しリクエストが登録されます。オペレーターがサーバーで確認するまで {{name}} はロールを保持します。",
+      "confirm_cancel": "キャンセル",
+      "notice_dismiss": "閉じる"
     },
     "audit": {
       "title": "監査ログ",
@@ -1238,7 +1250,13 @@
       "empty": "監査エントリはまだありません。",
       "failed": "監査ログを読み込めませんでした。",
       "row": "実行者 {{actor}} → {{target}}",
-      "actor_server": "サーバーチャネル"
+      "actor_server": "サーバーチャネル",
+      "col_action": "アクション",
+      "col_summary": "概要",
+      "col_when": "日時",
+      "empty_title": "監査記録はまだありません",
+      "search_placeholder": "監査ログを検索",
+      "no_matches": "検索条件に一致する記録はありません。"
     },
     "policy": {
       "title": "デプロイポリシー",

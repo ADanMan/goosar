@@ -1238,7 +1238,19 @@
       "pending_status": "Pending",
       "pending_grant": "Grant the role to {{target}}",
       "pending_revoke": "Revoke the role from {{target}}",
-      "confirm_instruction": "To apply, confirm on the server:"
+      "confirm_instruction": "To apply, confirm on the server:",
+      "col_name": "Name",
+      "col_email": "Email",
+      "row_actions_aria": "Actions for {{name}}",
+      "search_placeholder": "Search administrators",
+      "no_matches": "No administrators match the search.",
+      "empty_title": "No deployment administrators",
+      "grant_filed": "Grant request filed. It takes effect after the server confirms it.",
+      "revoke_filed": "Revoke request filed for {{name}}. It takes effect after the server confirms it.",
+      "confirm_remove_title": "Request revoking the role from {{name}}?",
+      "confirm_remove_description": "This files a pending revoke request; {{name}} keeps the role until an operator confirms it on the server.",
+      "confirm_cancel": "Cancel",
+      "notice_dismiss": "Dismiss"
     },
     "audit": {
       "title": "Audit journal",
@@ -1246,7 +1258,13 @@
       "empty": "No audit entries yet.",
       "failed": "Couldn't load the audit journal.",
       "row": "actor {{actor}} → {{target}}",
-      "actor_server": "server channel"
+      "actor_server": "server channel",
+      "col_action": "Action",
+      "col_summary": "Summary",
+      "col_when": "When",
+      "empty_title": "No audit entries yet",
+      "search_placeholder": "Search the audit log",
+      "no_matches": "No entries match the search."
     },
     "policy": {
       "title": "Deployment policy",

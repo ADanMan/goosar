@@ -518,6 +518,7 @@
     "pin_to_sidebar": "サイドバーにピン留め",
     "unpin_from_sidebar": "サイドバーのピン留めを解除",
     "copy_link": "リンクをコピー",
+    "open_in_new_tab": "新しいタブで開く",
     "copy_workdir_path": "ローカルの作業ディレクトリのパスをコピー",
     "relations": "関係",
     "create_sub_issue": "サブタスクを作成",

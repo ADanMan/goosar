@@ -1230,7 +1230,19 @@
       "pending_status": "대기 중",
       "pending_grant": "{{target}}에게 역할 부여",
       "pending_revoke": "{{target}}의 역할 회수",
-      "confirm_instruction": "적용하려면 서버에서 확인하세요:"
+      "confirm_instruction": "적용하려면 서버에서 확인하세요:",
+      "col_name": "이름",
+      "col_email": "이메일",
+      "row_actions_aria": "{{name}} 작업",
+      "search_placeholder": "관리자 검색",
+      "no_matches": "검색 결과에 해당하는 관리자가 없습니다.",
+      "empty_title": "배포 관리자가 없습니다",
+      "grant_filed": "부여 요청이 접수되었습니다. 서버에서 확인되면 적용됩니다.",
+      "revoke_filed": "{{name}}의 회수 요청이 접수되었습니다. 서버에서 확인되면 적용됩니다.",
+      "confirm_remove_title": "{{name}}의 역할 회수를 요청하시겠습니까?",
+      "confirm_remove_description": "대기 중인 회수 요청이 접수됩니다. 운영자가 서버에서 확인할 때까지 {{name}}은(는) 역할을 유지합니다.",
+      "confirm_cancel": "취소",
+      "notice_dismiss": "닫기"
     },
     "audit": {
       "title": "감사 로그",
@@ -1238,7 +1250,13 @@
       "empty": "아직 감사 기록이 없습니다.",
       "failed": "감사 로그를 불러오지 못했습니다.",
       "row": "행위자 {{actor}} → {{target}}",
-      "actor_server": "서버 채널"
+      "actor_server": "서버 채널",
+      "col_action": "작업",
+      "col_summary": "요약",
+      "col_when": "시각",
+      "empty_title": "아직 감사 기록이 없습니다",
+      "search_placeholder": "감사 로그 검색",
+      "no_matches": "검색 결과에 해당하는 기록이 없습니다."
     },
     "policy": {
       "title": "배포 정책",

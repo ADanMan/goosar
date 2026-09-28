@@ -1,6 +1,13 @@
 import { afterAll, describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, renderHook, fireEvent, waitFor, within } from '@testing-library/react';
 import { useScrollFade } from '@goosar/ui/hooks/use-scroll-fade';
+import enCommon from '@goosar/views/locales/en/common.json';
+
+vi.mock('@goosar/views/i18n', () => ({
+  useT: () => ({
+    t: (selector: (resources: typeof enCommon) => string) => selector(enCommon),
+  }),
+}));
 
 type MockTab = {
   id: string;
@@ -52,7 +59,13 @@ vi.mock('@/stores/tab-store', () => {
   );
   const useActiveGroup = () =>
     state.activeWorkspaceSlug ? (state.byWorkspace[state.activeWorkspaceSlug] ?? null) : null;
-  return { useTabStore, useActiveGroup };
+  const getActiveTab = (s: typeof store) => {
+    if (!s.activeWorkspaceSlug) return null;
+    const group = s.byWorkspace[s.activeWorkspaceSlug];
+    if (!group) return null;
+    return group.tabs.find((t) => t.id === group.activeTabId) ?? null;
+  };
+  return { useTabStore, useActiveGroup, getActiveTab };
 });
 
 vi.mock('@goosar/core/paths', async (importOriginal) => ({
@@ -238,7 +251,7 @@ describe('TabBar overflow', () => {
     );
     expect(getByLabelText('Tab 1').closest('[data-tab-frame]')).toHaveClass('w-40', 'min-w-32');
 
-    const newTabButton = getByLabelText('New tab');
+    const newTabButton = getByLabelText('New tab ⌘T');
     expect(tabScroller).not.toContainElement(newTabButton);
   });
 
@@ -405,6 +418,58 @@ describe('TabBar overflow', () => {
     expect(scrollTo).not.toHaveBeenCalled();
     expect(container.querySelector('[data-new-tab-edge-feedback="true"]')).toBeInTheDocument();
     rectSpy.mockRestore();
+  });
+});
+
+describe('TabBar new tab', () => {
+  it('the "+" button is always rendered (not only on hover)', () => {
+    const { getByLabelText } = render(<TabBar />);
+    const button = getByLabelText('New tab ⌘T');
+    expect(button).toBeVisible();
+    expect(button).not.toHaveClass('opacity-0');
+  });
+
+  it('clicking "+" opens a new tab seeded with the active tab\'s current route', () => {
+    state.byWorkspace.acme.tabs = [
+      { id: 'tA', url: '/acme/issues/i1', title: 'MUL-1', pinned: false },
+      { id: 'tB', url: '/acme/projects', title: 'Projects', pinned: false },
+    ];
+    state.byWorkspace.acme.activeTabId = 'tA';
+    state.addTab.mockReturnValue('tNew');
+
+    const { getByLabelText } = render(<TabBar />);
+    fireEvent.click(getByLabelText('New tab ⌘T'));
+
+    expect(state.addTab).toHaveBeenCalledWith('/acme/issues/i1', 'MUL-1');
+    expect(state.setActiveTab).toHaveBeenCalledWith('tNew');
+  });
+
+  it('⌘T opens a new tab the same way as clicking "+"', () => {
+    state.addTab.mockReturnValue('tNew');
+    render(<TabBar />);
+
+    fireEvent.keyDown(window, { key: 't', metaKey: true });
+
+    expect(state.addTab).toHaveBeenCalledWith('/acme/issues', 'Issues');
+    expect(state.setActiveTab).toHaveBeenCalledWith('tNew');
+  });
+
+  it('Ctrl+T opens a new tab as well (non-mac accelerator)', () => {
+    state.addTab.mockReturnValue('tNew');
+    render(<TabBar />);
+
+    fireEvent.keyDown(window, { key: 't', ctrlKey: true });
+
+    expect(state.addTab).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores plain "t" and modified variants like ⌘⇧T', () => {
+    render(<TabBar />);
+
+    fireEvent.keyDown(window, { key: 't' });
+    fireEvent.keyDown(window, { key: 't', metaKey: true, shiftKey: true });
+
+    expect(state.addTab).not.toHaveBeenCalled();
   });
 });
 
