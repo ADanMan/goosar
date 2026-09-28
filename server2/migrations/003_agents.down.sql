@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS operative_disabled_local_skills;
+DROP TABLE IF EXISTS operative_capabilities;
+DROP TABLE IF EXISTS operative_mcp_links;
+DROP TABLE IF EXISTS operative_targets;
+DROP TABLE IF EXISTS operatives;
+DROP TABLE IF EXISTS capability_files;
+DROP TABLE IF EXISTS capabilities;
+DROP TABLE IF EXISTS executor_probes;
+DROP TABLE IF EXISTS executors;

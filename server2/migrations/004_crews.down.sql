@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS crew_members;
+DROP TABLE IF EXISTS crews;

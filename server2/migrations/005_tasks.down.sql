@@ -1,0 +1,16 @@
+DROP TABLE IF EXISTS initiative_bookmarks;
+DROP TABLE IF EXISTS ticket_bookmarks;
+DROP TABLE IF EXISTS ticket_activity;
+DROP TABLE IF EXISTS ticket_pr_links;
+DROP TABLE IF EXISTS ticket_subscribers;
+DROP TABLE IF EXISTS ticket_marks;
+DROP TABLE IF EXISTS note_marks;
+DROP TABLE IF EXISTS ticket_notes;
+DROP TABLE IF EXISTS capability_tag_links;
+DROP TABLE IF EXISTS operative_tag_links;
+DROP TABLE IF EXISTS ticket_tag_links;
+DROP TABLE IF EXISTS tickets;
+DROP TABLE IF EXISTS field_defs;
+DROP TABLE IF EXISTS tags;
+DROP TABLE IF EXISTS initiative_resources;
+DROP TABLE IF EXISTS initiatives;

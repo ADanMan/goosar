@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS agent_protocols;
+DROP TABLE IF EXISTS space_mcp_credentials;
+DROP TABLE IF EXISTS space_mcp_servers;
+DROP TABLE IF EXISTS space_config_overrides;
+DROP TABLE IF EXISTS space_config;
+DROP TABLE IF EXISTS space_export_jobs;
+DROP TABLE IF EXISTS space_invitations;
+DROP TABLE IF EXISTS space_members;
+DROP TABLE IF EXISTS spaces;
