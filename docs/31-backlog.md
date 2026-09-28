@@ -502,3 +502,20 @@ Acceptance criteria:
 
 Затрагивает: `packages/views/**`, `apps/desktop/src/renderer/src/components/**`, `apps/web/features/landing/**`, `apps/web/app/**`, `packages/views/locales/**`
 Риск: L1
+
+### T-033 · Фиксы Medium и Low из ревью
+Эпик: E9
+Оценка: 3 дня
+Зависит от: T-032
+
+Задача: закрыть строки Medium и Low из `docs/33-ux-review.md` §3, не помеченные «исправлено» в T-032, группами однотипных находок: сырые ошибки API через `describeServerFailure`, пустые состояния по образцу `create-project`, подтверждения и undo-тосты по образцам `TypedConfirmDialog`/`StatusPicker`, доступность (aria-label, aria-pressed, aria-live, роли предупреждений), навигация публичного сайта. Спорные предложения (монотемный hero, CTA на `/about`, переименование «Лента», пять языков лендинга) не трогать — пометить «отложено: нужно решение владельца». Досъёмка тёмной темы и 1024px — раздел 5 ревью.
+
+Acceptance criteria:
+- [ ] Каждая строка Medium/Low в `docs/33-ux-review.md` помечена «исправлено <хеш>» или «отложено» с причиной;
+- [ ] `pnpm --filter @goosar/{views,web,desktop} typecheck`, `pnpm --filter @goosar/views test`, `node scripts/check-ui-strings.mjs` зелёные (кроме известного `editor/utils/repair-list-items`);
+- [ ] новые тексты — во всех пяти локалях, русский первичен;
+- [ ] раздел «5. Тёмная тема и 1024px» в `docs/33-ux-review.md`;
+- [ ] ветка `ux/review-fixes`, коммит на группу находок, PR не создаётся.
+
+Затрагивает: `packages/views/**`, `apps/web/features/landing/**`, `apps/web/app/**`, `apps/desktop/src/renderer/src/components/**`, `packages/views/locales/**`, `docs/33-ux-review.md`
+Риск: L1
