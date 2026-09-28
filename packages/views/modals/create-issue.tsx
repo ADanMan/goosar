@@ -107,6 +107,7 @@ import {
   CustomPropertyValueInput,
 } from '../issues/components/pickers/custom-property-picker';
 import { IssuePickerModal } from './issue-picker-modal';
+import { describeServerFailure } from '../common/server-error';
 import { useT } from '../i18n';
 
 function CreateRunHint({
@@ -193,6 +194,7 @@ export function ManualCreatePanel({
 }) {
   const { t } = useT('modals');
   const { t: tEditor } = useT('editor');
+  const { t: tCommon } = useT('common');
   const router = useNavigation();
   const p = useWorkspacePaths();
   const workspaceName = useCurrentWorkspace()?.name;
@@ -575,8 +577,13 @@ export function ManualCreatePanel({
             return false;
           }
         }
+        // Raw API text stays in the log only — the toast always shows a
+        // localized message (see docs/33-ux-review.md §3.1).
+        console.error('[create-issue] create failed', err);
+        const failure = describeServerFailure(tCommon, err, t(($) => $.create_issue.toast_failed));
         toast.error(
-          err instanceof Error && err.message ? err.message : t(($) => $.create_issue.toast_failed),
+          failure.text,
+          failure.detail === undefined ? undefined : { description: failure.detail },
         );
         return false;
       }

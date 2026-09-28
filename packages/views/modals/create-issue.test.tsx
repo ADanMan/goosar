@@ -236,6 +236,8 @@ vi.mock('@goosar/core/api', async () => {
   const { DuplicateIssueErrorBodySchema } = await vi.importActual<
     typeof import('@goosar/core/api/schemas')
   >('@goosar/core/api/schemas');
+  const { describeApiFailure, apiErrorCode } =
+    await vi.importActual<typeof import('@goosar/core/api')>('@goosar/core/api');
   return {
     api: {
       listProperties: mockListProperties,
@@ -245,6 +247,8 @@ vi.mock('@goosar/core/api', async () => {
     ApiError,
     parseWithFallback,
     DuplicateIssueErrorBodySchema,
+    describeApiFailure,
+    apiErrorCode,
   };
 });
 
@@ -1025,11 +1029,16 @@ describe('CreateIssueModal', () => {
     await user.click(screen.getByRole('button', { name: 'Create Task' }));
 
     await waitFor(() => expect(mockToastError).toHaveBeenCalledTimes(1));
-    expect(mockToastError).toHaveBeenCalledWith('Backend says title is taken');
+    // The localized fallback is always shown; the raw server text moves to
+    // the toast's collapsed detail instead of standing in as the headline
+    // (docs/33-ux-review.md §3.1, L37).
+    expect(mockToastError).toHaveBeenCalledWith('Failed to create task', {
+      description: 'Backend says title is taken',
+    });
     expect(mockToastCustom).not.toHaveBeenCalled();
   });
 
-  it('surfaces err.message verbatim for non-duplicate errors', async () => {
+  it('shows the localized failure toast instead of the raw err.message', async () => {
     const user = userEvent.setup();
     mockCreateIssue.mockRejectedValue(new Error('Server is overloaded, try again'));
 
@@ -1038,7 +1047,9 @@ describe('CreateIssueModal', () => {
     await user.click(screen.getByRole('button', { name: 'Create Task' }));
 
     await waitFor(() => expect(mockToastError).toHaveBeenCalledTimes(1));
-    expect(mockToastError).toHaveBeenCalledWith('Server is overloaded, try again');
+    expect(mockToastError).toHaveBeenCalledWith('Failed to create task', {
+      description: 'Server is overloaded, try again',
+    });
   });
 
   it('falls back to the generic toast when the thrown value is not an Error', async () => {
@@ -1050,7 +1061,9 @@ describe('CreateIssueModal', () => {
     await user.click(screen.getByRole('button', { name: 'Create Task' }));
 
     await waitFor(() => expect(mockToastError).toHaveBeenCalledTimes(1));
-    expect(mockToastError).toHaveBeenCalledWith('Failed to create task');
+    expect(mockToastError).toHaveBeenCalledWith('Failed to create task', {
+      description: 'network exploded',
+    });
   });
 
   it('commits the picked project to the shared draft when switching to agent mode', async () => {
