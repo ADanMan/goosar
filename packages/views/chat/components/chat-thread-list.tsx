@@ -185,7 +185,7 @@ export function ChatThreadList({
       );
     } else if (isRunning) {
       previewNode = (
-        <span className="flex min-w-0 items-center gap-1.5 text-emerald-500">
+        <span className="flex min-w-0 items-center gap-1.5 text-success">
           <Loader2 className="size-3 shrink-0 animate-spin" />
           <span className="truncate">{t(($) => $.list.typing)}</span>
         </span>
@@ -309,7 +309,7 @@ export function ChatThreadList({
                 {unread > 0 && (
                   <span
                     aria-label={t(($) => $.session_history.row_subtitle.new_reply)}
-                    className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-[oklch(0.62_0.14_18)] px-1 text-[10.5px] font-semibold text-white"
+                    className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-destructive px-1 text-[10.5px] font-semibold text-white"
                   >
                     {unread > 99 ? '99+' : unread}
                   </span>

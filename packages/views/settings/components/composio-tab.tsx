@@ -262,7 +262,7 @@ function ToolkitCard({
 
         {isConnected ? (
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
+            <span className="inline-flex items-center gap-1 text-xs text-success">
               <Check className="h-3 w-3" />
               {t(($) => $.composio.connected)}
             </span>

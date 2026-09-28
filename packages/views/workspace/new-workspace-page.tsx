@@ -57,7 +57,7 @@ export function NewWorkspacePage({
         <div className="flex w-full max-w-md flex-col items-center gap-6">
           {workspaceCreationDisabled ? (
             <div className="text-center">
-              <h1 className="text-2xl font-semibold tracking-tight">
+              <h1 className="text-xl font-semibold tracking-tight">
                 {t(($) => $.creation_disabled.title)}
               </h1>
               <p className="mt-3 text-muted-foreground">
@@ -67,7 +67,7 @@ export function NewWorkspacePage({
           ) : (
             <>
               <div className="text-center">
-                <h1 className="text-2xl font-semibold tracking-tight">
+                <h1 className="text-xl font-semibold tracking-tight">
                   {t(($) => $.new_page.title)}
                 </h1>
                 <p className="mt-3 text-muted-foreground">{t(($) => $.new_page.description)}</p>

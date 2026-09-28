@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, RefreshCw, ExternalLink } from 'lucide-react';
+import { CreditCard, Loader2, RefreshCw, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   billingBalanceOptions,
@@ -23,6 +23,7 @@ import type {
 } from '@goosar/core/types';
 import { ApiError } from '@goosar/core/api';
 import { createLogger } from '@goosar/core/logger';
+import { Badge } from '@goosar/ui/components/ui/badge';
 import { Button } from '@goosar/ui/components/ui/button';
 import {
   Card,
@@ -32,6 +33,7 @@ import {
   CardTitle,
 } from '@goosar/ui/components/ui/card';
 import { describeServerFailure } from '../common/server-error';
+import { PageHeader } from '../layout/page-header';
 import { useT } from '../i18n';
 import { useNavigation } from '../navigation';
 
@@ -47,30 +49,37 @@ export function BillingTestPage() {
   const sessionId = searchParams.get('session_id') ?? '';
 
   return (
-    <div className="space-y-6 p-6">
-      <header>
-        <h1 className="text-lg font-semibold">{t(($) => $.title)}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{t(($) => $.subtitle)}</p>
-      </header>
+    <div className="flex flex-1 min-h-0 flex-col">
+      {/* T-035 §3.2: this page had a bare <h1 class="text-xl font-semibold">
+          instead of the shared 48px PageHeader every other route uses. */}
+      <PageHeader className="gap-2">
+        <CreditCard aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
+        <h1 className="text-sm font-medium">{t(($) => $.title)}</h1>
+      </PageHeader>
+      <div className="min-w-0 flex-1 overflow-y-auto">
+        <div className="space-y-6 p-6">
+          <p className="text-sm text-muted-foreground">{t(($) => $.subtitle)}</p>
 
-      {sessionId && (
-        <CheckoutSessionStatusBanner
-          sessionId={sessionId}
-          onDismiss={() => {
-            replace(pathname);
-          }}
-        />
-      )}
+          {sessionId && (
+            <CheckoutSessionStatusBanner
+              sessionId={sessionId}
+              onDismiss={() => {
+                replace(pathname);
+              }}
+            />
+          )}
 
-      <BalanceCard />
+          <BalanceCard />
 
-      <BuyAndPortalSection />
+          <BuyAndPortalSection />
 
-      <TransactionsCard />
+          <TransactionsCard />
 
-      <BatchesCard />
+          <BatchesCard />
 
-      <TopupsCard />
+          <TopupsCard />
+        </div>
+      </div>
     </div>
   );
 }
@@ -368,9 +377,9 @@ function TransactionRow({ row }: { row: BillingTransaction }) {
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-medium">
           {row.tx_type}
-          <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+          <Badge variant="info" className="ml-1.5 font-mono">
             {row.source}
-          </span>
+          </Badge>
         </span>
         <span
           className={`text-sm tabular-nums ${
@@ -506,17 +515,18 @@ function TopupRow({ row }: { row: BillingTopup }) {
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-medium">
           {row.tier_id || row.id.slice(0, 8)}
-          <span
-            className={`ml-1.5 rounded px-1.5 py-0.5 font-mono text-[10px] ${
+          <Badge
+            variant={
               row.status === 'credited'
-                ? 'bg-success/10 text-success'
+                ? 'success'
                 : row.status === 'failed' || row.status === 'canceled'
-                  ? 'bg-destructive/10 text-destructive'
-                  : 'bg-warning/10 text-warning'
-            }`}
+                  ? 'destructive'
+                  : 'warning'
+            }
+            className="ml-1.5 font-mono"
           >
             {row.status}
-          </span>
+          </Badge>
         </span>
         <span className="text-sm tabular-nums">
           {row.bonus_credits > 0

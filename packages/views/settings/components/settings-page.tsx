@@ -28,6 +28,7 @@ import { useAuthStore } from '@goosar/core/auth';
 import { useCurrentWorkspace } from '@goosar/core/paths';
 import { memberListOptions } from '@goosar/core/workspace/queries';
 import { deploymentAdminsOptions } from '@goosar/core/deployment/admin';
+import { PageHeader } from '../../layout/page-header';
 import { useNavigation } from '../../navigation';
 import { AccountTab } from './account-tab';
 import { AdminTab } from './admin-tab';
@@ -192,176 +193,187 @@ export function SettingsPage({
   };
 
   return (
-    <Tabs
-      value={activeTab}
-      onValueChange={handleTabChange}
-      orientation={isMobile ? 'horizontal' : 'vertical'}
-      className="flex flex-1 min-h-0 flex-col gap-0 overflow-y-auto md:flex-row md:overflow-hidden"
-    >
-      {/* Structural navigation; bounded setting groups remain in the content surface.
-          Stays on the content surface color (no shell tint): the desktop's active
-          tab merges into the card top, and a tinted panel under the first tabs
-          breaks that seam (MUL-4439). Zoning comes from the divider instead.
+    <div className="flex flex-1 min-h-0 flex-col">
+      {/* T-035 §3.2: settings had no top-level 48px header like every other
+          route — the section title lived only in the rail (hidden on
+          mobile). The rail's own label stays as in-page navigation copy
+          (not a heading, to avoid a duplicate h1), and this PageHeader is
+          the one visible-at-every-width title. */}
+      <PageHeader className="gap-2">
+        <Settings aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
+        <h1 className="text-sm font-medium">{t(($) => $.page.title)}</h1>
+      </PageHeader>
+      <Tabs
+        value={activeTab}
+        onValueChange={handleTabChange}
+        orientation={isMobile ? 'horizontal' : 'vertical'}
+        className="flex flex-1 min-h-0 flex-col gap-0 overflow-y-auto md:flex-row md:overflow-hidden"
+      >
+        {/* Structural navigation; bounded setting groups remain in the content surface.
+            Stays on the content surface color (no shell tint): the desktop's active
+            tab merges into the card top, and a tinted panel under the first tabs
+            breaks that seam (MUL-4439). Zoning comes from the divider instead.
 
-          §3 L98: this rail is intentionally NOT independently collapsible,
-          unlike the app's primary sidebar — it is a settings-only nested
-          panel (HIG "Sidebars"), and the asymmetry is deliberate, not a gap
-          to close on the next pass through this file. */}
-      <div className="shrink-0 overflow-x-auto border-b border-surface-border p-2 md:w-56 md:overflow-y-auto md:border-b-0 md:border-r md:p-4">
-        <h1 className="sr-only text-sm font-semibold md:not-sr-only md:mb-4 md:px-2">
-          {t(($) => $.page.title)}
-        </h1>
-        <TabsList
-          variant="line"
-          className="flex w-max min-w-full flex-row items-center gap-1 p-0 md:w-full md:flex-col md:items-stretch"
-        >
-          {/* My Account group */}
-          <span className={cn(SETTINGS_TAB_GROUP_LABEL_CLASS, 'md:pt-2')}>
-            {t(($) => $.page.my_account)}
-          </span>
-          {ACCOUNT_TAB_KEYS.map((key) => {
-            const Icon = ACCOUNT_TAB_ICONS[key];
-            return (
-              <TabsTrigger key={key} value={key} className={SETTINGS_TAB_TRIGGER_CLASS}>
-                <Icon className="h-4 w-4" />
-                {t(($) => $.page.tabs[key])}
-              </TabsTrigger>
-            );
-          })}
-          {extraAccountTabs?.map((tab) => (
-            <TabsTrigger key={tab.value} value={tab.value} className={SETTINGS_TAB_TRIGGER_CLASS}>
-              <tab.icon className="h-4 w-4" />
-              {tab.label}
-            </TabsTrigger>
-          ))}
-
-          {/* Workspace group */}
-          <span
-            className={cn(
-              SETTINGS_TAB_GROUP_LABEL_CLASS,
-              'max-w-[8rem] truncate md:max-w-none md:pt-4',
-            )}
+            §3 L98: this rail is intentionally NOT independently collapsible,
+            unlike the app's primary sidebar — it is a settings-only nested
+            panel (HIG "Sidebars"), and the asymmetry is deliberate, not a gap
+            to close on the next pass through this file. */}
+        <div className="shrink-0 overflow-x-auto border-b border-surface-border p-2 md:w-56 md:overflow-y-auto md:border-b-0 md:border-r md:p-4">
+          <div className="sr-only text-sm font-semibold md:not-sr-only md:mb-4 md:px-2">
+            {t(($) => $.page.title)}
+          </div>
+          <TabsList
+            variant="line"
+            className="flex w-max min-w-full flex-row items-center gap-1 p-0 md:w-full md:flex-col md:items-stretch"
           >
-            {workspaceName ?? t(($) => $.page.workspace_fallback)}
-          </span>
-          {workspaceTabKeys.map((key) => {
-            const Icon = WORKSPACE_TAB_ICONS[key];
-            return (
-              <TabsTrigger
-                key={key}
-                value={WORKSPACE_TAB_VALUES[key]}
-                className={SETTINGS_TAB_TRIGGER_CLASS}
-              >
-                <Icon className="h-4 w-4" />
-                {t(($) => $.page.tabs[key])}
+            {/* My Account group */}
+            <span className={cn(SETTINGS_TAB_GROUP_LABEL_CLASS, 'md:pt-2')}>
+              {t(($) => $.page.my_account)}
+            </span>
+            {ACCOUNT_TAB_KEYS.map((key) => {
+              const Icon = ACCOUNT_TAB_ICONS[key];
+              return (
+                <TabsTrigger key={key} value={key} className={SETTINGS_TAB_TRIGGER_CLASS}>
+                  <Icon className="h-4 w-4" />
+                  {t(($) => $.page.tabs[key])}
+                </TabsTrigger>
+              );
+            })}
+            {extraAccountTabs?.map((tab) => (
+              <TabsTrigger key={tab.value} value={tab.value} className={SETTINGS_TAB_TRIGGER_CLASS}>
+                <tab.icon className="h-4 w-4" />
+                {tab.label}
               </TabsTrigger>
-            );
-          })}
+            ))}
 
-          {/* Deployment group — only for holders of the deployment_admin
-              role (see the gate above). */}
-          {isDeploymentAdmin && (
-            <>
-              <span className={cn(SETTINGS_TAB_GROUP_LABEL_CLASS, 'md:pt-4')}>
-                {t(($) => $.page.deployment_group)}
-              </span>
-              <TabsTrigger value="deployment" className={SETTINGS_TAB_TRIGGER_CLASS}>
-                <ServerCog className="h-4 w-4" />
-                {t(($) => $.page.tabs.deployment)}
-              </TabsTrigger>
-            </>
-          )}
-        </TabsList>
-      </div>
-
-      {/* Right content */}
-      <div className="min-w-0 flex-1 md:overflow-y-auto">
-        <div
-          className={`mx-auto w-full p-4 sm:p-6 md:p-8 ${activeTab === 'labels' || activeTab === 'properties' ? 'max-w-5xl' : 'max-w-3xl'}`}
-        >
-          <TabsContent value="profile">
-            <AccountTab kerberosSlot={accountKerberosSlot} hasKerberos={accountHasKerberos} />
-          </TabsContent>
-          <TabsContent value="preferences">
-            <PreferencesTab />
-          </TabsContent>
-          <TabsContent value="shortcuts">
-            <KeyboardShortcutsTab />
-          </TabsContent>
-          <TabsContent value="issue">
-            <IssueTab />
-          </TabsContent>
-          <TabsContent value="chat">
-            <ChatTab />
-          </TabsContent>
-          <TabsContent value="notifications">
-            <NotificationsTab />
-          </TabsContent>
-          {/* Second factor, recovery codes and the person's own sessions
-              (#391). Account-scoped, not workspace-scoped: a factor protects
-              the ACCOUNT, and it would be wrong to reach it through whichever
-              workspace happens to be open. */}
-          <TabsContent value="security">
-            <SecurityTab />
-          </TabsContent>
-          <TabsContent value="tokens">
-            <TokensTab />
-          </TabsContent>
-          <TabsContent value="workspace">
-            <WorkspaceTab />
-          </TabsContent>
-          <TabsContent value="repositories">
-            <RepositoriesTab />
-          </TabsContent>
-          <TabsContent value="integrations">
-            <IntegrationsTab />
-          </TabsContent>
-          <TabsContent value="labs">
-            <LabsTab />
-          </TabsContent>
-          <TabsContent value="members">
-            <MembersTab />
-          </TabsContent>
-          <TabsContent value="labels">
-            <LabelsTab />
-          </TabsContent>
-          <TabsContent value="properties">
-            <PropertiesTab />
-          </TabsContent>
-          {/* The workspace MCP library. Every member may see the inventory —
-              it carries no credential material and an agent owner needs to
-              know what is available to assign — so this tab is not gated on
-              the admin role; the write affordances inside it are. */}
-          <TabsContent value="mcp">
-            <McpTab wsId={workspace?.id ?? ''} />
-          </TabsContent>
-          {canManageWorkspace && (
-            <TabsContent value="admin">
-              <AdminTab />
-            </TabsContent>
-          )}
-          {/* Mounted whenever 'deployment' is the active tab (see validTabs
-              above), not only for a confirmed admin: it is what shows the
-              loading and no-access states instead of a silent fallback. */}
-          {activeTab === 'deployment' && (
-            <TabsContent value="deployment">
-              {isDeploymentAdminsLoading ? (
-                <DeploymentTabSkeleton />
-              ) : isDeploymentAdmin ? (
-                <DeploymentTab />
-              ) : (
-                <DeploymentNoAccess />
+            {/* Workspace group */}
+            <span
+              className={cn(
+                SETTINGS_TAB_GROUP_LABEL_CLASS,
+                'max-w-[8rem] truncate md:max-w-none md:pt-4',
               )}
-            </TabsContent>
-          )}
-          {extraAccountTabs?.map((tab) => (
-            <TabsContent key={tab.value} value={tab.value}>
-              {tab.content}
-            </TabsContent>
-          ))}
+            >
+              {workspaceName ?? t(($) => $.page.workspace_fallback)}
+            </span>
+            {workspaceTabKeys.map((key) => {
+              const Icon = WORKSPACE_TAB_ICONS[key];
+              return (
+                <TabsTrigger
+                  key={key}
+                  value={WORKSPACE_TAB_VALUES[key]}
+                  className={SETTINGS_TAB_TRIGGER_CLASS}
+                >
+                  <Icon className="h-4 w-4" />
+                  {t(($) => $.page.tabs[key])}
+                </TabsTrigger>
+              );
+            })}
+
+            {/* Deployment group — only for holders of the deployment_admin
+                role (see the gate above). */}
+            {isDeploymentAdmin && (
+              <>
+                <span className={cn(SETTINGS_TAB_GROUP_LABEL_CLASS, 'md:pt-4')}>
+                  {t(($) => $.page.deployment_group)}
+                </span>
+                <TabsTrigger value="deployment" className={SETTINGS_TAB_TRIGGER_CLASS}>
+                  <ServerCog className="h-4 w-4" />
+                  {t(($) => $.page.tabs.deployment)}
+                </TabsTrigger>
+              </>
+            )}
+          </TabsList>
         </div>
-      </div>
-    </Tabs>
+
+        {/* Right content */}
+        <div className="min-w-0 flex-1 md:overflow-y-auto">
+          <div
+            className={`mx-auto w-full p-4 sm:p-6 md:p-8 ${activeTab === 'labels' || activeTab === 'properties' ? 'max-w-5xl' : 'max-w-3xl'}`}
+          >
+            <TabsContent value="profile">
+              <AccountTab kerberosSlot={accountKerberosSlot} hasKerberos={accountHasKerberos} />
+            </TabsContent>
+            <TabsContent value="preferences">
+              <PreferencesTab />
+            </TabsContent>
+            <TabsContent value="shortcuts">
+              <KeyboardShortcutsTab />
+            </TabsContent>
+            <TabsContent value="issue">
+              <IssueTab />
+            </TabsContent>
+            <TabsContent value="chat">
+              <ChatTab />
+            </TabsContent>
+            <TabsContent value="notifications">
+              <NotificationsTab />
+            </TabsContent>
+            {/* Second factor, recovery codes and the person's own sessions
+                (#391). Account-scoped, not workspace-scoped: a factor protects
+                the ACCOUNT, and it would be wrong to reach it through whichever
+                workspace happens to be open. */}
+            <TabsContent value="security">
+              <SecurityTab />
+            </TabsContent>
+            <TabsContent value="tokens">
+              <TokensTab />
+            </TabsContent>
+            <TabsContent value="workspace">
+              <WorkspaceTab />
+            </TabsContent>
+            <TabsContent value="repositories">
+              <RepositoriesTab />
+            </TabsContent>
+            <TabsContent value="integrations">
+              <IntegrationsTab />
+            </TabsContent>
+            <TabsContent value="labs">
+              <LabsTab />
+            </TabsContent>
+            <TabsContent value="members">
+              <MembersTab />
+            </TabsContent>
+            <TabsContent value="labels">
+              <LabelsTab />
+            </TabsContent>
+            <TabsContent value="properties">
+              <PropertiesTab />
+            </TabsContent>
+            {/* The workspace MCP library. Every member may see the inventory —
+                it carries no credential material and an agent owner needs to
+                know what is available to assign — so this tab is not gated on
+                the admin role; the write affordances inside it are. */}
+            <TabsContent value="mcp">
+              <McpTab wsId={workspace?.id ?? ''} />
+            </TabsContent>
+            {canManageWorkspace && (
+              <TabsContent value="admin">
+                <AdminTab />
+              </TabsContent>
+            )}
+            {/* Mounted whenever 'deployment' is the active tab (see validTabs
+                above), not only for a confirmed admin: it is what shows the
+                loading and no-access states instead of a silent fallback. */}
+            {activeTab === 'deployment' && (
+              <TabsContent value="deployment">
+                {isDeploymentAdminsLoading ? (
+                  <DeploymentTabSkeleton />
+                ) : isDeploymentAdmin ? (
+                  <DeploymentTab />
+                ) : (
+                  <DeploymentNoAccess />
+                )}
+              </TabsContent>
+            )}
+            {extraAccountTabs?.map((tab) => (
+              <TabsContent key={tab.value} value={tab.value}>
+                {tab.content}
+              </TabsContent>
+            ))}
+          </div>
+        </div>
+      </Tabs>
+    </div>
   );
 }
 

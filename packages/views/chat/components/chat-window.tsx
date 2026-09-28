@@ -1172,7 +1172,7 @@ function SessionDropdown({
             <div className="flex shrink-0 items-center">
               <div className="flex h-7 items-center justify-end gap-1.5 text-xs text-muted-foreground group-hover/history-row:hidden">
                 {isRunning && <Loader2 className="size-3 animate-spin" />}
-                {showCompleted && !isRunning && <Check className="size-3 text-emerald-500" />}
+                {showCompleted && !isRunning && <Check className="size-3 text-success" />}
                 {showUnread && !isRunning && !showCompleted && (
                   <span
                     aria-label={t(($) => $.window.unread)}

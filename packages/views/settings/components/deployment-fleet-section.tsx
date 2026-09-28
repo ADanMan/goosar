@@ -225,7 +225,7 @@ function FleetRow({ machine, heartbeat }: { machine: DeploymentFleetMachine; hea
           aria-hidden="true"
           className={
             machine.online === true
-              ? 'size-2 shrink-0 rounded-full bg-emerald-500'
+              ? 'size-2 shrink-0 rounded-full bg-success'
               : 'size-2 shrink-0 rounded-full bg-muted-foreground'
           }
         />

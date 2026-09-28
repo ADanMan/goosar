@@ -409,7 +409,7 @@ function SlackAgentBotStatusRow({
       )}
       data-testid="slack-agent-bot-status"
     >
-      <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+      <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-success" />
       <span className="truncate">{t(($) => $.slack.agent_bot_connected_label)}</span>
       <ChevronRight className="ml-auto h-3.5 w-3.5 shrink-0" />
     </button>
@@ -449,7 +449,7 @@ function SlackAgentBotConnectedBadge({
     <div className={cn('space-y-2', className)} data-testid="slack-agent-bot-connected">
       <div className="flex items-center justify-between gap-3">
         <span className="inline-flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-          <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+          <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-success" />
           <span className="truncate">{t(($) => $.slack.agent_bot_connected_label)}</span>
         </span>
         <Button
