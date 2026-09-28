@@ -902,7 +902,7 @@ function ClassComposition({
           <li key={row.failureClass} className="flex items-center gap-1.5">
             <span
               aria-hidden
-              className="h-2 w-2 shrink-0 rounded-[2px]"
+              className="h-2 w-2 shrink-0 rounded-xs"
               style={{ backgroundColor: FAILURE_CLASS_COLOR[row.failureClass] }}
             />
             <span className="text-xs">{classLabel(row.failureClass)}</span>
@@ -926,7 +926,7 @@ function ReasonList({ rows }: { rows: FailureReasonRow[] }) {
           <span className="flex min-w-0 items-center gap-2">
             <span
               aria-hidden
-              className="h-2 w-2 shrink-0 rounded-[2px]"
+              className="h-2 w-2 shrink-0 rounded-xs"
               style={{ backgroundColor: FAILURE_CLASS_COLOR[row.failureClass] }}
             />
             <code className="truncate text-xs text-muted-foreground">{row.reason}</code>

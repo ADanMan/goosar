@@ -5,8 +5,8 @@
 //    Tailwind palette steps (bg-red-500) are
 //    rejected in component code under packages/** and apps/web/features/**
 //    (plus the desktop renderer). Colours come from tokens.css via var(--…).
-// 2. Arbitrary type sizes: `text-[…px|rem]` and text-4xl…9xl are rejected;
-//    the scale is --text-2xs…--text-3xl in tokens.css.
+// 2. Arbitrary type sizes and radii: `text-[…px|rem]`, text-4xl…9xl and
+//    `rounded-[…]` are rejected; the scales live in tokens.css.
 // 3. Token contrast: parses packages/ui/styles/tokens.css, resolves the
 //    light (:root) and dark (.dark) themes and checks every declared
 //    foreground/background pair against WCAG 2.2 AA — 4.5:1 for text,
@@ -82,6 +82,8 @@ const HEX = /(?<=["'`\[(:\s,])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4}
 const FN = /\b(?:rgba?|hsla?|oklch|oklab|lab|lch)\(\s*[\d.]/g;
 const TEXT_ARB = /\btext-\[\d+(?:\.\d+)?(?:px|rem|em)\]/g;
 const TEXT_BIG = /\btext-(?:[4-9])xl\b/g;
+// Radii come from the --radius-* ramp (rounded-xs…4xl, rounded-full).
+const RADIUS_ARB = /\brounded(?:-[trblse]{1,2})?-\[(?!inherit\])[^\]]+\]/g;
 // Raw Tailwind palette steps bypass the theme (no dark pair, no contrast
 // guarantee): bg-red-500, text-emerald-600/80 …
 const RAW_PALETTE =
@@ -108,6 +110,7 @@ for (const d of SCAN_DIRS) {
       }
       for (const m of line.matchAll(TEXT_ARB)) problems.push(`${rel}:${i + 1}: произвольный размер ${m[0]}`);
       for (const m of line.matchAll(TEXT_BIG)) problems.push(`${rel}:${i + 1}: размер вне шкалы ${m[0]}`);
+      for (const m of line.matchAll(RADIUS_ARB)) problems.push(`${rel}:${i + 1}: произвольный радиус ${m[0]}`);
     });
   }
 }

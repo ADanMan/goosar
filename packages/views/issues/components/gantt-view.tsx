@@ -353,7 +353,7 @@ function ScheduledRow({
                     href={p.issueDetail(issue.id)}
                     className={cn(
                       'absolute top-1/2 -translate-y-1/2 transition-opacity hover:opacity-90',
-                      bar.isMarker ? 'h-3 w-3 rotate-45 rounded-[2px]' : 'h-5 rounded-md',
+                      bar.isMarker ? 'h-3 w-3 rotate-45 rounded-xs' : 'h-5 rounded-md',
                       STATUS_BAR_BG[issue.status],
                       inverted && 'ring-2 ring-destructive ring-offset-1 ring-offset-background',
                     )}
