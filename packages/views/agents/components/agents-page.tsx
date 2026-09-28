@@ -185,11 +185,16 @@ function PageHeaderBar({
   onCreate,
   wsId,
   runtimeConnectExtras,
+  hideNewAgentAction,
 }: {
   totalCount: number;
   onCreate: () => void;
   wsId: string;
   runtimeConnectExtras?: RuntimeConnectLauncherExtras;
+  // While the empty state is shown, its own body already carries the
+  // primary "new agent" CTA — showing the same action in the header too
+  // duplicates it (T-033, docs/33-ux-review.md).
+  hideNewAgentAction?: boolean;
 }) {
   const { t, i18n } = useT('agents');
   return (
@@ -207,11 +212,13 @@ function PageHeaderBar({
           {/* R-16c: an agent is useless without a machine to run on, so the
               way to add one lives on the page that lists them. */}
           <RuntimeConnectButton wsId={wsId} extras={runtimeConnectExtras} />
-          <CollectionPageHeaderAction
-            icon={Plus}
-            label={t(($) => $.page.new_agent)}
-            onClick={onCreate}
-          />
+          {!hideNewAgentAction && (
+            <CollectionPageHeaderAction
+              icon={Plus}
+              label={t(($) => $.page.new_agent)}
+              onClick={onCreate}
+            />
+          )}
         </>
       }
     />
@@ -852,6 +859,7 @@ export function AgentsPage({ runtimeConnectExtras }: AgentsPageProps = {}) {
         onCreate={() => navigation.push(paths.newAgent())}
         wsId={wsId}
         runtimeConnectExtras={runtimeConnectExtras}
+        hideNewAgentAction={showEmpty}
       />
 
       {isLoading || (!showEmpty && !listReady) ? (

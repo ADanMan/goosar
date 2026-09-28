@@ -917,37 +917,47 @@ export function ModeChooser({ onBlank, onAI }: { onBlank: () => void; onAI: () =
           </p>
         </div>
         <div className="mx-auto mt-9 grid max-w-3xl gap-4 md:grid-cols-2">
-          {modes.map(({ icon: Icon, title, description, action, recommended }) => (
-            <button
-              key={title}
-              type="button"
-              onClick={action}
-              className={cn(
-                'group relative flex min-h-56 flex-col items-start rounded-xl border bg-card p-5 text-left',
-                'transition-[border-color,background-color,transform] hover:-translate-y-0.5 hover:border-primary/40 hover:bg-accent/30',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                recommended && 'border-primary/30 bg-primary/[0.025]',
-              )}
-            >
-              {recommended && (
-                <span className="absolute right-4 top-4 rounded-full bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary">
-                  {t(($) => $.creation_studio.recommended)}
+          {modes.map(({ icon: Icon, title, description, action, recommended }, index) => {
+            // Без aria-label весь текст карточки (заголовок + описание +
+            // «Продолжить») озвучивается как одно длинное имя кнопки —
+            // даём короткое имя и выносим описание в aria-describedby.
+            const descriptionId = `agent-creation-mode-description-${index}`;
+            return (
+              <button
+                key={title}
+                type="button"
+                onClick={action}
+                aria-label={title}
+                aria-describedby={descriptionId}
+                className={cn(
+                  'group relative flex min-h-56 flex-col items-start rounded-xl border bg-card p-5 text-left',
+                  'transition-[border-color,background-color,transform] hover:-translate-y-0.5 hover:border-primary/40 hover:bg-accent/30',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  recommended && 'border-primary/30 bg-primary/[0.025]',
+                )}
+              >
+                {recommended && (
+                  <span className="absolute right-4 top-4 rounded-full bg-primary/10 px-2 py-1 text-[10px] font-medium text-primary">
+                    {t(($) => $.creation_studio.recommended)}
+                  </span>
+                )}
+                <span className="flex size-11 items-center justify-center rounded-lg bg-muted text-muted-foreground group-hover:text-foreground">
+                  <Icon className="size-5" aria-hidden="true" />
                 </span>
-              )}
-              <span className="flex size-11 items-center justify-center rounded-lg bg-muted text-muted-foreground group-hover:text-foreground">
-                <Icon className="size-5" aria-hidden="true" />
-              </span>
-              <span className="mt-7 text-base font-semibold">{title}</span>
-              <span className="mt-2 text-sm leading-6 text-muted-foreground">{description}</span>
-              <span className="mt-auto flex items-center gap-1 pt-5 text-xs font-medium text-foreground">
-                {t(($) => $.creation_studio.continue)}
-                <ChevronRight
-                  className="size-3.5 transition-transform group-hover:translate-x-0.5"
-                  aria-hidden="true"
-                />
-              </span>
-            </button>
-          ))}
+                <span className="mt-7 text-base font-semibold">{title}</span>
+                <span id={descriptionId} className="mt-2 text-sm leading-6 text-muted-foreground">
+                  {description}
+                </span>
+                <span className="mt-auto flex items-center gap-1 pt-5 text-xs font-medium text-foreground">
+                  {t(($) => $.creation_studio.continue)}
+                  <ChevronRight
+                    className="size-3.5 transition-transform group-hover:translate-x-0.5"
+                    aria-hidden="true"
+                  />
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </main>

@@ -808,11 +808,16 @@ export function SquadsPage() {
         title={t(($) => $.page.title)}
         count={squads.length}
         actions={
-          <CollectionPageHeaderAction
-            icon={Plus}
-            label={t(($) => $.page.new_button)}
-            onClick={() => useModalStore.getState().open('create-squad')}
-          />
+          // While the empty state is shown, its own body already carries
+          // the primary "new squad" CTA — showing the same action in the
+          // header too duplicates it (T-033, docs/33-ux-review.md).
+          squads.length === 0 ? undefined : (
+            <CollectionPageHeaderAction
+              icon={Plus}
+              label={t(($) => $.page.new_button)}
+              onClick={() => useModalStore.getState().open('create-squad')}
+            />
+          )
         }
       />
 
