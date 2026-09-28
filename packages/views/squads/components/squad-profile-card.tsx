@@ -10,6 +10,7 @@ import {
 } from '@goosar/core/workspace/queries';
 import { useWorkspacePaths } from '@goosar/core/paths';
 import { ActorAvatar as ActorAvatarBase } from '@goosar/ui/components/common/actor-avatar';
+import { Badge } from '@goosar/ui/components/ui/badge';
 import { Skeleton } from '@goosar/ui/components/ui/skeleton';
 import { ActorAvatar } from '../../common/actor-avatar';
 import { AppLink } from '../../navigation';
@@ -158,9 +159,9 @@ function MembersList({
               />
               <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
               {isLeader && (
-                <span className="max-w-[4rem] shrink-0 truncate rounded-md bg-warning/15 px-1 py-0.5 text-[10px] font-medium text-warning">
+                <Badge variant="warning" className="max-w-[4rem] shrink-0 truncate">
                   {t(($) => $.members_tab.leader_chip)}
-                </span>
+                </Badge>
               )}
               {m.member_type === 'member' && memberRole && (
                 <span className="max-w-[3.5rem] shrink-0 truncate text-muted-foreground">

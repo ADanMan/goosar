@@ -11,6 +11,7 @@ import { runtimeProfileListOptions } from '@goosar/core/runtimes';
 import { runtimeKeys, runtimeListOptions } from '@goosar/core/runtimes/queries';
 import { useWSEvent } from '@goosar/core/realtime';
 import { agentListOptions, memberListOptions } from '@goosar/core/workspace/queries';
+import { Badge } from '@goosar/ui/components/ui/badge';
 import { Button } from '@goosar/ui/components/ui/button';
 import { Skeleton } from '@goosar/ui/components/ui/skeleton';
 import { AppLink, useNavigation } from '../../navigation';
@@ -190,7 +191,7 @@ export function RuntimeDetailPage({
               </div>
               <div className="min-w-0 pt-0.5">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                  <h1 className="min-w-0 text-balance text-lg font-semibold tracking-tight sm:text-xl">
+                  <h1 className="min-w-0 text-balance text-xl font-semibold tracking-tight">
                     {machine.title}
                   </h1>
                   <span className="inline-flex items-center gap-1.5 text-xs">
@@ -198,9 +199,9 @@ export function RuntimeDetailPage({
                     {healthLabel(machine.health)}
                   </span>
                   {machine.isCurrent && (
-                    <span className="rounded bg-foreground px-1.5 py-0.5 text-[10px] font-medium text-background">
+                    <Badge variant="outline" className="border-transparent bg-foreground text-background">
                       {t(($) => $.machine.this_machine)}
-                    </span>
+                    </Badge>
                   )}
                 </div>
                 {machine.subtitle && (

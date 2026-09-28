@@ -14,6 +14,7 @@ import { resolvePublicFileUrl } from '@goosar/core/workspace/avatar-url';
 import { runtimeListOptions } from '@goosar/core/runtimes/queries';
 import { useWorkspacePaths } from '@goosar/core/paths';
 import { ActorAvatar as ActorAvatarBase } from '@goosar/ui/components/common/actor-avatar';
+import { Badge } from '@goosar/ui/components/ui/badge';
 import { Skeleton } from '@goosar/ui/components/ui/skeleton';
 import { AppLink } from '../../navigation';
 import { HealthIcon } from '../../runtimes/components/shared';
@@ -82,9 +83,9 @@ export function AgentProfileCard({ agentId }: AgentProfileCardProps) {
             <p className="truncate text-sm font-semibold">{agent.name}</p>
             {!isArchived && <VisibilityBadge value={agent.visibility} compact />}
             {isArchived && (
-              <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              <Badge variant="outline" className="border-transparent bg-muted text-muted-foreground">
                 {t(($) => $.row.archived)}
-              </span>
+              </Badge>
             )}
           </div>
           {!isArchived && <AgentAvailabilityLine wsId={wsId} agentId={agent.id} />}

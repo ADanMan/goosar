@@ -31,6 +31,7 @@ import {
   type RuntimeAvailability,
 } from '@goosar/core/runtimes';
 import { useWorkspacePaths } from '@goosar/core/paths';
+import { Badge } from '@goosar/ui/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -174,15 +175,16 @@ function RuntimeKindBadge({ runtime }: { runtime: AgentRuntime }) {
   const { t } = useT('runtimes');
   const isCustom = !!runtime.profile_id;
   return (
-    <span
+    <Badge
+      variant="outline"
       className={
         isCustom
-          ? 'inline-flex shrink-0 items-center rounded bg-info/10 px-1 text-[10px] font-medium text-info'
-          : 'inline-flex shrink-0 items-center rounded bg-muted px-1 text-[10px] font-medium text-muted-foreground'
+          ? 'shrink-0 border-transparent bg-info/10 text-info'
+          : 'shrink-0 border-transparent bg-muted text-muted-foreground'
       }
     >
       {isCustom ? t(($) => $.list.badge_custom) : t(($) => $.list.badge_builtin)}
-    </span>
+    </Badge>
   );
 }
 
@@ -190,16 +192,16 @@ function PendingRuntimeBadge({ availability }: { availability: RuntimeAvailabili
   const { t } = useT('runtimes');
   if (availability === 'disabled') {
     return (
-      <span className="inline-flex shrink-0 items-center rounded bg-muted px-1 text-[10px] font-medium text-muted-foreground">
+      <Badge variant="outline" className="shrink-0 border-transparent bg-muted text-muted-foreground">
         {t(($) => $.list.badge_disabled)}
-      </span>
+      </Badge>
     );
   }
   if (availability === 'registering') {
     return (
-      <span className="inline-flex shrink-0 items-center rounded bg-warning/10 px-1 text-[10px] font-medium text-warning">
+      <Badge variant="warning" className="shrink-0">
         {t(($) => $.list.badge_registering)}
-      </span>
+      </Badge>
     );
   }
   return null;
@@ -212,10 +214,10 @@ function VisibilityBadge({ runtime }: { runtime: AgentRuntime }) {
     <Tooltip>
       <TooltipTrigger
         render={
-          <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-info/10 px-1 text-[10px] font-medium text-info">
+          <Badge variant="outline" className="shrink-0 border-transparent bg-info/10 text-info">
             <Globe className="h-2.5 w-2.5" />
             {t(($) => $.detail.visibility_label.public)}
-          </span>
+          </Badge>
         }
       />
       <TooltipContent>{t(($) => $.detail.visibility_hint.public)}</TooltipContent>

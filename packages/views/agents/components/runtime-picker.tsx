@@ -7,6 +7,7 @@ import { ActorAvatar } from '../../common/actor-avatar';
 import { runtimeDisplayName } from '@goosar/core/runtimes';
 import type { MemberWithUser, RuntimeDevice } from '@goosar/core/types';
 import { Popover, PopoverTrigger, PopoverContent } from '@goosar/ui/components/ui/popover';
+import { Badge } from '@goosar/ui/components/ui/badge';
 import { Label } from '@goosar/ui/components/ui/label';
 import { useT } from '../../i18n';
 import {
@@ -143,9 +144,9 @@ export function RuntimePicker({
                     : t(($) => $.create_dialog.runtime_none)}
               </span>
               {selectedRuntime?.runtime_mode === 'cloud' && (
-                <span className="shrink-0 rounded bg-info/10 px-1.5 py-0.5 text-xs font-medium text-info">
+                <Badge variant="outline" className="shrink-0 border-transparent bg-info/10 text-info">
                   {t(($) => $.create_dialog.runtime_cloud_badge)}
-                </span>
+                </Badge>
               )}
             </div>
             {selectedRuntime && (
@@ -230,15 +231,21 @@ export function RuntimePicker({
                               {runtimeRowLabel(device, machine.title)}
                             </span>
                             {device.runtime_mode === 'cloud' && (
-                              <span className="shrink-0 rounded bg-info/10 px-1.5 py-0.5 text-xs font-medium text-info">
+                              <Badge
+                                variant="outline"
+                                className="shrink-0 border-transparent bg-info/10 text-info"
+                              >
                                 {t(($) => $.create_dialog.runtime_cloud_badge)}
-                              </span>
+                              </Badge>
                             )}
                             {disabled && (
-                              <span className="shrink-0 inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              <Badge
+                                variant="outline"
+                                className="shrink-0 border-transparent bg-muted text-muted-foreground"
+                              >
                                 <Lock className="h-3 w-3" />
                                 {t(($) => $.create_dialog.runtime_private_badge)}
-                              </span>
+                              </Badge>
                             )}
                           </div>
                           <div className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">

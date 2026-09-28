@@ -8,6 +8,7 @@ import { useWorkspacePaths } from '@goosar/core/paths';
 import { effectiveConfigOptions } from '@goosar/core/workspace/effective-config';
 import { workspaceCapabilitiesOptions } from '@goosar/core/workspace/queries';
 import { cn } from '@goosar/ui/lib/utils';
+import { Badge } from '@goosar/ui/components/ui/badge';
 import { CollectionPageHeader } from '../layout/collection-page';
 import { WorkToolsSetupButton, type WorkToolsLauncherExtras } from '../onboarding/launchers';
 import { useNavigation } from '../navigation';
@@ -279,12 +280,13 @@ function ServiceBadges({ status }: { status: ServiceCredentialStatus }) {
   return (
     <span className="flex flex-wrap items-center gap-1.5">
       {adminLabel !== null ? (
-        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+        <Badge variant="outline" className="border-transparent bg-muted text-muted-foreground">
           {adminLabel}
-        </span>
+        </Badge>
       ) : null}
       {personalLabel !== null ? (
-        <span
+        <Badge
+          variant="outline"
           // "filled" only means the value is saved, not that it works — the
           // code tracks no separate "verified" state (nothing here calls a
           // service to check), so a plain success/green badge would claim
@@ -297,16 +299,15 @@ function ServiceBadges({ status }: { status: ServiceCredentialStatus }) {
               : undefined
           }
           className={cn(
-            'rounded-full px-2 py-0.5 text-[11px] font-medium',
             isPersonalActionable(status)
-              ? 'bg-warning/10 text-warning'
+              ? 'border-transparent bg-warning/10 text-warning'
               : status.personal === 'filled'
-                ? 'border border-dashed border-muted-foreground/40 bg-muted/60 text-muted-foreground'
-                : 'bg-muted text-muted-foreground',
+                ? 'border-dashed border-muted-foreground/40 bg-muted/60 text-muted-foreground'
+                : 'border-transparent bg-muted text-muted-foreground',
           )}
         >
           {personalLabel}
-        </span>
+        </Badge>
       ) : null}
     </span>
   );

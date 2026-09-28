@@ -11,6 +11,7 @@ import {
   runtimeRowLabel,
   type RuntimeMachine,
 } from '../../../runtimes/components/runtime-machines';
+import { Badge } from '@goosar/ui/components/ui/badge';
 import { Label } from '@goosar/ui/components/ui/label';
 import { CHIP_CLASS } from './chip';
 import { useT } from '../../../i18n';
@@ -329,15 +330,15 @@ export function RuntimePicker({
               <ProviderLogo provider={rt.provider} className="h-4 w-4 shrink-0" />
               <span className="min-w-0 flex-1 truncate text-sm font-medium">{label}</span>
               {rt.runtime_mode === 'cloud' && (
-                <span className="shrink-0 rounded bg-info/10 px-1 text-[10px] font-medium text-info">
+                <Badge variant="outline" className="shrink-0 border-transparent bg-info/10 text-info">
                   {t(($) => $.create_dialog.runtime_cloud_badge)}
-                </span>
+                </Badge>
               )}
               {locked && (
-                <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 text-[10px] font-medium text-muted-foreground">
+                <Badge variant="outline" className="shrink-0 border-transparent bg-muted text-muted-foreground">
                   <Lock className="h-2.5 w-2.5" />
                   {t(($) => $.create_dialog.runtime_private_badge)}
-                </span>
+                </Badge>
               )}
               <span
                 className={`h-1.5 w-1.5 shrink-0 rounded-full ${
@@ -373,9 +374,9 @@ export function RuntimePicker({
                 <div className="flex items-center gap-1.5">
                   <span className="truncate text-sm font-medium">{machine.title}</span>
                   {machine.mode === 'cloud' && (
-                    <span className="shrink-0 rounded bg-info/10 px-1 text-[10px] font-medium text-info">
+                    <Badge variant="outline" className="shrink-0 border-transparent bg-info/10 text-info">
                       {t(($) => $.create_dialog.runtime_cloud_badge)}
-                    </span>
+                    </Badge>
                   )}
                 </div>
                 <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">

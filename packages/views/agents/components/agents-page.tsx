@@ -29,6 +29,7 @@ import { useWorkspaceId } from '@goosar/core/hooks';
 import { useWorkspacePaths } from '@goosar/core/paths';
 import { agentListOptions, memberListOptions } from '@goosar/core/workspace/queries';
 import { runtimeDisplayLabel, runtimeListOptions } from '@goosar/core/runtimes';
+import { Badge } from '@goosar/ui/components/ui/badge';
 import { Button } from '@goosar/ui/components/ui/button';
 import { Checkbox } from '@goosar/ui/components/ui/checkbox';
 import {
@@ -327,9 +328,9 @@ function NameCell({ row }: { row: AgentListRow }) {
             </Tooltip>
           )}
           {isOwnedByMe && (
-            <span className="shrink-0 rounded bg-muted px-1 text-[10px] font-medium text-muted-foreground">
+            <Badge variant="outline" className="shrink-0 border-transparent bg-muted text-muted-foreground">
               {t(($) => $.row.you)}
-            </span>
+            </Badge>
           )}
         </div>
         {agent.description ? (

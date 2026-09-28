@@ -11,6 +11,7 @@ import { runtimeProfileListOptions } from '@goosar/core/runtimes';
 import { runtimeListOptions, runtimeKeys } from '@goosar/core/runtimes/queries';
 import { useWSEvent } from '@goosar/core/realtime';
 import { agentListOptions } from '@goosar/core/workspace/queries';
+import { Badge } from '@goosar/ui/components/ui/badge';
 import { Button } from '@goosar/ui/components/ui/button';
 import { Skeleton } from '@goosar/ui/components/ui/skeleton';
 import {
@@ -297,9 +298,9 @@ function MachineRow({ machine }: { machine: RuntimeMachine }) {
                 : t(($) => $.machine.metrics.local_daemon))}
           </span>
           {machine.isCurrent && (
-            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            <Badge variant="outline" className="shrink-0 border-transparent bg-muted text-muted-foreground">
               {t(($) => $.machine.this_machine)}
-            </span>
+            </Badge>
           )}
         </span>
       </span>

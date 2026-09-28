@@ -93,7 +93,7 @@ export function WebhookUrlField({ url, size = 'sm', actions }: WebhookUrlFieldPr
         aria-label={t(($) => $.trigger_row.copy_url)}
       >
         {copied ? (
-          <Check className={cn(s.icon, 'text-emerald-500')} />
+          <Check className={cn(s.icon, 'text-success')} />
         ) : (
           <Copy className={cn(s.icon, 'text-muted-foreground')} />
         )}

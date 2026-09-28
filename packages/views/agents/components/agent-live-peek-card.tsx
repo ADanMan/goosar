@@ -11,6 +11,7 @@ import { agentTaskSnapshotOptions, useAgentPresenceDetail } from '@goosar/core/a
 import { issueDetailOptions } from '@goosar/core/issues';
 import type { AgentTask } from '@goosar/core/types';
 import { AlertTriangle } from 'lucide-react';
+import { Badge } from '@goosar/ui/components/ui/badge';
 import { AppLink } from '../../navigation';
 import { useT, useTimeAgo } from '../../i18n';
 import { availabilityConfig, workloadConfig } from '../presence';
@@ -193,13 +194,10 @@ function LastActivityRow({
         <span className="inline-flex min-w-0 items-center gap-1 truncate">
           <span className="truncate">{timeAgo(task.completed_at)}</span>
           {task.status === 'failed' && (
-            <span
-              className="inline-flex items-center gap-0.5 rounded bg-warning/10 px-1 py-0.5 text-[10px] font-medium text-warning"
-              title={failedLabel}
-            >
+            <Badge variant="warning" className="shrink-0" title={failedLabel}>
               <AlertTriangle className="h-2.5 w-2.5" />
               {failedLabel}
-            </span>
+            </Badge>
           )}
         </span>
       ) : (

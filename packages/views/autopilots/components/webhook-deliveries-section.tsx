@@ -42,7 +42,7 @@ type StatusVisual = {
 
 const STATUS_VISUAL: Record<WebhookDeliveryStatus, StatusVisual> = {
   queued: { color: 'text-accent-beak', icon: Loader2, spin: true },
-  dispatched: { color: 'text-emerald-500', icon: CheckCircle2 },
+  dispatched: { color: 'text-success', icon: CheckCircle2 },
   rejected: { color: 'text-destructive', icon: ShieldOff },
   ignored: { color: 'text-muted-foreground', icon: Ban },
   failed: { color: 'text-destructive', icon: XCircle },
@@ -397,7 +397,7 @@ function CodeBlock({ label, value }: { label: string; value: string }) {
           onClick={handleCopy}
           className="flex items-center gap-1 rounded px-2 py-0.5 hover:bg-accent transition-colors"
         >
-          {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+          {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
           {copied ? t(($) => $.webhook_payload.copied_short) : t(($) => $.webhook_payload.copy)}
         </button>
       </div>

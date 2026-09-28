@@ -22,6 +22,7 @@ import {
   useCreateRuntimeProfile,
   useUpdateRuntimeProfile,
 } from '@goosar/core/runtimes';
+import { Badge } from '@goosar/ui/components/ui/badge';
 import { Button } from '@goosar/ui/components/ui/button';
 import {
   Dialog,
@@ -404,9 +405,9 @@ function CatalogRow({
             {label}
           </span>
           {disabled && (
-            <span className="shrink-0 rounded bg-muted px-1 text-[10px] font-medium text-muted-foreground">
+            <Badge variant="outline" className="shrink-0 border-transparent bg-muted text-muted-foreground">
               {t(($) => $.profiles.badge_disabled)}
-            </span>
+            </Badge>
           )}
         </span>
         {entry.kind === 'custom' && (

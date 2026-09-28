@@ -281,7 +281,7 @@ function runStatusDotClass(status: string | null | undefined): string {
   switch (status) {
     case 'completed':
     case 'issue_created':
-      return 'bg-emerald-500';
+      return 'bg-success';
     case 'failed':
       return 'bg-destructive';
     case 'skipped':
