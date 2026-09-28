@@ -1,0 +1,2985 @@
+openapi: 3.1.0
+info:
+  title: Goosar API — Part D (Agent Templates, Agent Builder, Skills, Dashboard, Runtimes, Cloud Runtime, Chat, Inbox, Notification Preferences)
+  version: 1.0.0
+  description: >
+    Спецификация покрывает маршруты router.go со строки 1061 до конца файла.
+    Общие компоненты (Error, User, Workspace, Member, схемы авторизации,
+    заголовок workspace) и схемы Agent/Issue/Squad/Project определены в
+    других частях контракта и здесь только referenced.
+
+paths:
+  # ---------------------------------------------------------------------
+  # Agent Templates
+  # ---------------------------------------------------------------------
+  /api/agent-templates:
+    get:
+      operationId: listAgentTemplates
+      summary: Список встроенных шаблонов агентов
+      description: >
+        Возвращает каталог шаблонов агентов, зашитых в поставку сервера
+        (не хранятся в БД воркспейса). Каждый шаблон описывает набор
+        предустановленных навыков (skills), которые будут импортированы или
+        переиспользованы при создании агента из шаблона.
+      tags: [AgentTemplates]
+      security:
+        - cookieAuth: [ ]
+        - bearerAuth: [ ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: Список шаблонов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentTemplateSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/agent-templates/{slug}:
+    get:
+      operationId: getAgentTemplate
+      summary: Детали шаблона агента по slug
+      description: >
+        Возвращает полное описание шаблона, включая системную инструкцию
+        (instructions), которая не входит в сводный список.
+      tags: [AgentTemplates]
+      security:
+        - cookieAuth: [ ]
+        - bearerAuth: [ ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: Шаблон найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTemplate'
+        '404':
+          description: Шаблон с таким slug не зарегистрирован
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ---------------------------------------------------------------------
+  # Agent Builder
+  # ---------------------------------------------------------------------
+  /api/agent-builder/sessions:
+    post:
+      operationId: createAgentBuilderSession
+      summary: Начать диалоговую сессию конструктора агента
+      description: >
+        Создаёт служебного системного агента "Agent Builder" (kind=system,
+        system_key вида agent_builder:<flowId>) и обычную чат-сессию, привязанную
+        к нему. Пользователь далее ведёт диалог через обычные чат-эндпоинты
+        (POST /api/chat/sessions/{sessionId}/messages); Agent Builder отвечает
+        черновиком конфигурации агента (JSON-блок в тексте ответа), но сам
+        никаких агентов не создаёт — это делает клиент отдельным вызовом после
+        подтверждения черновика пользователем.
+        Runtime, на котором будет исполняться диалог, должен быть в статусе
+        online и быть публичным либо принадлежать вызывающему пользователю
+        (или тот должен быть owner/admin воркспейса).
+      tags: [AgentBuilder]
+      security:
+        - cookieAuth: [ ]
+        - bearerAuth: [ ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      x-roles: [owner, admin, member]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [runtime_id]
+              properties:
+                runtime_id: { type: string, format: uuid }
+                model: { type: string, description: "Необязательный id модели для стартовой конфигурации диалога" }
+      responses:
+        '201':
+          description: Сессия конструктора создана
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_id: { type: string, format: uuid }
+                  builder_agent_id: { type: string, format: uuid }
+                  runtime_id: { type: string, format: uuid }
+        '400':
+          description: "runtime_id отсутствует или не UUID / тело запроса некорректно"
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Error' } }
+        '403':
+          description: "runtime приватный и не принадлежит пользователю"
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Error' } }
+        '404':
+          description: "воркспейс не найден (гонка удаления во время блокировки)"
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Error' } }
+        '409':
+          description: "runtime не в статусе online"
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Error' } }
+
+  /api/agent-builder/sessions/{sessionId}/runtime:
+    patch:
+      operationId: switchAgentBuilderRuntime
+      summary: Переключить runtime активной сессии конструктора агента
+      description: >
+        Меняет runtime у системного агента, обслуживающего конкретную сессию
+        Agent Builder. Разрешено только пока сессия active и у неё нет
+        незавершённой (pending) задачи — иначе нужно сперва остановить текущий
+        ответ. Целевой сессией должен владеть вызывающий пользователь, а её
+        агент обязан быть распознан как carrier конструктора
+        (kind=system и system_key с префиксом agent_builder:).
+      tags: [AgentBuilder]
+      security:
+        - cookieAuth: [ ]
+        - bearerAuth: [ ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      x-roles: [owner, admin, member]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [runtime_id]
+              properties:
+                runtime_id: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Runtime переключён
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  runtime_id: { type: string, format: uuid }
+        '400':
+          description: "runtime_id отсутствует, либо сессия архивная (status != active)"
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Error' } }
+        '404':
+          description: "сессия не найдена / не принадлежит пользователю / не является сессией конструктора"
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Error' } }
+        '409':
+          description: "у сессии есть незавершённая задача, либо runtime offline"
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Error' } }
+
+  # ---------------------------------------------------------------------
+  # Skills
+  # ---------------------------------------------------------------------
+  /api/skills:
+    get:
+      operationId: listSkills
+      summary: Список навыков (skills) воркспейса
+      description: Краткие сведения без содержимого SKILL.md (без поля content).
+      tags: [Skills]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/SkillSummary' } }
+    post:
+      operationId: createSkill
+      summary: Создать навык вручную
+      description: >
+        Создаёт новый Skill вместе с опциональным набором вспомогательных
+        файлов. Путь каждого файла проверяется на отсутствие абсолютных
+        путей и выхода за пределы каталога навыка (`..`). Имя навыка уникально
+        в пределах воркспейса.
+      tags: [Skills]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                description: { type: string }
+                content: { type: string, description: "Содержимое SKILL.md" }
+                config: { type: object }
+                files:
+                  type: array
+                  items: { $ref: '#/components/schemas/SkillFileInput' }
+      x-events:
+        - event: "skill:created"
+          payload: "{ skill: SkillWithFiles }"
+      responses:
+        '201':
+          description: Навык создан
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/SkillWithFiles' } }
+        '400':
+          description: "имя пустое или путь файла некорректен"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: "навык с таким именем уже существует в воркспейсе"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/skills/search:
+    get:
+      operationId: searchSkills
+      summary: Поиск навыков во внешнем каталоге сообщества
+      description: >
+        Проксирует поисковый запрос во внешний публичный каталог навыков
+        (по домену clawhub.ai). Источник может быть отключён администратором
+        деплоя (403 source_disabled). Для первых 10 найденных кандидатов
+        дополнительно подтягивается счётчик установок.
+      tags: [Skills]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: Найденные кандидаты
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/SkillSearchCandidate' } }
+        '400':
+          description: "параметр q отсутствует"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '403':
+          description: "источник поиска отключён на этом деплое"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { code: { type: string, enum: [source_disabled] }, error: { type: string } }
+        '502':
+          description: "внешний каталог недоступен"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { code: { type: string, enum: [upstream_unavailable] }, error: { type: string } }
+
+  /api/skills/import:
+    post:
+      operationId: importSkill
+      summary: Импортировать навык из внешнего источника или архива
+      description: >
+        Два режима запроса:
+        1) `application/json` с полем `url` — навык подтягивается по сети
+        из одного из разрешённых источников (домены clawhub.ai, skills.sh,
+        github.com; администратор деплоя может отключить любой источник
+        по отдельности — тогда 403). SKILL.md обязателен и не должен быть
+        пустым, иначе импорт отклоняется.
+        2) `multipart/form-data` с полем `file` — навык распаковывается
+        из ZIP/.skill архива, загруженного пользователем (до 16 МБ), также
+        обязателен SKILL.md внутри архива.
+        В обоих случаях бинарные файлы (по расширению) и LICENSE-файлы
+        пропускаются; импорт ограничен 256 файлами и 8 МБ суммарно,
+        отдельный файл — не более 1 МБ.
+        Поведение при конфликте имени задаётся `on_conflict`
+        (`fail` по умолчанию, `overwrite`, `rename`, `skip`); если это поле
+        передано явно (даже пустой строкой не считается), ответ
+        оборачивается в структурированный `SkillImportResult` вместо голого
+        Skill.
+      tags: [Skills]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, description: "Ссылка на навык (clawhub.ai, skills.sh или github.com)" }
+                on_conflict:
+                  type: string
+                  enum: [fail, overwrite, rename, skip]
+                  default: fail
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary, description: "ZIP/.skill архив с SKILL.md" }
+                on_conflict: { type: string, enum: [fail, overwrite, rename, skip] }
+      x-events:
+        - event: "skill:created"
+          payload: "{ skill: SkillWithFiles } — при status=created"
+        - event: "skill:updated"
+          payload: "{ skill: SkillWithFiles } — при status=updated (overwrite)"
+      responses:
+        '201':
+          description: "Навык создан (status=created либо тело — голый Skill, если on_conflict не передавался)"
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/SkillWithFiles'
+                  - $ref: '#/components/schemas/SkillImportResult'
+        '200':
+          description: "Импорт завершился без создания новой записи: updated / skipped / conflict"
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/SkillImportResult' } }
+        '400':
+          description: "невалидный url/архив, недопустимый on_conflict, отсутствует SKILL.md"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '403':
+          description: "источник импорта отключён администратором деплоя"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: "конфликт имени при on_conflict=fail (или не передан) без структурированного ответа"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  existing_skill: { $ref: '#/components/schemas/ExistingSkillIdentity' }
+        '413':
+          description: "превышен лимит размера/количества файлов импорта"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '502':
+          description: "источник вернул ошибку"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '503':
+          description: "источник временно недоступен (например, недоступен GitHub API)"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '504':
+          description: "тайм-аут получения файлов источника (45 секунд)"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/skills/{id}:
+    get:
+      operationId: getSkill
+      summary: Получить навык вместе с файлами
+      tags: [Skills]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillWithFiles' } } }
+        '404':
+          description: "навык не найден в воркспейсе"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    put:
+      operationId: updateSkill
+      summary: Обновить навык
+      description: >
+        Обновляет только переданные поля (частичное обновление). Если поле
+        `files` передано (даже пустым списком), все существующие файлы
+        навыка удаляются и заменяются переданными; файл с зарезервированным
+        путём (SKILL.md) в списке файлов игнорируется — основное содержимое
+        меняется только через поле `content`. Если `files` не передано,
+        текущие файлы возвращаются в ответе без изменений.
+        Управлять навыком может только его создатель либо owner/admin
+        воркспейса.
+      tags: [Skills]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      x-roles: [owner, admin, "member (только создатель навыка)"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+                content: { type: string }
+                config: { type: object }
+                files:
+                  type: array
+                  items: { $ref: '#/components/schemas/SkillFileInput' }
+      x-events:
+        - event: "skill:updated"
+          payload: "{ skill: SkillWithFiles }"
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillWithFiles' } } }
+        '400':
+          description: "путь файла некорректен"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '403':
+          description: "вызывающий не создатель навыка и не owner/admin"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "навык не найден"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: "конфликт имени с другим навыком"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    delete:
+      operationId: deleteSkill
+      summary: Удалить навык
+      description: >
+        Удаляет навык вместе с присвоенными ему метками (label assignments).
+        Не отвязывает навык от агентов заранее — это должно обеспечиваться
+        каскадом на уровне БД (вне зоны ответственности этой спецификации).
+      tags: [Skills]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      x-roles: [owner, admin, "member (только создатель навыка)"]
+      x-events:
+        - event: "skill:deleted"
+          payload: "{ skill_id: string }"
+      responses:
+        '204':
+          description: Удалено
+        '403':
+          description: "вызывающий не создатель навыка и не owner/admin"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "навык не найден"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/skills/{id}/labels:
+    get:
+      operationId: listSkillLabels
+      summary: Список меток, привязанных к навыку
+      description: >
+        Доступно только если в воркспейсе включена фича resource labels,
+        иначе 404 (фича считается несуществующим ресурсом).
+      tags: [Skills]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  labels: { type: array, items: { $ref: '#/components/schemas/SkillLabel' } }
+        '404':
+          description: "фича labels отключена, либо навык не найден"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    post:
+      operationId: attachSkillLabel
+      summary: Привязать метку ресурса типа skill к навыку
+      description: >
+        Метка должна существовать в воркспейсе и иметь resource_type=skill.
+        В ответ на успех возвращается тот же список, что и listSkillLabels.
+      tags: [Skills]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      x-roles: [owner, admin, "member (только создатель навыка)"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label_id]
+              properties: { label_id: { type: string, format: uuid } }
+      x-events:
+        - event: "label:updated"
+          payload: "{ label: SkillLabel }"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { labels: { type: array, items: { $ref: '#/components/schemas/SkillLabel' } } }
+        '400':
+          description: "label_id отсутствует"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '403':
+          description: "недостаточно прав на управление навыком"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "фича отключена, метка или навык не найдены, либо метка не resource_type=skill"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/skills/{id}/labels/{labelId}:
+    delete:
+      operationId: detachSkillLabel
+      summary: Отвязать метку от навыка
+      tags: [Skills]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: labelId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, "member (только создатель навыка)"]
+      x-events:
+        - event: "label:updated"
+          payload: "{ label_id: string, resource_type: \"skill\" }"
+      responses:
+        '200':
+          description: "OK — тело как у listSkillLabels"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { labels: { type: array, items: { $ref: '#/components/schemas/SkillLabel' } } }
+        '403':
+          description: "недостаточно прав"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "фича отключена или навык не найден"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/skills/{id}/files:
+    get:
+      operationId: listSkillFiles
+      summary: Список вспомогательных файлов навыка
+      tags: [Skills]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/SkillFile' } } } }
+        '404':
+          description: "навык не найден"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    put:
+      operationId: upsertSkillFile
+      summary: Создать или заменить один файл навыка
+      description: >
+        Путь SKILL.md зарезервирован под основное содержимое навыка и не
+        может быть создан/заменён через этот эндпоинт (400).
+      tags: [Skills]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, "member (только создатель навыка)"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SkillFileInput' }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/SkillFile' } } }
+        '400':
+          description: "путь некорректен либо это зарезервированный путь SKILL.md"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '403':
+          description: "недостаточно прав"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "навык не найден"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/skills/{id}/files/{fileId}:
+    delete:
+      operationId: deleteSkillFile
+      summary: Удалить один файл навыка
+      tags: [Skills]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: fileId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, "member (только создатель навыка)"]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: object } } }
+        '403':
+          description: "недостаточно прав"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "навык или файл не найден, либо файл принадлежит другому навыку"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  # ---------------------------------------------------------------------
+  # Dashboard
+  # ---------------------------------------------------------------------
+  /api/dashboard/usage/daily:
+    get:
+      operationId: getDashboardUsageDaily
+      summary: Дневная статистика токенов/стоимости по провайдеру и модели
+      tags: [Dashboard]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - $ref: '#/components/parameters/DashboardDays'
+        - $ref: '#/components/parameters/DashboardTz'
+        - $ref: '#/components/parameters/DashboardProjectId'
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/DashboardUsageDaily' } } } }
+
+  /api/dashboard/usage/by-agent:
+    get:
+      operationId: getDashboardUsageByAgent
+      summary: Статистика токенов/стоимости по агенту
+      tags: [Dashboard]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - $ref: '#/components/parameters/DashboardDays'
+        - $ref: '#/components/parameters/DashboardTz'
+        - $ref: '#/components/parameters/DashboardProjectId'
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/DashboardUsageByAgent' } } } }
+
+  /api/dashboard/agent-runtime:
+    get:
+      operationId: getDashboardAgentRunTime
+      summary: Суммарное время выполнения задач по агенту
+      tags: [Dashboard]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - $ref: '#/components/parameters/DashboardDays'
+        - $ref: '#/components/parameters/DashboardTz'
+        - $ref: '#/components/parameters/DashboardProjectId'
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/DashboardAgentRunTime' } } } }
+
+  /api/dashboard/runtime/daily:
+    get:
+      operationId: getDashboardRunTimeDaily
+      summary: Суммарное время выполнения задач по дням
+      tags: [Dashboard]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - $ref: '#/components/parameters/DashboardDays'
+        - $ref: '#/components/parameters/DashboardTz'
+        - $ref: '#/components/parameters/DashboardProjectId'
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/DashboardRunTimeDaily' } } } }
+
+  /api/dashboard/failures/daily:
+    get:
+      operationId: getDashboardFailuresDaily
+      summary: Количество провалившихся задач по дням и причине
+      tags: [Dashboard]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - $ref: '#/components/parameters/DashboardDays'
+        - $ref: '#/components/parameters/DashboardTz'
+        - $ref: '#/components/parameters/DashboardProjectId'
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/DashboardFailureDaily' } } } }
+
+  /api/dashboard/failures/by-agent:
+    get:
+      operationId: getDashboardFailuresByAgent
+      summary: Количество провалившихся задач по агенту и причине
+      description: >
+        В отличие от остальных дашборд-эндпоинтов использует "точную" границу
+        `since` (days трактуется буквально, без дополнительного дня запаса).
+      tags: [Dashboard]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - $ref: '#/components/parameters/DashboardDays'
+        - $ref: '#/components/parameters/DashboardTz'
+        - $ref: '#/components/parameters/DashboardProjectId'
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/DashboardFailureByAgent' } } } }
+
+  # ---------------------------------------------------------------------
+  # Runtimes
+  # ---------------------------------------------------------------------
+  /api/runtimes:
+    get:
+      operationId: listRuntimes
+      summary: Список runtime-сред (daemon-окружений), зарегистрированных в воркспейсе
+      description: >
+        Runtime — это подключённое к воркспейсу daemon-окружение (десктопное
+        приложение или облачный воркер), способное исполнять задачи агентов.
+        `?owner=me` сужает список до runtime, которыми владеет вызывающий
+        пользователь.
+      tags: [Runtimes]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - name: owner
+          in: query
+          schema: { type: string, enum: [me] }
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Runtime' } } } }
+
+  /api/runtimes/{runtimeId}:
+    patch:
+      operationId: updateRuntime
+      summary: Изменить видимость и/или отображаемое имя runtime
+      description: >
+        Изменять runtime может его владелец либо owner/admin воркспейса.
+        `custom_name` — человекочитаемое имя, максимум 100 символов;
+        пустая строка сбрасывает имя на значение по умолчанию (name).
+        Если `apply_to_machine=true` и у runtime есть daemon_id, имя
+        применяется сразу ко всем runtime, зарегистрированным тем же
+        daemon-процессом (той же физической машиной), в рамках воркспейса;
+        для не-owner/admin пользователя это ограничивается только теми
+        экземплярами daemon, которыми он сам владеет.
+      tags: [Runtimes]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: runtimeId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, "member (только владелец runtime)"]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                visibility: { type: string, enum: [private, public] }
+                custom_name: { type: string, maxLength: 100 }
+                apply_to_machine: { type: boolean, default: false }
+      x-events:
+        - event: "daemon:register"
+          payload: "{ action: \"update\" } — сигнал всем клиентам workspace перечитать список runtime"
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/Runtime' } } }
+        '400':
+          description: "visibility не private/public, либо custom_name длиннее 100 символов, либо тело не JSON"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '403':
+          description: "вызывающий не владелец runtime и не owner/admin"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "runtime не найден"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    delete:
+      operationId: deleteRuntime
+      summary: Удалить runtime
+      description: >
+        Удаление напрямую запрещено (409, код `runtime_profile_instance_delete_unsupported`),
+        если runtime порождён живым runtime-профилем — профиль удаляется
+        отдельно. Также запрещено (409, код `runtime_has_active_agents`),
+        если на runtime есть неархивные агенты — тело ответа перечисляет их
+        (см. `runtime_has_active_agents`), а также если есть активные отряды
+        (squads), у которых лидер — архивный агент этого runtime (обычная
+        текстовая ошибка без кода). При отсутствии препятствий удаление
+        каскадно останавливает автопилоты, чьи агенты-исполнители архивны
+        на этом runtime, удаляет привязанные к архивным агентам squads,
+        invocation targets, интеграции каналов, закреплённые в чате агенты,
+        назначения меток, черновики чата, MCP-подключения, сами архивные
+        и системные агенты runtime, и затем сам runtime.
+      tags: [Runtimes]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: runtimeId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, "member (только владелец runtime)"]
+      x-events:
+        - event: "daemon:register"
+          payload: "{ action: \"delete\" }"
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: object, properties: { status: { type: string, enum: [ok] } } } } }
+        '403':
+          description: "вызывающий не владелец runtime и не owner/admin"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "runtime не найден"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: "runtime порождён профилем, либо есть активные агенты/отряды"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  code: { type: string, enum: [runtime_profile_instance_delete_unsupported, runtime_has_active_agents] }
+                  active_agents:
+                    type: array
+                    description: "заполняется только при code=runtime_has_active_agents; элементы схемы Agent (см. часть C)"
+                    items: { type: object }
+
+  /api/runtimes/{runtimeId}/mcp-verified:
+    post:
+      operationId: reportRuntimeMcpVerified
+      summary: Зафиксировать результат проверки MCP-прокси runtime
+      description: >
+        Принимает от клиента (обычно от самого daemon-приложения, через
+        обычную сессию пользователя, а не через daemonAuth) результат
+        самопроверки доступности MCP-серверов на runtime и держит его
+        в памяти процесса сервера (не персистится в БД, не переживает
+        рестарт). `status` — либо `ok`, либо `proxy_unreachable`, либо
+        `mcp_failed(<причина>)`.
+      tags: [Runtimes]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: runtimeId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, member]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [server, status]
+              properties:
+                server: { type: string }
+                status: { type: string, description: "ok | proxy_unreachable | mcp_failed(<reason>)" }
+      responses:
+        '204':
+          description: Принято
+        '400':
+          description: "server/status пустые, либо status не соответствует допустимому формату"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "runtime не найден"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/runtimes/{runtimeId}/usage:
+    get:
+      operationId: getRuntimeUsage
+      summary: Дневная статистика токенов/стоимости конкретного runtime
+      tags: [Runtimes]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: runtimeId, in: path, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/DashboardDays'
+        - $ref: '#/components/parameters/DashboardTz'
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/RuntimeUsage' } } } }
+        '404':
+          description: "runtime не найден"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/runtimes/{runtimeId}/usage/by-agent:
+    get:
+      operationId: getRuntimeUsageByAgent
+      summary: Статистика токенов/стоимости runtime по агенту
+      tags: [Runtimes]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: runtimeId, in: path, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/DashboardDays'
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/RuntimeUsageByAgent' } } } }
+        '404':
+          description: "runtime не найден"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/runtimes/{runtimeId}/usage/by-hour:
+    get:
+      operationId: getRuntimeUsageByHour
+      summary: Статистика токенов/стоимости runtime по часу суток
+      tags: [Runtimes]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: runtimeId, in: path, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/DashboardDays'
+        - $ref: '#/components/parameters/DashboardTz'
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/RuntimeUsageByHour' } } } }
+        '404':
+          description: "runtime не найден"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/runtimes/{runtimeId}/activity:
+    get:
+      operationId: getRuntimeTaskActivity
+      summary: Почасовая активность задач runtime (тепловая карта)
+      tags: [Runtimes]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: runtimeId, in: path, required: true, schema: { type: string, format: uuid } }
+        - $ref: '#/components/parameters/DashboardTz'
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    hour: { type: integer, minimum: 0, maximum: 23 }
+                    count: { type: integer }
+        '404':
+          description: "runtime не найден"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/runtimes/{runtimeId}/update:
+    post:
+      operationId: initiateRuntimeUpdate
+      summary: Запросить самообновление daemon-приложения на runtime
+      description: >
+        Ставит асинхронный запрос на обновление в очередь daemon-а (polling
+        через отдельный daemon-канал вне этой части спецификации). Отключено
+        (403) на деплоях с периметровым (perimeter) профилем поставки —
+        там обновления доставляются оператором. Только владелец runtime
+        или owner/admin воркспейса может инициировать обновление. Одновременно
+        на один runtime может быть только один необработанный запрос — иначе
+        409. Запрос считается протухшим и переходит в timeout, если daemon
+        не откликнулся за 120 секунд (pending) либо не завершил обновление
+        за 150 секунд после начала выполнения (running); истёкшие записи
+        хранятся в памяти сервера ещё 5 минут для чтения через getRuntimeUpdate.
+      tags: [Runtimes]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: runtimeId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, "member (только владелец runtime)"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_version]
+              properties: { target_version: { type: string } }
+      responses:
+        '200':
+          description: Запрос поставлен в очередь
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeUpdateRequest' } } }
+        '400':
+          description: "target_version отсутствует"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '403':
+          description: "недостаточно прав, либо self-update отключён (perimeter delivery profile)"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "runtime не найден"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: "для этого runtime уже есть необработанный запрос на обновление"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/runtimes/{runtimeId}/update/{updateId}:
+    get:
+      operationId: getRuntimeUpdate
+      summary: Статус запроса на самообновление
+      description: >
+        Просматривать статус может владелец runtime, owner/admin воркспейса,
+        либо сам инициатор запроса.
+      tags: [Runtimes]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: runtimeId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: updateId, in: path, required: true, schema: { type: string } }
+      x-roles: [owner, admin, "member (владелец runtime либо инициатор запроса)"]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeUpdateRequest' } } }
+        '403':
+          description: "вызывающий не владелец/admin и не инициатор запроса"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "runtime или запрос не найден"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/runtimes/{runtimeId}/models:
+    post:
+      operationId: initiateRuntimeModelList
+      summary: Запросить у runtime актуальный список поддерживаемых моделей
+      description: >
+        Асинхронный запрос: сервер создаёт заявку со статусом pending,
+        daemon runtime (через отдельный не входящий в эту часть канал)
+        забирает её и публикует результат. Требует runtime в статусе online.
+        Заявка считается протухшей через 30 секунд без ответа (pending)
+        или через 60 секунд выполнения без завершения (running).
+      tags: [Runtimes]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: runtimeId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: Запрос поставлен в очередь
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeModelListRequest' } } }
+        '404':
+          description: "runtime не найден"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '503':
+          description: "runtime не online"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/runtimes/{runtimeId}/models/{requestId}:
+    get:
+      operationId: getRuntimeModelListRequest
+      summary: Статус запроса списка моделей
+      tags: [Runtimes]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: runtimeId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: requestId, in: path, required: true, schema: { type: string } }
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeModelListRequest' } } }
+        '404':
+          description: "заявка не найдена (в т.ч. если requestId принадлежит другому runtime)"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/runtimes/{runtimeId}/local-skills:
+    post:
+      operationId: initiateRuntimeLocalSkillList
+      summary: Запросить у runtime список локально установленных навыков и MCP-серверов
+      description: >
+        Аналогичный асинхронный паттерн: заявка pending → daemon её забирает
+        и отчитывается результатом (список навыков с ключом, путём к
+        исходнику, провайдером; список MCP-серверов с транспортом и флагом
+        enabled). Доступно любому участнику воркспейса с доступом на чтение
+        к runtime; требует runtime online. Протухает через 3 минуты без
+        ответа или 60 секунд выполнения.
+      tags: [Runtimes]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: runtimeId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: Запрос поставлен в очередь
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeLocalSkillListRequest' } } }
+        '404':
+          description: "runtime не найден"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '503':
+          description: "runtime не online"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/runtimes/{runtimeId}/local-skills/{requestId}:
+    get:
+      operationId: getRuntimeLocalSkillListRequest
+      summary: Статус запроса списка локальных навыков
+      tags: [Runtimes]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: runtimeId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: requestId, in: path, required: true, schema: { type: string } }
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeLocalSkillListRequest' } } }
+        '404':
+          description: "заявка не найдена"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/runtimes/{runtimeId}/local-skills/import:
+    post:
+      operationId: initiateRuntimeLocalSkillImport
+      summary: Запросить импорт одного локально найденного навыка в воркспейс
+      description: >
+        В отличие от простого просмотра списка, инициировать импорт может
+        только владелец runtime (не любой участник воркспейса), поскольку
+        импорт читает содержимое файлов с машины владельца. `action=""`
+        (create, значение по умолчанию) создаёт новый Skill; `action=overwrite`
+        требует `target_skill_id` — существующий навык, которым владеет тот
+        же пользователь, и подставляет `supports_conflict=true`
+        автоматически.
+      tags: [Runtimes]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: runtimeId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: ["member (только владелец runtime)", owner, admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [skill_key]
+              properties:
+                skill_key: { type: string, description: "ключ локального навыка из ответа initiateRuntimeLocalSkillList" }
+                name: { type: string }
+                description: { type: string }
+                action: { type: string, enum: ["", overwrite], default: "" }
+                target_skill_id: { type: string, format: uuid, description: "обязателен при action=overwrite" }
+                supports_conflict: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Запрос поставлен в очередь
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeLocalSkillImportRequest' } } }
+        '400':
+          description: "skill_key пуст, action некорректен, либо target_skill_id не UUID при action=overwrite"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '403':
+          description: "вызывающий не владелец runtime"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "runtime не найден"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '503':
+          description: "runtime не online"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/runtimes/{runtimeId}/local-skills/import/{requestId}:
+    get:
+      operationId: getRuntimeLocalSkillImportRequest
+      summary: Статус запроса импорта локального навыка
+      description: >
+        При завершении со статусом `conflict` тело содержит объект `conflict`
+        с данными существующего навыка того же имени и флагом,
+        может ли вызывающий его перезаписать.
+      tags: [Runtimes]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: runtimeId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: requestId, in: path, required: true, schema: { type: string } }
+      x-roles: ["member (только владелец runtime)", owner, admin]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/RuntimeLocalSkillImportRequest' } } }
+        '403':
+          description: "вызывающий не владелец runtime"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "заявка не найдена"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/runtimes/{runtimeId}/archive-agents-and-delete:
+    post:
+      operationId: archiveAgentsAndDeleteRuntime
+      summary: Массово архивировать активных агентов runtime и удалить его одной операцией
+      description: >
+        Двухфазное подтверждение: клиент сначала получает 409 от
+        deleteRuntime со списком активных агентов, показывает его
+        пользователю и повторяет вызов сюда, передав список ожидаемых id
+        активных агентов (`expected_active_agent_ids`). Если фактический
+        набор активных агентов runtime изменился с момента показа списка
+        (гонка), запрос отклоняется 409 с кодом `runtime_delete_plan_changed`
+        и обновлённым списком — повторное подтверждение обязательно.
+        При успехе: архивирует все совпавшие активные агенты, отменяет их
+        задачи и задачи на runtime, останавливает автопилоты с архивными
+        исполнителями, зачищает связанные ресурсы (как в deleteRuntime),
+        и удаляет runtime в одной транзакции.
+      tags: [Runtimes]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: runtimeId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, "member (только владелец runtime)"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expected_active_agent_ids]
+              properties:
+                expected_active_agent_ids: { type: array, items: { type: string, format: uuid } }
+      x-events:
+        - event: "agent:archived"
+          payload: "{ agent: Agent } — по одному событию на каждого архивированный агент"
+        - event: "daemon:register"
+          payload: "{ action: \"delete\" }"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [ok] }
+                  agents_archived: { type: integer }
+                  tasks_cancelled: { type: integer }
+        '400':
+          description: "expected_active_agent_ids отсутствует или содержит не-UUID"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '403':
+          description: "недостаточно прав"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "runtime не найден"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: "runtime порождён профилем, либо фактический набор активных агентов не совпал с ожидаемым (code=runtime_delete_plan_changed)"
+          content: { application/json: { schema: { type: object } } }
+
+  # ---------------------------------------------------------------------
+  # Cloud Runtime (прокси в облачный fleet-сервис)
+  # ---------------------------------------------------------------------
+  /api/cloud-runtime:
+    get:
+      operationId: getCloudRuntimeService
+      summary: Информация об облачном runtime-сервисе (fleet)
+      description: >
+        Все `/api/cloud-runtime/**` — прозрачный HTTP-прокси в отдельный
+        облачный fleet-сервис управления виртуальными runtime-нодами.
+        Сервер goosar добавляет только X-User-ID и (где нужно) прокидывает
+        query/body без изменений; если сервис не настроен на деплое —
+        503. Формат ответа определяется fleet-сервисом; здесь он описан
+        по фактическому использованию из клиента.
+      tags: [CloudRuntime]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: "ответ fleet-сервиса, проксируется как есть"
+          content: { application/json: { schema: { type: object } } }
+        '502':
+          description: "fleet-сервис вернул ошибку/недоступен"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '503':
+          description: "cloud runtime не сконфигурирован на этом деплое"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '504':
+          description: "тайм-аут запроса к fleet-сервису"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/cloud-runtime/healthz:
+    get:
+      operationId: getCloudRuntimeHealth
+      summary: Проверка живости fleet-сервиса (проксируется без авторизации пользователя)
+      tags: [CloudRuntime]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      responses:
+        '200': { description: "ответ проксируется как есть" }
+        '503': { description: "cloud runtime не сконфигурирован" }
+
+  /api/cloud-runtime/readyz:
+    get:
+      operationId: getCloudRuntimeReady
+      summary: Проверка готовности fleet-сервиса
+      tags: [CloudRuntime]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      responses:
+        '200': { description: "ответ проксируется как есть" }
+        '503': { description: "cloud runtime не сконфигурирован" }
+
+  /api/cloud-runtime/nodes:
+    get:
+      operationId: listCloudRuntimeNodes
+      summary: Список облачных runtime-нод пользователя
+      tags: [CloudRuntime]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - name: limit
+          in: query
+          schema: { type: integer }
+        - name: offset
+          in: query
+          schema: { type: integer }
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/CloudRuntimeNode' } } } }
+        '503':
+          description: "cloud runtime не сконфигурирован"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    post:
+      operationId: createCloudRuntimeNode
+      summary: Заказать новую облачную runtime-ноду
+      tags: [CloudRuntime]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCloudRuntimeNodeRequest' }
+      responses:
+        '200':
+          description: Нода создана (или поставлена в очередь на запуск)
+          content: { application/json: { schema: { $ref: '#/components/schemas/CloudRuntimeNode' } } }
+        '400':
+          description: "тело запроса пустое или не JSON"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '502':
+          description: "fleet-сервис отклонил запрос"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '503':
+          description: "cloud runtime не сконфигурирован"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    delete:
+      operationId: deleteCloudRuntimeNode
+      summary: Удалить/остановить навсегда облачную runtime-ноду
+      description: "Идентификатор ноды передаётся в теле запроса, а не в пути (ограничение fleet-протокола)."
+      tags: [CloudRuntime]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [instance_id]
+              properties: { instance_id: { type: string } }
+      responses:
+        '200': { description: "ответ проксируется как есть" }
+        '400':
+          description: "тело запроса пустое или не JSON"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '503':
+          description: "cloud runtime не сконфигурирован"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/cloud-runtime/nodes/start:
+    post:
+      operationId: startCloudRuntimeNode
+      summary: Запустить остановленную облачную runtime-ноду
+      tags: [CloudRuntime]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [instance_id], properties: { instance_id: { type: string } } }
+      responses:
+        '200': { description: "ответ проксируется как есть" }
+        '503': { description: "cloud runtime не сконфигурирован" }
+
+  /api/cloud-runtime/nodes/stop:
+    post:
+      operationId: stopCloudRuntimeNode
+      summary: Остановить облачную runtime-ноду
+      tags: [CloudRuntime]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [instance_id], properties: { instance_id: { type: string } } }
+      responses:
+        '200': { description: "ответ проксируется как есть" }
+        '503': { description: "cloud runtime не сконфигурирован" }
+
+  /api/cloud-runtime/nodes/reboot:
+    post:
+      operationId: rebootCloudRuntimeNode
+      summary: Перезагрузить облачную runtime-ноду
+      tags: [CloudRuntime]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [instance_id], properties: { instance_id: { type: string } } }
+      responses:
+        '200': { description: "ответ проксируется как есть" }
+        '503': { description: "cloud runtime не сконфигурирован" }
+
+  /api/cloud-runtime/nodes/status:
+    post:
+      operationId: getCloudRuntimeNodeStatus
+      summary: Опросить актуальный статус облачной runtime-ноды
+      description: "Реализован как POST (не GET), так как принимает тело с instance_id."
+      tags: [CloudRuntime]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [instance_id], properties: { instance_id: { type: string } } }
+      responses:
+        '200': { description: "ответ проксируется как есть" }
+        '503': { description: "cloud runtime не сконфигурирован" }
+
+  /api/cloud-runtime/nodes/exec:
+    post:
+      operationId: execCloudRuntimeNode
+      summary: Выполнить команду на облачной runtime-ноде
+      tags: [CloudRuntime]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [instance_id]
+              properties:
+                instance_id: { type: string }
+                command: { type: string }
+      responses:
+        '200': { description: "ответ проксируется как есть" }
+        '400':
+          description: "тело запроса пустое или не JSON"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '503': { description: "cloud runtime не сконфигурирован" }
+
+  # ---------------------------------------------------------------------
+  # Задачи и агентская активность воркспейса
+  # ---------------------------------------------------------------------
+  /api/tasks/{taskId}/cancel:
+    post:
+      operationId: cancelTaskByUser
+      summary: Отменить задачу агента по инициативе пользователя
+      description: >
+        Если задача привязана к чат-сессии — отменять может только создатель
+        сессии; если задача не чатовая — нужен доступ к приватному агенту.
+        Если у клиента заявлена поддержка возможности `chat_draft_restore_v1`
+        (через заголовок клиентских capability), отменённое пользовательское
+        сообщение чата может быть возвращено в ответе как черновик для
+        восстановления в поле ввода.
+      tags: [Tasks]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: taskId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, member]
+      x-events:
+        - event: "task:cancelled"
+          payload: "{ task_id, agent_id, issue_id?, status, chat_session_id? }"
+        - event: "chat:cancel_finalized"
+          payload: "ChatCancelFinalizedPayload { outcome: stopped|restored, chat_session_id, task_id, message_id?, content?, message_kind?, elapsed_ms? } — только для чатовых задач"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cancelled_chat_message:
+                    type: object
+                    nullable: true
+                    properties:
+                      chat_session_id: { type: string, format: uuid }
+                      message_id: { type: string, format: uuid }
+                      content: { type: string }
+                      restore_to_input: { type: boolean }
+                      attachments: { type: array, items: { $ref: '#/components/schemas/ChatAttachment' } }
+        '400':
+          description: "задачу нельзя отменить в её текущем статусе"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '403':
+          description: "недостаточно прав на задачу"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "задача не найдена в воркспейсе"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/agent-task-snapshot:
+    get:
+      operationId: listWorkspaceAgentTaskSnapshot
+      summary: Снимок текущих задач агентов воркспейса
+      tags: [WorkspaceActivity]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { type: object } } } }
+
+  /api/working-agents:
+    get:
+      operationId: listWorkspaceWorkingAgents
+      summary: Список агентов воркспейса, у которых прямо сейчас есть выполняемая задача
+      tags: [WorkspaceActivity]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { type: object } } } }
+
+  /api/agent-activity-30d:
+    get:
+      operationId: getWorkspaceAgentActivity30d
+      summary: Активность агентов воркспейса за последние 30 дней
+      tags: [WorkspaceActivity]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { type: object } } } }
+
+  /api/agent-run-counts:
+    get:
+      operationId: getWorkspaceAgentRunCounts
+      summary: Количество запусков по агентам воркспейса
+      tags: [WorkspaceActivity]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { type: object } } } }
+
+  # ---------------------------------------------------------------------
+  # Chat
+  # ---------------------------------------------------------------------
+  /api/chat/sessions:
+    post:
+      operationId: createChatSession
+      summary: Создать чат-сессию с агентом
+      description: >
+        Требует доступа на вызов агента (`invoke`) — публичного или
+        принадлежащего пользователю/доступного его роли агента; агент не
+        должен быть архивным. Опционально привязывает сессию к проекту
+        (project_id).
+      tags: [Chat]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_id]
+              properties:
+                agent_id: { type: string, format: uuid }
+                title: { type: string }
+                project_id: { type: string, format: uuid, nullable: true }
+      responses:
+        '201':
+          description: Сессия создана
+          content: { application/json: { schema: { $ref: '#/components/schemas/ChatSession' } } }
+        '400':
+          description: "agent_id отсутствует или некорректен"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '403':
+          description: "нет доступа к вызову этого агента"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "агент, воркспейс или проект не найдены"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+    get:
+      operationId: listChatSessions
+      summary: Список чат-сессий, созданных текущим пользователем
+      description: >
+        По умолчанию — только сессии с активным статусом; `?status=all`
+        включает и архивные. Список отфильтрован по агентам, доступным
+        вызывающему (учитывает приватность агентов и роль пользователя).
+      tags: [Chat]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - name: status
+          in: query
+          schema: { type: string, enum: [active, all] }
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ChatSession' } } } }
+
+  /api/chat/sessions/{sessionId}:
+    get:
+      operationId: getChatSession
+      summary: Получить чат-сессию
+      description: "Доступна только создателю сессии, при доступе к агенту сессии (не архивированному приватно)."
+      tags: [Chat]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, "member (только создатель сессии)"]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/ChatSession' } } }
+        '403':
+          description: "сессия не принадлежит пользователю, либо нет доступа к агенту"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "сессия не найдена"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    patch:
+      operationId: updateChatSession
+      summary: Переименовать сессию либо перепривязать к другому проекту
+      description: >
+        Ровно одно из полей `title`/`project_id` должно быть передано за
+        раз (иначе 400). `project_id: null` отвязывает сессию от проекта.
+      tags: [Chat]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, "member (только создатель сессии)"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string, maxLength: 200 }
+                project_id: { type: string, format: uuid, nullable: true }
+      x-events:
+        - event: "chat:session_updated"
+          payload: "ChatSessionUpdatedPayload { chat_session_id, title, project_id?, updated_at }"
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/ChatSession' } } }
+        '400':
+          description: "передано не ровно одно поле, либо title пустой/длиннее 200 символов, либо project_id некорректен"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "сессия или проект не найдены"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    delete:
+      operationId: deleteChatSession
+      summary: Удалить чат-сессию
+      description: >
+        Отменяет все незавершённые задачи сессии, снимает привязку к
+        каналам (Slack и т.п.) и исходящим карточкам, удаляет черновики
+        восстановления, саму сессию и — если агент сессии системный
+        (например, Agent Builder) — удаляет и этого служебного агента.
+      tags: [Chat]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, "member (только создатель сессии)"]
+      x-events:
+        - event: "task:cancelled"
+          payload: "по каждой отменённой задаче сессии"
+        - event: "chat:session_deleted"
+          payload: "ChatSessionDeletedPayload { chat_session_id }"
+      responses:
+        '204':
+          description: "Удалено (в т.ч. идемпотентно, если сессия уже удалена параллельно)"
+        '403':
+          description: "сессия не принадлежит пользователю"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "сессия не найдена"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/chat/sessions/{sessionId}/pin:
+    patch:
+      operationId: setChatSessionPinned
+      summary: Закрепить/открепить чат-сессию
+      tags: [Chat]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, "member (только создатель сессии)"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [pinned], properties: { pinned: { type: boolean } } }
+      x-events:
+        - event: "chat:session_updated"
+          payload: "ChatSessionUpdatedPayload { chat_session_id, title, pinned, updated_at }"
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/ChatSession' } } }
+        '403':
+          description: "сессия не принадлежит пользователю"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "сессия не найдена"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/chat/sessions/{sessionId}/archive:
+    patch:
+      operationId: setChatSessionArchived
+      summary: Архивировать/восстановить чат-сессию
+      description: "При архивировании (archived=true) снимается привязка сессии к внешнему каналу (например, Slack-треду)."
+      tags: [Chat]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, "member (только создатель сессии)"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [archived], properties: { archived: { type: boolean } } }
+      x-events:
+        - event: "chat:session_updated"
+          payload: "ChatSessionUpdatedPayload { chat_session_id, title, status, updated_at }"
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/ChatSession' } } }
+        '403':
+          description: "сессия не принадлежит пользователю"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "сессия не найдена"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/chat/sessions/{sessionId}/messages:
+    post:
+      operationId: sendChatMessage
+      summary: Отправить сообщение в чат-сессию (запускает задачу агента)
+      description: >
+        Ключевой сценарий: сообщение пользователя создаёт задачу агента
+        (`agent task`) с приоритетом чата, привязанную к сессии и к
+        runtime агента; задача ставится в очередь runtime. Требования:
+        сессия активна (не архивирована), агент не архивирован, у агента
+        назначен runtime, у вызывающего есть право вызывать агента именно
+        в контексте этой сессии. К сообщению можно приложить ранее
+        загруженные вложения (`attachment_ids`); в ответ возвращаются
+        только реально привязанные id (то есть без дублей/уже занятых).
+        Если это первое пользовательское сообщение в сессии — асинхронно
+        запускается генерация заголовка сессии по содержимому сообщения.
+
+        Дальнейший обмен не синхронный: ответ агента приходит позже через
+        realtime-события на ту же сессию — по мере выполнения задачи
+        публикуются `task:queued` → `task:dispatch`/`task:running` →
+        (опционально) серии `task:progress`/`task:message` с промежуточными
+        шагами инструмента → и в конце либо `task:completed`, либо
+        `task:failed`. Одновременно с завершением сервис создаёт
+        ассистентское сообщение чата и публикует `chat:message`
+        (role=assistant) и затем `chat:done`. Если пользователь отменяет
+        задачу до ответа — публикуется `chat:cancel_finalized`.
+      tags: [Chat]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, "member (только создатель сессии)"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string, minLength: 1 }
+                attachment_ids: { type: array, items: { type: string, format: uuid } }
+      x-events:
+        - event: "chat:message"
+          payload: "ChatMessagePayload { chat_session_id, message_id, role: \"user\", content, task_id, created_at } — публикуется немедленно"
+        - event: "task:queued / task:dispatch / task:running / task:progress / task:message / task:completed / task:failed / task:cancelled"
+          payload: "публикуются асинхронно сервисом задач по ходу исполнения (не этим хендлером напрямую)"
+        - event: "chat:message"
+          payload: "ChatMessagePayload { role: \"assistant\", ... } — при получении ответа агента"
+        - event: "chat:done"
+          payload: "ChatDonePayload { chat_session_id, task_id, message_id?, content?, elapsed_ms?, message_kind? } — сигнал конца ответа"
+      responses:
+        '201':
+          description: Сообщение принято, задача поставлена в очередь
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message_id: { type: string, format: uuid }
+                  task_id: { type: string, format: uuid }
+                  attachment_ids: { type: array, items: { type: string, format: uuid } }
+                  created_at: { type: string, format: date-time }
+        '400':
+          description: "content пуст, либо attachment_ids содержит не-UUID, либо сессия архивна"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '403':
+          description: "нет прав вызывать агента в этой сессии"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '409':
+          description: "агент архивирован или у него нет назначенного runtime"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    get:
+      operationId: listChatMessages
+      summary: Полная история сообщений сессии (без пагинации)
+      tags: [Chat]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, "member (только создатель сессии)"]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ChatMessage' } } } }
+        '403':
+          description: "нет доступа к сессии/агенту"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "сессия не найдена"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/chat/sessions/{sessionId}/messages/page:
+    get:
+      operationId: listChatMessagesPage
+      summary: История сообщений сессии постранично (курсор по времени и id)
+      description: >
+        Курсорная пагинация назад по времени: `before_created_at` +
+        `before_id` должны передаваться вместе. `limit` — от 1 до 100,
+        по умолчанию 50. В ответе сообщения идут в хронологическом
+        порядке (от старых к новым внутри страницы).
+      tags: [Chat]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+        - { name: before_created_at, in: query, schema: { type: string, format: date-time } }
+        - { name: before_id, in: query, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, "member (только создатель сессии)"]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/ChatMessagesPage' } } }
+        '400':
+          description: "limit вне диапазона, либо передан только один из курсорных параметров"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "сессия не найдена"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/chat/sessions/{sessionId}/pending-task:
+    get:
+      operationId: getPendingChatTask
+      summary: Есть ли у сессии незавершённая (в очереди/в работе) задача
+      description: "Если незавершённой задачи нет, возвращается 200 с пустым объектом (не 404)."
+      tags: [Chat]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, "member (только создатель сессии)"]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/PendingChatTask' } } }
+        '404':
+          description: "сессия не найдена"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/chat/sessions/{sessionId}/read:
+    post:
+      operationId: markChatSessionRead
+      summary: Отметить сессию прочитанной
+      tags: [Chat]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, "member (только создатель сессии)"]
+      x-events:
+        - event: "chat:session_read"
+          payload: "ChatSessionReadPayload { chat_session_id }"
+      responses:
+        '204':
+          description: OK
+        '404':
+          description: "сессия не найдена"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/chat/sessions/{sessionId}/draft-restores:
+    get:
+      operationId: listChatDraftRestores
+      summary: Список отложенных черновиков сообщений сессии (после отмены задачи)
+      description: >
+        Черновик восстановления создаётся, когда пользовательское сообщение
+        было "потеряно" при отмене задачи (см. `cancelled_chat_message` в
+        cancelTaskByUser) и клиент подтвердил поддержку функции; хранит
+        текст и вложения, которые нужно вернуть в поле ввода.
+      tags: [Chat]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, "member (только создатель сессии)"]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  restores: { type: array, items: { $ref: '#/components/schemas/ChatDraftRestore' } }
+        '404':
+          description: "сессия не найдена"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/chat/sessions/{sessionId}/draft-restores/{restoreId}:
+    delete:
+      operationId: consumeChatDraftRestore
+      summary: Пометить черновик восстановления как использованный/отклонённый
+      description: "Клиент вызывает это после того, как показал черновик пользователю (восстановил его в поле ввода или пользователь его отклонил)."
+      tags: [Chat]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: sessionId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: restoreId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, "member (только создатель сессии)"]
+      responses:
+        '204':
+          description: OK
+        '404':
+          description: "сессия не найдена"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/chat/pending-tasks:
+    get:
+      operationId: listPendingChatTasks
+      summary: Все незавершённые чат-задачи пользователя в воркспейсе
+      tags: [Chat]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tasks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        task_id: { type: string, format: uuid }
+                        status: { type: string }
+                        chat_session_id: { type: string, format: uuid }
+
+  /api/chat/pending-tasks/has-any:
+    get:
+      operationId: hasPendingChatTasks
+      summary: Есть ли у пользователя хотя бы одна незавершённая чат-задача
+      description: "Более дешёвая версия listPendingChatTasks для частого опроса (polling)."
+      tags: [Chat]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, properties: { has_pending: { type: boolean } } }
+
+  /api/chat/pinned-agents:
+    get:
+      operationId: listChatPinnedAgents
+      summary: Список закреплённых в чате агентов пользователя
+      tags: [Chat]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ChatPinnedAgent' } } } }
+    post:
+      operationId: pinChatAgent
+      summary: Закрепить агента в списке быстрого доступа чата
+      description: >
+        Лимит — 5 закреплённых агентов на пользователя в воркспейсе (400
+        при превышении). Агент должен быть в списке доступных вызывающему.
+        Позиция нового закрепления — максимум существующих плюс один.
+      tags: [Chat]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [agent_id], properties: { agent_id: { type: string, format: uuid } } }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/ChatPinnedAgent' } } }
+        '400':
+          description: "agent_id некорректен, либо достигнут лимит в 5 закреплений"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "агент недоступен вызывающему"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/chat/pinned-agents/{agentId}:
+    delete:
+      operationId: unpinChatAgent
+      summary: Открепить агента
+      tags: [Chat]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: agentId, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, member]
+      responses:
+        '204':
+          description: "OK (идемпотентно — успех и если агент не был закреплён)"
+
+  /api/chat/history:
+    get:
+      operationId: getChatChannelHistory
+      summary: История внешнего чат-канала (например, Slack) для сессии, вызываемая из задачи агента
+      description: >
+        Специальный маршрут, вызываемый не человеком из браузера, а самим
+        агентом во время выполнения задачи через инструмент чтения истории
+        канала: требует заголовок `X-Actor-Source: task_token` и
+        `X-Task-ID` с id текущей задачи; задача обязана быть чатовой.
+        Если у сессии нет привязанного внешнего канала (например, обычный
+        внутренний чат, не Slack-тред) — возвращает пустой список с полем
+        `note`, а не ошибку.
+      tags: [Chat]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: X-Actor-Source, in: header, required: true, schema: { type: string, enum: [task_token] } }
+        - { name: X-Task-ID, in: header, required: true, schema: { type: string, format: uuid } }
+        - { name: limit, in: query, schema: { type: integer } }
+        - { name: before, in: query, schema: { type: string } }
+      x-roles: ["agent (только вызов из контекста задачи, не человек)"]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/ChatChannelHistoryResponse' } } }
+        '400':
+          description: "отсутствует/некорректен X-Task-ID, либо задача не чатовая"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '403':
+          description: "запрос не помечен как X-Actor-Source: task_token"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "задача или чат-сессия не найдены"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '502':
+          description: "внешний канал вернул ошибку"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/chat/thread:
+    get:
+      operationId: getChatThread
+      summary: Конкретный тред внешнего чат-канала, вызываемый из задачи агента
+      description: "Тот же контракт доступа, что и getChatChannelHistory; `id` — идентификатор треда во внешнем канале."
+      tags: [Chat]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: X-Actor-Source, in: header, required: true, schema: { type: string, enum: [task_token] } }
+        - { name: X-Task-ID, in: header, required: true, schema: { type: string, format: uuid } }
+        - { name: id, in: query, required: true, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer } }
+        - { name: before, in: query, schema: { type: string } }
+      x-roles: ["agent (только вызов из контекста задачи, не человек)"]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/ChatChannelHistoryResponse' } } }
+        '400':
+          description: "отсутствует/некорректен X-Task-ID, либо задача не чатовая"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '403':
+          description: "запрос не помечен как X-Actor-Source: task_token"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        '404':
+          description: "задача или чат-сессия не найдены"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  # ---------------------------------------------------------------------
+  # Inbox
+  # ---------------------------------------------------------------------
+  /api/inbox:
+    get:
+      operationId: listInbox
+      summary: Активные (неархивные) элементы инбокса пользователя
+      tags: [Inbox]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/InboxItem' } } } }
+
+  /api/inbox/archived:
+    get:
+      operationId: listArchivedInbox
+      summary: Архивные элементы инбокса пользователя
+      tags: [Inbox]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/InboxItem' } } } }
+
+  /api/inbox/unread-count:
+    get:
+      operationId: countUnreadInbox
+      summary: Число непрочитанных элементов инбокса в текущем воркспейсе
+      tags: [Inbox]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: object, properties: { count: { type: integer } } } } }
+
+  /api/inbox/unread-summary:
+    get:
+      operationId: getUnreadInboxSummary
+      summary: Число непрочитанных элементов инбокса по всем воркспейсам пользователя
+      description: "Единственный инбокс-эндпоинт, не ограниченный текущим воркспейсом — агрегирует по всем воркспейсам, где состоит пользователь."
+      tags: [Inbox]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    workspace_id: { type: string, format: uuid }
+                    count: { type: integer }
+
+  /api/inbox/mark-all-read:
+    post:
+      operationId: markAllInboxRead
+      summary: Отметить все элементы инбокса воркспейса прочитанными
+      tags: [Inbox]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      x-events:
+        - event: "inbox:batch-read"
+          payload: "{ recipient_id, count }"
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: object, properties: { count: { type: integer } } } } }
+
+  /api/inbox/archive-all:
+    post:
+      operationId: archiveAllInbox
+      summary: Архивировать все элементы инбокса воркспейса
+      tags: [Inbox]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      x-events:
+        - event: "inbox:batch-archived"
+          payload: "{ recipient_id, count }"
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: object, properties: { count: { type: integer } } } } }
+
+  /api/inbox/archive-all-read:
+    post:
+      operationId: archiveAllReadInbox
+      summary: Архивировать все прочитанные элементы инбокса воркспейса
+      tags: [Inbox]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      x-events:
+        - event: "inbox:batch-archived"
+          payload: "{ recipient_id, count }"
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: object, properties: { count: { type: integer } } } } }
+
+  /api/inbox/archive-completed:
+    post:
+      operationId: archiveCompletedInbox
+      summary: Архивировать элементы инбокса, чьи связанные задачи/тикеты завершены
+      tags: [Inbox]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      x-events:
+        - event: "inbox:batch-archived"
+          payload: "{ recipient_id, count }"
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { type: object, properties: { count: { type: integer } } } } }
+
+  /api/inbox/{id}/read:
+    post:
+      operationId: markInboxItemRead
+      summary: Отметить один элемент инбокса прочитанным
+      description: "Элемент должен принадлежать вызывающему пользователю как получателю (recipient_type=member, recipient_id=текущий пользователь)."
+      tags: [Inbox]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, member]
+      x-events:
+        - event: "inbox:read"
+          payload: "{ item_id, recipient_id }"
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/InboxItem' } } }
+        '404':
+          description: "элемент не найден или не принадлежит пользователю"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/inbox/{id}/archive:
+    post:
+      operationId: archiveInboxItem
+      summary: Архивировать один элемент инбокса
+      description: >
+        Если элемент связан с тикетом (issue_id заполнен), заодно
+        архивируются все прочие элементы инбокса того же получателя,
+        привязанные к тому же тикету (сворачивает "цепочку" уведомлений
+        по одному тикету).
+      tags: [Inbox]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, member]
+      x-events:
+        - event: "inbox:archived"
+          payload: "{ item_id, issue_id?, recipient_id }"
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/InboxItem' } } }
+        '404':
+          description: "элемент не найден или не принадлежит пользователю"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  /api/inbox/{id}/unarchive:
+    post:
+      operationId: unarchiveInboxItem
+      summary: Вернуть один элемент инбокса из архива
+      description: "Симметрично archiveInboxItem: также возвращает из архива связанные по тому же тикету элементы того же получателя."
+      tags: [Inbox]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      x-roles: [owner, admin, member]
+      x-events:
+        - event: "inbox:unarchived"
+          payload: "{ item_id, issue_id?, recipient_id }"
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/InboxItem' } } }
+        '404':
+          description: "элемент не найден или не принадлежит пользователю"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  # ---------------------------------------------------------------------
+  # Notification preferences
+  # ---------------------------------------------------------------------
+  /api/notification-preferences:
+    get:
+      operationId: getNotificationPreferences
+      summary: Настройки уведомлений пользователя в воркспейсе
+      description: "Если запись ещё не создавалась, возвращает пустой объект preferences (не 404)."
+      tags: [NotificationPreferences]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/NotificationPreferences' } } }
+    patch:
+      operationId: patchNotificationPreferences
+      summary: Частично обновить настройки уведомлений (слить с существующими)
+      tags: [NotificationPreferences]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NotificationPreferencesInput' }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/NotificationPreferences' } } }
+        '400':
+          description: "preferences отсутствует, либо содержит неизвестную группу или недопустимое значение"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    put:
+      operationId: updateNotificationPreferences
+      summary: Полностью заменить настройки уведомлений
+      description: "В отличие от PATCH, заменяет весь объект preferences целиком (группы, не перечисленные в запросе, теряют сохранённое значение)."
+      tags: [NotificationPreferences]
+      security: [ { cookieAuth: [] }, { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/WorkspaceSlugHeader' } ]
+      x-roles: [owner, admin, member]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NotificationPreferencesInput' }
+      responses:
+        '200':
+          description: OK
+          content: { application/json: { schema: { $ref: '#/components/schemas/NotificationPreferences' } } }
+        '400':
+          description: "preferences отсутствует, либо содержит неизвестную группу или недопустимое значение"
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+components:
+  parameters:
+    DashboardDays:
+      name: days
+      in: query
+      description: "Ширина окна в днях (1..365). По умолчанию 30 (90 для usage runtime)."
+      schema: { type: integer, minimum: 1, maximum: 365 }
+    DashboardTz:
+      name: tz
+      in: query
+      description: "IANA-таймзона для группировки по дням/часам. При отсутствии — таймзона профиля пользователя, иначе UTC."
+      schema: { type: string }
+    DashboardProjectId:
+      name: project_id
+      in: query
+      description: "Фильтр по проекту (см. схему Project в части C)."
+      schema: { type: string, format: uuid }
+
+  responses:
+    Unauthorized:
+      description: "Не аутентифицирован"
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Forbidden:
+      description: "Нет доступа"
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+
+  schemas:
+    # Error, User, Workspace, Member — определены в общей части контракта
+    # (докс части "общие компоненты"), здесь только referenced по имени.
+
+    # --- Agent Templates ---
+    AgentTemplateSkillRef:
+      type: object
+      properties:
+        source_url: { type: string }
+        cached_name: { type: string }
+        cached_description: { type: string }
+    AgentTemplateSummary:
+      type: object
+      properties:
+        slug: { type: string }
+        name: { type: string }
+        description: { type: string }
+        category: { type: string }
+        icon: { type: string }
+        accent: { type: string }
+        skills: { type: array, items: { $ref: '#/components/schemas/AgentTemplateSkillRef' } }
+    AgentTemplate:
+      allOf:
+        - $ref: '#/components/schemas/AgentTemplateSummary'
+        - type: object
+          properties:
+            instructions: { type: string, description: "Системная инструкция, которую получит созданный из шаблона агент" }
+
+    # --- Skills ---
+    SkillFileInput:
+      type: object
+      required: [path, content]
+      properties:
+        path: { type: string, description: "Относительный путь без .. и без абсолютных путей" }
+        content: { type: string }
+    SkillFile:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        skill_id: { type: string, format: uuid }
+        path: { type: string }
+        content: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    SkillSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        config: { type: object }
+        created_by: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        enabled: { type: boolean, description: "заполняется только в контексте конкретного агента (не в listSkills)" }
+    Skill:
+      allOf:
+        - $ref: '#/components/schemas/SkillSummary'
+        - type: object
+          properties:
+            content: { type: string, description: "Содержимое SKILL.md" }
+    SkillWithFiles:
+      allOf:
+        - $ref: '#/components/schemas/Skill'
+        - type: object
+          properties:
+            files: { type: array, items: { $ref: '#/components/schemas/SkillFile' } }
+    SkillSearchCandidate:
+      type: object
+      properties:
+        name: { type: string }
+        url: { type: string }
+        source: { type: string, enum: [clawhub.ai] }
+        repo: { type: string, nullable: true }
+        install_count: { type: integer, nullable: true }
+        github_stars: { type: integer, nullable: true }
+        description: { type: string }
+    ExistingSkillIdentity:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        created_by: { type: string, format: uuid }
+        can_overwrite: { type: boolean, description: "true, если вызывающий — создатель существующего навыка" }
+    SkillImportResult:
+      type: object
+      properties:
+        status: { type: string, enum: [created, updated, skipped, conflict, failed] }
+        reason: { type: string }
+        skill: { $ref: '#/components/schemas/SkillWithFiles' }
+        existing_skill: { $ref: '#/components/schemas/ExistingSkillIdentity' }
+    SkillLabel:
+      type: object
+      description: "Метка (label) с resource_type=skill; каталог меток воркспейса ведётся вне этой части спецификации."
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        resource_type: { type: string, enum: [skill] }
+        name: { type: string }
+        description: { type: string }
+        color: { type: string }
+        usage_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    # --- Dashboard (общие поля usage-статистики повторяются для runtime и workspace) ---
+    UsageTokenFields:
+      type: object
+      properties:
+        provider: { type: string }
+        model: { type: string }
+        input_tokens: { type: integer }
+        output_tokens: { type: integer }
+        cache_read_tokens: { type: integer }
+        cache_write_tokens: { type: integer }
+        cost_usd_ticks: { type: integer, description: "Стоимость в целых тиках USD (1 тик = 1e-6 USD)" }
+        uncosted_input_tokens: { type: integer }
+        uncosted_output_tokens: { type: integer }
+        uncosted_cache_read_tokens: { type: integer }
+        uncosted_cache_write_tokens: { type: integer }
+    DashboardUsageDaily:
+      allOf:
+        - $ref: '#/components/schemas/UsageTokenFields'
+        - type: object
+          properties:
+            date: { type: string, format: date }
+            task_count: { type: integer }
+    DashboardUsageByAgent:
+      allOf:
+        - $ref: '#/components/schemas/UsageTokenFields'
+        - type: object
+          properties:
+            agent_id: { type: string, format: uuid }
+            task_count: { type: integer }
+    DashboardAgentRunTime:
+      type: object
+      properties:
+        agent_id: { type: string, format: uuid }
+        total_seconds: { type: integer }
+        task_count: { type: integer }
+        failed_count: { type: integer }
+    DashboardRunTimeDaily:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        total_seconds: { type: integer }
+        task_count: { type: integer }
+        failed_count: { type: integer }
+    DashboardFailureDaily:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        failure_reason: { type: string }
+        task_count: { type: integer }
+    DashboardFailureByAgent:
+      type: object
+      properties:
+        agent_id: { type: string, format: uuid }
+        failure_reason: { type: string }
+        task_count: { type: integer }
+
+    # --- Runtimes ---
+    Runtime:
+      type: object
+      description: >
+        Daemon-среда (десктопное приложение или облачный воркер),
+        подключённая к воркспейсу и способная исполнять задачи агентов.
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        daemon_id: { type: string, nullable: true, description: "Идентификатор физического daemon-процесса; несколько Runtime могут делить один daemon_id (одна машина, несколько провайдеров)" }
+        name: { type: string, description: "Имя по умолчанию, присвоенное daemon-ом" }
+        custom_name: { type: string, nullable: true, description: "Имя, заданное пользователем через updateRuntime" }
+        runtime_mode: { type: string, description: "Например local/cloud — режим исполнения задач" }
+        provider: { type: string, description: "Провайдер агентского движка на этом runtime" }
+        launch_header: { type: string, description: "Служебный заголовок для запуска, выводится из provider" }
+        status: { type: string, enum: [online, offline], description: "online — daemon недавно присылал heartbeat; offline — таймаут heartbeat истёк" }
+        device_info: { type: string }
+        metadata: { type: object }
+        owner_id: { type: string, format: uuid, nullable: true }
+        visibility: { type: string, enum: [private, public] }
+        profile_id: { type: string, format: uuid, nullable: true, description: "Если задан — runtime порождён живым runtime-профилем (управляется отдельным набором маршрутов /api/workspaces/{id}/runtime-profiles, вне этой части)" }
+        last_seen_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    RuntimeUsage:
+      allOf:
+        - $ref: '#/components/schemas/UsageTokenFields'
+        - type: object
+          properties:
+            runtime_id: { type: string, format: uuid }
+            date: { type: string, format: date }
+    RuntimeUsageByAgent:
+      allOf:
+        - $ref: '#/components/schemas/UsageTokenFields'
+        - type: object
+          properties:
+            agent_id: { type: string, format: uuid }
+            task_count: { type: integer }
+    RuntimeUsageByHour:
+      allOf:
+        - $ref: '#/components/schemas/UsageTokenFields'
+        - type: object
+          properties:
+            hour: { type: integer, minimum: 0, maximum: 23 }
+            task_count: { type: integer }
+    RuntimeUpdateRequest:
+      type: object
+      properties:
+        id: { type: string }
+        runtime_id: { type: string, format: uuid }
+        status: { type: string, enum: [pending, running, completed, failed, timeout] }
+        target_version: { type: string }
+        output: { type: string }
+        error: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ModelThinkingLevel:
+      type: object
+      properties:
+        value: { type: string }
+        label: { type: string }
+        description: { type: string }
+    ModelThinking:
+      type: object
+      properties:
+        supported_levels: { type: array, items: { $ref: '#/components/schemas/ModelThinkingLevel' } }
+        default_level: { type: string }
+    ModelServiceTier:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+    RuntimeModelEntry:
+      type: object
+      properties:
+        id: { type: string }
+        label: { type: string }
+        default: { type: boolean }
+        thinking: { $ref: '#/components/schemas/ModelThinking' }
+        service_tiers: { type: array, items: { $ref: '#/components/schemas/ModelServiceTier' } }
+    RuntimeModelListRequest:
+      type: object
+      properties:
+        id: { type: string }
+        runtime_id: { type: string, format: uuid }
+        status: { type: string, enum: [pending, running, completed, failed, timeout] }
+        models: { type: array, items: { $ref: '#/components/schemas/RuntimeModelEntry' } }
+        supported: { type: boolean, description: "false — runtime сообщил, что не поддерживает перечисление моделей" }
+        error: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    RuntimeLocalSkillEntry:
+      type: object
+      properties:
+        key: { type: string, description: "Стабильный ключ, используемый затем в initiateRuntimeLocalSkillImport" }
+        name: { type: string }
+        description: { type: string }
+        source_path: { type: string }
+        provider: { type: string }
+        root: { type: string }
+        plugin: { type: string }
+        can_disable: { type: boolean }
+        file_count: { type: integer }
+    RuntimeLocalMcpServerSummary:
+      type: object
+      properties:
+        name: { type: string }
+        transport: { type: string }
+        source: { type: string }
+        enabled: { type: boolean }
+    RuntimeLocalSkillListRequest:
+      type: object
+      properties:
+        id: { type: string }
+        runtime_id: { type: string, format: uuid }
+        status: { type: string, enum: [pending, running, completed, failed, timeout] }
+        skills: { type: array, items: { $ref: '#/components/schemas/RuntimeLocalSkillEntry' } }
+        supported: { type: boolean }
+        mcp_servers: { type: array, items: { $ref: '#/components/schemas/RuntimeLocalMcpServerSummary' } }
+        mcp_supported: { type: boolean }
+        error: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    LocalSkillImportConflict:
+      type: object
+      properties:
+        existing_skill_id: { type: string, format: uuid }
+        existing_created_by: { type: string, format: uuid }
+        can_overwrite: { type: boolean }
+    RuntimeLocalSkillImportRequest:
+      type: object
+      properties:
+        id: { type: string }
+        runtime_id: { type: string, format: uuid }
+        skill_key: { type: string }
+        name: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        action: { type: string, enum: ["", overwrite] }
+        target_skill_id: { type: string, format: uuid }
+        supports_conflict: { type: boolean }
+        status: { type: string, enum: [pending, running, completed, failed, timeout, conflict] }
+        skill: { $ref: '#/components/schemas/SkillWithFiles' }
+        conflict: { $ref: '#/components/schemas/LocalSkillImportConflict' }
+        error: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    # --- Cloud Runtime ---
+    CloudRuntimeNode:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        owner_id: { type: string, format: uuid }
+        instance_id: { type: string }
+        region: { type: string }
+        instance_type: { type: string }
+        image_id: { type: string }
+        subnet_id: { type: string }
+        name: { type: string }
+        status: { type: string, description: "Например: launching, pending, running, starting, stopping, stopped, rebooting, terminating, terminated, failed" }
+        tags: { type: object, additionalProperties: { type: string } }
+        metadata: { type: object }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CreateCloudRuntimeNodeRequest:
+      type: object
+      required: [instance_type]
+      properties:
+        instance_type: { type: string }
+        name: { type: string }
+        region: { type: string }
+        image_id: { type: string }
+        subnet_id: { type: string }
+        key_name: { type: string }
+        iam_instance_profile: { type: string }
+        disk_size_gb: { type: integer }
+        tags: { type: object, additionalProperties: { type: string } }
+
+    # --- Chat ---
+    ChatLastMessage:
+      type: object
+      properties:
+        content: { type: string }
+        role: { type: string, enum: [user, assistant, system] }
+        created_at: { type: string, format: date-time }
+        failure_reason: { type: string, nullable: true }
+        message_kind: { type: string, enum: [message, no_response] }
+    ChatSession:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        agent_id: { type: string, format: uuid }
+        creator_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid, nullable: true }
+        title: { type: string }
+        status: { type: string, enum: [active, archived] }
+        has_unread: { type: boolean, description: "присутствует только в элементах списка сессий, не в getChatSession" }
+        unread_count: { type: integer }
+        last_message: { $ref: '#/components/schemas/ChatLastMessage' }
+        pinned: { type: boolean }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ChatAttachment:
+      type: object
+      description: "Минимальное представление вложения, встраиваемое в чат-ответы. Полный жизненный цикл вложений (/api/attachments/**) описан в другой части контракта."
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        filename: { type: string }
+        url: { type: string }
+        download_url: { type: string }
+        content_type: { type: string }
+        size_bytes: { type: integer }
+        created_at: { type: string, format: date-time }
+    ChatMessage:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        chat_session_id: { type: string, format: uuid }
+        role: { type: string, enum: [user, assistant, system] }
+        content: { type: string }
+        task_id: { type: string, format: uuid, nullable: true }
+        created_at: { type: string, format: date-time }
+        failure_reason: { type: string, nullable: true }
+        elapsed_ms: { type: integer, nullable: true }
+        message_kind: { type: string, enum: [message, no_response], description: "no_response — агент осознанно не дал текстового ответа" }
+        attachments: { type: array, items: { $ref: '#/components/schemas/ChatAttachment' } }
+    ChatMessagesPage:
+      type: object
+      properties:
+        messages: { type: array, items: { $ref: '#/components/schemas/ChatMessage' } }
+        limit: { type: integer }
+        has_more: { type: boolean }
+        next_cursor:
+          type: object
+          nullable: true
+          properties:
+            created_at: { type: string, format: date-time }
+            id: { type: string, format: uuid }
+    PendingChatTask:
+      type: object
+      description: "Пустой объект ({}), если незавершённой задачи нет."
+      properties:
+        task_id: { type: string, format: uuid }
+        status: { type: string }
+        created_at: { type: string, format: date-time }
+    ChatDraftRestore:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        chat_session_id: { type: string, format: uuid }
+        task_id: { type: string, format: uuid }
+        content: { type: string }
+        attachments: { type: array, items: { $ref: '#/components/schemas/ChatAttachment' } }
+        created_at: { type: string, format: date-time }
+    ChatPinnedAgent:
+      type: object
+      properties:
+        agent_id: { type: string, format: uuid }
+        position: { type: number }
+    ChatHistoryMessage:
+      type: object
+      description: "Формат зависит от внешнего канала (Slack и т.п.); приводится в нормализованном виде."
+      properties:
+        id: { type: string }
+        author: { type: string }
+        text: { type: string }
+        created_at: { type: string, format: date-time }
+    ChatChannelHistoryResponse:
+      type: object
+      properties:
+        channel_type: { type: string, description: "Например slack; пусто, если канал не настроен" }
+        thread_id: { type: string }
+        messages: { type: array, items: { $ref: '#/components/schemas/ChatHistoryMessage' } }
+        next_cursor: { type: string }
+        note: { type: string, description: "Заполняется вместо ошибки, когда у сессии нет канальной интеграции" }
+
+    # --- Inbox ---
+    InboxItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        workspace_id: { type: string, format: uuid }
+        recipient_type: { type: string, enum: [member, agent], description: "Через человеческий /api/inbox виден только recipient_type=member" }
+        recipient_id: { type: string, format: uuid }
+        type:
+          type: string
+          description: >
+            Тип уведомления. Известные значения (список открыт, новые типы
+            могут появляться по мере развития продукта):
+            issue_assigned, unassigned, assignee_changed, status_changed,
+            priority_changed, start_date_changed, due_date_changed,
+            new_comment, mentioned, reaction_added, task_failed,
+            quick_create_done, quick_create_failed, quick_create_unconfirmed,
+            issue_subscribed, autopilot_paused.
+          example: task_failed
+        severity:
+          type: string
+          enum: [info, action_required, attention]
+        issue_id: { type: string, format: uuid, nullable: true }
+        title: { type: string }
+        body: { type: string, nullable: true }
+        read: { type: boolean }
+        archived: { type: boolean }
+        created_at: { type: string, format: date-time }
+        issue_status: { type: string, nullable: true, description: "заполняется только в списковых выдачах (ListInbox/ListArchivedInbox), денормализовано из связанного тикета" }
+        actor_type: { type: string, nullable: true, enum: [member, agent, system] }
+        actor_id: { type: string, format: uuid, nullable: true }
+        details: { type: object, description: "Произвольные структурированные детали, зависят от type (например {from, to} для status_changed)" }
+
+    # --- Notification Preferences ---
+    NotificationGroupValue:
+      type: string
+      enum: [all, muted]
+    NotificationPreferencesInput:
+      type: object
+      required: [preferences]
+      properties:
+        preferences:
+          type: object
+          description: "Ключи — из enum групп ниже; значения all|muted. Неизвестный ключ или значение — 400."
+          additionalProperties: { $ref: '#/components/schemas/NotificationGroupValue' }
+          properties:
+            assignments: { $ref: '#/components/schemas/NotificationGroupValue' }
+            status_changes: { $ref: '#/components/schemas/NotificationGroupValue' }
+            comments: { $ref: '#/components/schemas/NotificationGroupValue' }
+            updates: { $ref: '#/components/schemas/NotificationGroupValue' }
+            agent_activity: { $ref: '#/components/schemas/NotificationGroupValue' }
+            system_notifications: { $ref: '#/components/schemas/NotificationGroupValue' }
+    NotificationPreferences:
+      type: object
+      properties:
+        workspace_id: { type: string, format: uuid }
+        preferences:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/NotificationGroupValue' }
