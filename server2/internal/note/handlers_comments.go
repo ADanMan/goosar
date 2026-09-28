@@ -173,6 +173,7 @@ func (d *Deps) handleCreateComment(w http.ResponseWriter, r *http.Request) {
 	if d.Publisher != nil {
 		d.Publisher.Publish(member.WorkspaceID, realtime.Event{Type: "comment:created", Payload: commentEventPayload(comment, ticket)})
 	}
+	d.notifyComment(r.Context(), ticket, comment)
 	httpapi.WriteJSON(w, http.StatusCreated, comment)
 }
 

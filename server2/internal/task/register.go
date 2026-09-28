@@ -10,10 +10,13 @@ import (
 // вложений задачи (пакет note) и /api/labels/**, /api/properties/** как
 // самостоятельных ресурсов (см. package doc).
 func Register(router *httpapi.Router, deps *Deps) {
-	// /api/issues/table/{groups,rows,facets} и /api/issues/children (набор
-	// родителей через query) не реализованы в этой сессии (см.
-	// server2/docs/decisions.md) — остаются заглушками genstubs, этот пакет
-	// их путь не занимает.
+	// /api/issues/table/{groups,rows,facets} (тег IssueTable) и
+	// /api/issues/children (набор родителей через query) — T-027 доводка,
+	// см. internal/task/table.go и server2/docs/decisions.md.
+	router.Handle(http.MethodPost, "/api/issues/table/groups", deps.handleIssueTableGroups)
+	router.Handle(http.MethodPost, "/api/issues/table/rows", deps.handleIssueTableRows)
+	router.Handle(http.MethodPost, "/api/issues/table/facets", deps.handleIssueTableFacets)
+	router.Handle(http.MethodGet, "/api/issues/children", deps.handleIssueChildrenByParents)
 
 	router.Handle(http.MethodGet, "/api/issues/search", deps.handleSearchIssues)
 	router.Handle(http.MethodGet, "/api/issues/child-progress", deps.handleChildProgress)

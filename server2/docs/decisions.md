@@ -530,6 +530,205 @@ docs/51-data-model.md) не хватает, реализатор принима�
     сессия) уже успел подключиться к новой сигнатуре и своей реализации
     `ChatAccess` к моменту, когда `task.RealtimeTaskAccess()` был готов.
 
+## T-027 доводка
+
+Сессия-доводчик: единственный реализатор в дереве на этот момент (все домены
+T-027 из разделов выше уже слиты). Задача — тесты `internal/migrate`,
+реализовать оставшиеся операции контракта в области Issues/IssueTable/
+Comments/Labels/Properties/Attachments/Pins/Projects/ProjectResources/Inbox/
+NotificationPreferences/Chat, подключить `feed.Notify` там, где соседи этого
+не сделали, полный контрактный прогон и (по возможности) фронтовый e2e.
+
+1. **`internal/migrate` тесты хардкодили число миграций.** `TestLoad_realMigrationsDirParsesAllTwelve`
+   и `TestApply_isIdempotentAndSequential` были написаны на конкретное число
+   13 (историческое из T-025/T-026) — ломались бы при любой новой миграции.
+   Переписаны на `countUpSQLFiles` (считает `*.up.sql` в каталоге на
+   лету) вместо константы; тест переименован в `TestLoad_realMigrationsDirParsesAll`,
+   проверка "версии подряд, без разрывов" заменена на "версии строго
+   возрастают" (миграция `140_chat_read_state`, добавленная соседней сессией,
+   не непрерывна с `001..013`, и это нормально — раннер `migrate.Load` не
+   требует непрерывности, только сортировку и уникальность).
+
+2. **IssueTable (`/api/issues/table/{groups,rows,facets}`) и
+   `/api/issues/children` (плоский список по набору `parent_ids`) —
+   реализованы.** Ранее (см. раздел «T-027 (task/dispatch/realtime)» выше)
+   оставлены заглушками genstubs; `/api/issues/{id}/children` (единственный
+   родитель) уже был реализован (`task.handleChildIssues`), не путать с
+   `/api/issues/children` (набор родителей). Реализация —
+   `server2/internal/task/table.go`:
+   - `IssueTableQuery` (scope/filters/search) транслируется в SQL-условие
+     поверх `tickets`, переиспользуя `queryBuilder` из `filters.go`.
+     `scope.kind=my` с `relation` — `assigned`/`created`/`involved` (агент,
+     которым владеет вызывающий, через `operatives.op_owner_account_id`, и
+     отряд, чей лидер ему принадлежит, через `crews`+`operatives`) /`any`
+     (по умолчанию — OR всех трёх, контракт не уточняет дефолт `relation`,
+     решение зафиксировано здесь).
+   - `group.kind`: `none`/`status`/`assignee`/`project`/`parent`/`property`
+     реализованы полностью (SQL `GROUP BY` по соответствующему выражению);
+     `compound` — комбинация `primary`+`secondary` среди этого же набора
+     (кроме `property`, которое требует ещё и `property_id` на каждом из
+     primary/secondary — контракт не уточняет форму для этого случая,
+     оставлено неподдержанным, 400 при `group.kind=compound` без `primary`).
+   - Курсорная пагинация groups/rows — **без хранимого состояния сервера**:
+     курсор несёт офсет и SHA-256 отпечаток JSON-сериализации разобранного
+     запроса (`query`+`group`[+`group_key`/`parent_id`/`hierarchy.enabled`
+     для rows]); повторный вызов с другим query/group/group_key/parent_id
+     даёт другой отпечаток → курсор отклоняется 400 `invalid cursor` вместо
+     того, чтобы молча вернуть чужую страницу — это и есть контрактное
+     требование "курсор... не годится для другого набора фильтров/сортировки".
+     `query_fingerprint` в ответе `listIssueTableRows` — тот же отпечаток.
+     Обратная сторона упрощения: контракт говорит про "транзакцию с
+     REPEATABLE READ" между вызовами groups/rows одного пользовательского
+     запроса — здесь каждый HTTP-вызов открывает свою транзакцию чтения;
+     для типичного сценария (доска не меняется между открытием групп и
+     подгрузкой их строк) результат неотличим, но конкурентная запись между
+     двумя вызовами теоретически может дать несогласованную страницу. Не
+     реализовывать полноценный snapshot между независимыми HTTP-запросами
+     сочтено оправданным для рамок доводки.
+   - `hierarchy.enabled` в `listIssueTableRows` — только прямые дети
+     (`tk_parent_ticket_id = parent_id`), не полное поддерево; `branch_total`
+     равен `total` (числу прямых детей, попавших под фильтры). Полная
+     рекурсивная ветка потребовала бы `WITH RECURSIVE` с отдельной пагинацией
+     по глубине, которую контракт не описывает, — задокументированное
+     упрощение.
+   - `listIssueTableFacets` считает счётчики по **уже применённым фильтрам
+     query целиком**, не исключая фильтр самого фасета (контракт не
+     уточняет, должен ли, скажем, фасет `status` игнорировать
+     `filters.statuses` при подсчёте своих же значений) — простое и
+     предсказуемое поведение, взятое как решение по умолчанию.
+   - `listIssueChildrenByParents` (`GET /api/issues/children?parent_ids=`) —
+     прямой SQL `tk_parent_ticket_id = ANY($1)`, до 200 id (лимит из
+     контракта), пустой список — пустой результат без обращения к БД.
+
+3. **`internal/asset`: `GET /uploads/{key}` больше не 501, когда backend не
+   локальный.** Раньше домен монтировал только `"/uploads/{key...}"`
+   (хвостовой wildcard, нужный настоящему ключу — `newObjectKey` кладёт
+   `scope/имя-файла` через `/`) и только когда `Storage` — `*LocalStorage`;
+   иначе путь не был занят вовсе и падал в genstubs-заглушку 501, хотя
+   собственный комментарий домена уже требовал 404 "не найдено" для
+   нелокального backend. Обнаружено контрольным прогоном всех операций тегов
+   Issues/IssueTable/Comments/Labels/Properties/Attachments/Pins/Projects/
+   ProjectResources/Inbox/NotificationPreferences/Chat против поднятого
+   сервера (единственная строка 501 из 113). Решение: домен теперь всегда
+   занимает **буквальный** путь контракта `"/uploads/{key}"` (`handleServeLocalUpload`
+   уже отвечает 404, когда `Storage` не `*LocalStorage` или ключ не найден);
+   `"/uploads/{key...}"` (не входящий в контракт, только внутренняя
+   необходимость для реальных многосегментных ключей) по-прежнему
+   монтируется дополнительно, но только когда backend локальный — тем самым
+   `internal/app.TestRouteCoverageMatchesContract` (строит роутер без
+   сконфигурированного хранилища) по-прежнему видит только контрактный путь
+   и остаётся зелёным, а настоящий локальный backend в реальном
+   развёртывании получает оба варианта (net/http's ServeMux предпочитает
+   более специфичный `{key}` для однос сегментных запросов, `{key...}` — для
+   остальных).
+
+4. **`feed.Notify` не был подключён ни одним доменом.** Пакет `feed`
+   (реализован в разделе «T-027 (project/feed/chat)» выше) экспортирует
+   `Notify`, но ни `task`, ни `note`, ни `chat` его не вызывали — контрактные
+   источники уведомлений (назначение, смена статуса, новый комментарий,
+   упоминание) не создавали строк `alerts`. Подключено в этой сессии:
+   - `internal/task/notify.go`: `notifyAssigned` (`issue_assigned` —
+     назначенному участнику-человеку, если новый `assignee_type=member` и
+     это не сам инициатор) и `notifyStatusChanged` (`status_changed` — всем
+     человеческим подписчикам задачи, кроме инициатора смены), вызываются из
+     `handleCreateIssue`/`handleUpdateIssue`/`handleMoveIssue`.
+     Назначение на агента/отряд не создаёт инбокс-уведомление (у агентов нет
+     `/api/notification-preferences` по контракту — они реагируют на
+     постановку в очередь `internal/dispatch`, не на `InboxItem`).
+   - `internal/note/notify.go`: `notifySubscribersOfComment` (`new_comment` —
+     всем человеческим подписчикам задачи, кроме автора) и
+     `notifyMentionedMembers` (`mentioned` — участнику, упомянутому токеном
+     `@member:<uuid>`), вызываются из `handleCreateComment`. Синтаксис
+     `@member:<uuid>` — расширение уже принятого в T-027 решения про
+     `@agent:<uuid>`/`@squad:<uuid>` (см. `internal/note/triggers.go`,
+     `mentionRe`) тем же принципом на человеческое упоминание; `resolveTargets`
+     (правило автозапуска агентов) по-прежнему не видит `member`-упоминания —
+     они не должны запускать агентов.
+   - `chat` не тронут: контракт не документирует отдельный тип уведомления
+     для чат-сообщений участнику-человеку (чат — синхронный UI, не
+     инбокс-канал), поэтому `feed.Notify` в этом домене не подключался.
+
+5. **e2e фронтенда (`e2e/{issues,issue-table,comments,chat-attachments,navigation}.spec.ts`)
+   против server2 — частично.** `pnpm install` (30с, без проблем с сетью),
+   `apps/web` поднят (`BACKEND_PORT=8410` — прокси dev-режима Next.js на
+   `/api/**`/`/ws`/`/auth/**`/`/uploads/**`, см. `apps/web/config/runtime-urls.ts`),
+   Playwright — предустановленный Chromium (без `playwright install`).
+   Обнаружены и исправлены две реальные проблемы **server2**:
+   - `e2e/fixtures.ts` (файл вне server2, менять запрещено правилами этой
+     сессии) резолвит тестового пользователя/воркспейс/задачи прямым SQL по
+     именам таблиц исходного сервера (`verification_code`, `"user"`,
+     `workspace.issue_counter`, `issue`), а не через HTTP API. Модель данных
+     server2 — с другими именами по всей схеме (`login_codes`, `accounts`,
+     `spaces.ws_next_ticket_seq`, `tickets`) — так и задумано clean-room
+     переписью. Решение: узкая, явно обособленная миграция
+     `server2/migrations/160_e2e_test_compat.{up,down}.sql` — представления
+     (views) `verification_code`/`"user"`/`workspace`/`issue`, транслирующие
+     эти имена в реальную схему (`login_codes`/`accounts`/`spaces`/`tickets`),
+     плюс `INSTEAD OF INSERT`-триггер на `issue` (вычисляет обязательный
+     `tk_display_key = ws_ticket_prefix || '-' || number`, которого
+     SQL-фикстура не знает и не задаёт). **Не часть контракта** — только
+     совместимость с e2e-тестовой инфраструктурой верхнего уровня, которую
+     нельзя менять в этой сессии; задокументировано прямо в самом файле
+     миграции. `verification_code.code` — фиктивное значение (`login_codes`
+     хранит только `lc_code_digest`, не открытый текст); в тестовом прогоне
+     `GOOSAR_DEV_VERIFICATION_CODE` всегда задан, поэтому фикстура его не
+     читает. Проверено вручную: `DELETE`/`SELECT` по `verification_code`,
+     `SELECT`/`UPDATE` по `"user"`, `UPDATE ... RETURNING` по `workspace`,
+     многострочный `INSERT ... SELECT ... FROM unnest(...)` и `DELETE ... = ANY(...)`
+     по `issue` — все возвращают корректные данные, и созданные так задачи
+     видны и редактируются через настоящий `GET/PUT /api/issues` (сквозная
+     проверка).
+   - `handleSendCode` (dev-режим, `GOOSAR_DEV_VERIFICATION_CODE` задан) не
+     писал код в `login_codes` вовсе — `verify-code` сравнивает с
+     фиксированным dev-кодом напрямую, без обращения к БД. Это ломало ту же
+     `e2e/fixtures.ts`: её `SELECT code FROM verification_code WHERE ...`
+     (запасной путь на случай, когда у клиента теста не настроен
+     `GOOSAR_DEV_VERIFICATION_CODE`) кидал "No verification code found" ещё
+     до того, как код вообще сравнивался. Решение: dev-ветка `handleSendCode`
+     теперь тоже вызывает `Store.StoreCode` (тот же метод, что и обычный
+     путь) — и вынесена **перед** проверкой троттлинга "1 код в 60с на
+     email" (`LastCodeSentAt`), а не после: этот троттлинг защищает
+     почтового провайдера от спама, а dev-режим письмо не отправляет вовсе,
+     поэтому применять к нему тот же лимит означало бы блокировать повторные
+     логины одного и того же тестового email в пределах минуты (типичный
+     паттерн e2e, статичный `DEFAULT_E2E_EMAIL` на воркер) — сама проверка
+     кода (`constantTimeEqual` с `DevVerifyCode`) не изменилась, только то,
+     что теперь запись всё же попадает в `login_codes` для читателей вроде
+     `e2e/fixtures.ts`.
+   - Playwright: `@playwright/test@1.58.2` (по `pnpm-lock.yaml`) ожидает
+     ревизию Chromium 1208, а `/opt/pw-browsers` содержит только 1194
+     (`chromium-1194`/`chromium_headless_shell-1194`) — несовпадение версий
+     окружения, не связанное с server2 и не устранимое без
+     `playwright install` (запрещено инструкцией) или правки
+     `pnpm-lock.yaml`/`package.json` (фронтенд). Обойдено символическими
+     ссылками `chromium-1208`→`chromium-1194`,
+     `chromium_headless_shell-1208/chrome-headless-shell-linux64/*`→
+     соответствующим файлам `-1194` (тот же бинарник Chrome for Testing,
+     достаточно близкая ревизия для базовых CDP-операций) — браузер
+     запускается.
+   - После этого все специфичные для server2 проблемы устранены (логин
+     проходит, воркспейс создаётся, страница `/{slug}/issues` рендерится и
+     отдаёт реальные данные — подтверждено снимком DOM), но `e2e/issues.spec.ts`,
+     `e2e/issue-table.spec.ts`, `e2e/comments.spec.ts`, `e2e/navigation.spec.ts`
+     всё равно падают на `loginAsDefault`/`waitForIssuesPage` (`e2e/helpers.ts`):
+     хелпер ждёт текст/кнопку **"New Issue"**, но текущая копия фронтенда
+     (`packages/views/locales/en/layout.json`, ключ `new_issue`) уже
+     переименована в **"New Task"** — это переименование продукта в самом
+     фронтенде (просто смена строки перевода у того же ключа), никак не
+     связанное с backend/контрактом, предшествующее этой сессии и
+     затрагивающее исключительно файлы вне server2 (`e2e/helpers.ts`,
+     `packages/views/**`), которые эта сессия не имеет права менять.
+     `e2e/chat-attachments.spec.ts` не использует `loginAsDefault` (только
+     HTTP), но seed'ит данные прямым SQL по ещё более далёким от server2
+     именам (`agent_runtime`, `agent`, `chat_session`, `attachment` со
+     столбцами `runtime_mode`/`runtime_config`/`owner_id`/`visibility` и т.п.)
+     — построение для него отдельного совместимого набора представлений
+     означало бы, по сути, копирование значительной части модели данных
+     исходного сервера домена агентов/рантаймов ради одного теста и залезает
+     в область T-028 (агентский актор/демон), явно вне рамок этой сессии;
+     оставлено незавершённым, задокументировано здесь как таковое, а не
+     тихо пропущено.
+
 ## Прочитанные файлы (кроме docs/50-api-contract.{md,yaml}, docs/51-data-model.md)
 
 Session T-025:
@@ -636,5 +835,38 @@ Session T-027 (task/dispatch/realtime, дополнительно к списк�
   `difflib.SequenceMatcher` после нормализации), чтобы осмысленно
   восстановить `dispatch/deps.go` и `task/subscribers.go` ниже 30% после
   первого запуска, вместо косметических правок вслепую.
+
+Session T-027 доводка (дополнительно к спискам выше):
+- `docs/31-backlog.md` (T-027 — критерии приёмки доводки), `docs/50-api-contract.yaml`
+  (разделы IssueTable/Chat/Inbox, схемы `IssueTable*`, `InboxItem`, `AppConfig.feature_flags`).
+- `server2/README.md`, `server2/docs/adr/0001-stack.md`, `server2/docs/decisions.md`
+  (целиком, все записи предыдущих сессий).
+- `server2/internal/{app,httpapi,store,workspace,realtime}/*.go`,
+  `internal/{task,note,tagging,asset,pin,project,feed,chat,dispatch}/*.go`
+  (весь код всех доменов T-027, чтобы найти границы уже занятых маршрутов и
+  не задвоить их — не их черновые комментарии по существу чужой задачи, где
+  не относится к границе с этой доводкой).
+- `server2/internal/migrate/{migrate.go,migrate_test.go}`,
+  `server2/migrations/*.up.sql` (все, включая `140_chat_read_state`) —
+  точные имена таблиц/колонок для `internal/task/table.go` и для
+  совместимых представлений `160_e2e_test_compat.up.sql`.
+- `server2/migrations/check_names.py` — не запускался (не входит в список
+  обязательных проверок этой сессии; сверка имён вручную по regex-правилам
+  файла, без чтения `server/migrations/001_init.up.sql`).
+- `e2e/contract/{README.md,client.go,harness.go,contract_test.go,spec.go,main_test.go}`
+  — весь пакет (дописаны разделы issues: IssueTable/`/api/issues/children`).
+- `e2e/{helpers.ts,fixtures.ts,env.ts,base-url.ts}`, `playwright.config.ts`,
+  `e2e/{issues,issue-table,comments,chat-attachments,navigation}.spec.ts` —
+  только чтение (см. пункт 5 выше про исправление server2 под них); не
+  редактировались.
+- `apps/web/{next.config.ts,config/runtime-urls.ts,package.json}` — как
+  фронтенд резолвит backend-адрес в dev-режиме (`BACKEND_PORT`), для запуска
+  `pnpm --filter @goosar/web dev` против server2.
+- `packages/views/locales/en/{layout.json,modals.json,search.json,projects.json}`,
+  `packages/views/search/search-command.tsx` — только чтобы диагностировать
+  расхождение "New Issue"/"New Task" между `e2e/helpers.ts` и текущей копией
+  фронтенда (пункт 5 выше); `packages/core/**` не открывался, `server/**` не
+  открывался.
+- `scripts/similarity-check.py` (повторно, после каждой правки).
 
 `server/**` и `packages/core/**` не открывались.

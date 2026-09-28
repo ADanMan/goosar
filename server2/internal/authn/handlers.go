@@ -39,20 +39,32 @@ func (d *Deps) handleSendCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// dev-режим: фиксированный код из GOOSAR_DEV_VERIFICATION_CODE, почта не
+	// отправляется — verify-code сравнивает с ним напрямую (см.
+	// handleVerifyCode), не читая эту строку. Код всё же сохраняется в
+	// login_codes (тем же StoreCode, что и обычный путь) — T-027 доводка:
+	// e2e-тесты фронтенда (e2e/fixtures.ts, вне server2) читают
+	// подтверждающий код прямым SQL-запросом как запасной вариант, когда
+	// GOOSAR_DEV_VERIFICATION_CODE не задан у клиента теста, и без строки в
+	// БД эта проверка всегда возвращает "код не найден", даже когда сам логин
+	// в остальном работает. Троттлинг "1 код в 60с на email"
+	// (LastCodeSentAt) сюда не применяется: он защищает почтовый провайдер от
+	// спама, а в dev-режиме письмо не отправляется вовсе, поэтому эта ветка —
+	// раньше проверки повторной отправки, не после.
+	if d.Config.DevCodeEnabled() {
+		if err := d.Store.StoreCode(r.Context(), email, d.Config.DevVerifyCode, "login", codeTTL); err != nil {
+			d.Logger.Warn("auth: сохранение dev-кода", "err", err)
+		}
+		d.Logger.Info("auth: dev-код входа", "email", email)
+		httpapi.WriteJSON(w, http.StatusOK, map[string]string{"message": "code sent"})
+		return
+	}
+
 	if last, ok, err := d.Store.LastCodeSentAt(r.Context(), email, "login"); err == nil && ok {
 		if time.Since(last) < codeResendWindow {
 			httpapi.TooManyRequests(w, "code requested too recently")
 			return
 		}
-	}
-
-	// dev-режим: фиксированный код из GOOSAR_DEV_VERIFICATION_CODE, почта не
-	// отправляется и код в БД не сохраняется — verify-code сравнивает с ним
-	// напрямую (см. handleVerifyCode).
-	if d.Config.DevCodeEnabled() {
-		d.Logger.Info("auth: dev-код входа", "email", email)
-		httpapi.WriteJSON(w, http.StatusOK, map[string]string{"message": "code sent"})
-		return
 	}
 
 	code, err := randomCode(6)

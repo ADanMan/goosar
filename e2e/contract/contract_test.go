@@ -250,6 +250,68 @@ func testIssues(f *fixture) func(t *testing.T) {
 		if status != 400 {
 			t.Errorf("POST /api/issues with no title: expected 400, got %d", status)
 		}
+
+		// T-027 доводка: IssueTable (/api/issues/table/{groups,rows,facets})
+		// и /api/issues/children (набор родителей через query).
+		status, _ = f.call(t, http.MethodGet, "/api/issues/children",
+			"/api/issues/children?parent_ids="+f.issueID, nil)
+		if status != 200 {
+			t.Errorf("GET /api/issues/children: expected 200, got %d", status)
+		}
+
+		status, groupsBody := f.call(t, http.MethodPost, "/api/issues/table/groups", "/api/issues/table/groups",
+			map[string]any{
+				"query": map[string]any{"scope": map[string]any{"kind": "workspace"}},
+				"group": map[string]any{"kind": "status"},
+			})
+		if status != 200 {
+			t.Fatalf("POST /api/issues/table/groups: expected 200, got %d, body=%s", status, truncate(groupsBody))
+		}
+		groups := decodeJSON(t, groupsBody)
+		groupList, _ := groups["groups"].([]any)
+		if len(groupList) == 0 {
+			t.Errorf("POST /api/issues/table/groups: expected at least one group (issue was created above), got 0")
+		}
+
+		status, rowsBody := f.call(t, http.MethodPost, "/api/issues/table/rows", "/api/issues/table/rows",
+			map[string]any{
+				"query": map[string]any{"scope": map[string]any{"kind": "workspace"}},
+				"group": map[string]any{"kind": "none"},
+				"page":  map[string]any{"limit": 10},
+			})
+		if status != 200 {
+			t.Fatalf("POST /api/issues/table/rows: expected 200, got %d, body=%s", status, truncate(rowsBody))
+		}
+		rows := decodeJSON(t, rowsBody)
+		rowList, _ := rows["rows"].([]any)
+		if len(rowList) == 0 {
+			t.Errorf("POST /api/issues/table/rows: expected at least one row, got 0")
+		}
+		fingerprint, _ := rows["query_fingerprint"].(string)
+		if fingerprint == "" {
+			t.Errorf("POST /api/issues/table/rows: expected a non-empty query_fingerprint")
+		}
+
+		status, _ = f.call(t, http.MethodPost, "/api/issues/table/facets", "/api/issues/table/facets",
+			map[string]any{
+				"query":  map[string]any{"scope": map[string]any{"kind": "workspace"}},
+				"facets": []map[string]any{{"kind": "status"}, {"kind": "priority"}},
+			})
+		if status != 200 {
+			t.Errorf("POST /api/issues/table/facets: expected 200, got %d", status)
+		}
+
+		// A cursor whose fingerprint does not match the current query is a
+		// documented 400, not a silently-wrong page.
+		status, _ = f.call(t, http.MethodPost, "/api/issues/table/rows", "/api/issues/table/rows",
+			map[string]any{
+				"query": map[string]any{"scope": map[string]any{"kind": "workspace"}},
+				"group": map[string]any{"kind": "none"},
+				"page":  map[string]any{"limit": 10, "cursor": "not-a-valid-cursor"},
+			})
+		if status != 400 {
+			t.Errorf("POST /api/issues/table/rows with an invalid cursor: expected 400, got %d", status)
+		}
 	}
 }
 

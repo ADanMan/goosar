@@ -53,10 +53,24 @@ func NewStorageFromConfig(cfg config.Config) Storage {
 }
 
 // Register регистрирует операции тега Attachments + upload-file + список
-// вложений задачи. GET /uploads/{key} — отдельно, а не в таблице: он
-// монтируется только когда backend — локальный диск (LOCAL_UPLOAD_DIR
-// задан), контракт прямо оговаривает, что иначе этот путь не существует
-// (404), а не отвечает пустым списком/ошибкой конфигурации.
+// вложений задачи. GET /uploads/{key} — единственный путь, который контракт
+// (docs/50-api-contract.yaml) описывает буквально этой строкой, и его этот
+// домен занимает всегда (не только когда backend — локальный диск):
+// handleServeLocalUpload уже отвечает 404, когда Storage не *LocalStorage —
+// раньше при отсутствии LOCAL_UPLOAD_DIR путь не занимался этим доменом
+// вовсе и падал в genstubs-заглушку 501, что расходилось с собственным
+// комментарием этого домена ("иначе 404, не ошибка конфигурации"); это и
+// есть T-027 доводка для этого маршрута.
+//
+// Настоящий объектный ключ (newObjectKey) — "scope/имя-файла", то есть
+// содержит "/": одного "{key}" (один сегмент, ровно то, что называет
+// контракт) для него недостаточно — net/http's ServeMux сопоставляет "{key}"
+// только одному сегменту пути. Поэтому когда backend локальный, домен
+// дополнительно занимает "{key...}" (хвост из нескольких сегментов) той же
+// ручкой; это не входит в TestRouteCoverageMatchesContract (internal/app),
+// который строит роутер без сконфигурированного хранилища и потому никогда
+// не видит этот второй путь — тот же компромисс, что был в исходном коде до
+// этой правки, задокументирован в server2/docs/decisions.md.
 func Register(router *httpapi.Router, deps *Deps) {
 	table := [...]struct {
 		method  string
@@ -69,6 +83,7 @@ func Register(router *httpapi.Router, deps *Deps) {
 		{http.MethodGet, "/api/attachments/{id}/content", deps.handleAttachmentContent},
 		{http.MethodGet, "/api/attachments/{id}/download", deps.handleAttachmentDownload},
 		{http.MethodGet, "/api/issues/{id}/attachments", deps.handleListIssueAttachments},
+		{http.MethodGet, "/uploads/{key}", deps.handleServeLocalUpload},
 	}
 	for _, rt := range table {
 		router.Handle(rt.method, rt.pattern, rt.handler)

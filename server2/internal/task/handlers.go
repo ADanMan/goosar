@@ -236,6 +236,7 @@ func (d *Deps) handleCreateIssue(w http.ResponseWriter, r *http.Request) {
 
 	d.publishWorkspace(ws.ID, "issue:created", map[string]any{"issue": issue})
 	d.enqueueAutostart(r.Context(), ws, Issue{}, issue, true, "", false, "")
+	d.notifyAssigned(r.Context(), ws, issue, actorKind(actor.IsHuman), actor.UserID)
 
 	httpapi.WriteJSON(w, http.StatusCreated, issue)
 }
@@ -288,10 +289,22 @@ func (d *Deps) handleUpdateIssue(w http.ResponseWriter, r *http.Request) {
 		after.Labels = labels
 	}
 	d.afterIssueMutated(r.Context(), ws, before, after)
+	d.notifyIssueChange(r.Context(), ws, before, after, actorKind(actor.IsHuman), actor.UserID)
 
 	d.publishWorkspace(ws.ID, "issue:updated", map[string]any{"issue": after})
 	d.enqueueAutostart(r.Context(), ws, before, after, false, "", req.SuppressRun, req.HandoffNote)
 	httpapi.WriteJSON(w, http.StatusOK, after)
+}
+
+// notifyIssueChange — общая точка для updateIssue/moveIssue: назначение и
+// смена статуса — единственные два источника инбокс-уведомлений из этого
+// домена по правилам контракта (см. internal/task/notify.go); упоминание и
+// комментарий в подписанной задаче уведомляются из internal/note.
+func (d *Deps) notifyIssueChange(ctx context.Context, ws workspace.Workspace, before, after Issue, actorType, actorID string) {
+	if !ptrEq(before.AssigneeType, after.AssigneeType) || !ptrEq(before.AssigneeID, after.AssigneeID) {
+		d.notifyAssigned(ctx, ws, after, actorType, actorID)
+	}
+	d.notifyStatusChanged(ctx, ws, before, after, actorType, actorID)
 }
 
 // afterIssueMutated — если исполнитель снят или статус ушёл в done/cancelled,
@@ -408,6 +421,7 @@ func (d *Deps) handleMoveIssue(w http.ResponseWriter, r *http.Request) {
 		after.Labels = labels
 	}
 	d.afterIssueMutated(r.Context(), ws, before, after)
+	d.notifyIssueChange(r.Context(), ws, before, after, actorKind(actor.IsHuman), actor.UserID)
 	d.publishWorkspace(ws.ID, "issue:updated", map[string]any{"issue": after})
 	d.enqueueAutostart(r.Context(), ws, before, after, false, "", req.SuppressRun, req.HandoffNote)
 	httpapi.WriteJSON(w, http.StatusOK, after)

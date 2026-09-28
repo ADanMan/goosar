@@ -3,6 +3,7 @@ package migrate
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -39,21 +40,44 @@ func TestLoadFS_ordersByVersionAndIgnoresOtherFiles(t *testing.T) {
 	}
 }
 
-func TestLoad_realMigrationsDirParsesAllTwelve(t *testing.T) {
-	// Название теста сохранено (историческое из T-025); T-026 добавил
-	// 013_authn_token_epoch (см. server2/docs/decisions.md), отсюда 13.
+func TestLoad_realMigrationsDirParsesAll(t *testing.T) {
+	// Число миграций не хардкодится: T-027 доводка считает .up.sql файлы в
+	// каталоге напрямую, чтобы новые миграции не требовали правки этого теста.
+	wantCount, err := countUpSQLFiles("../../migrations")
+	if err != nil {
+		t.Fatalf("countUpSQLFiles: %v", err)
+	}
 	files, err := Load("../../migrations")
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if len(files) != 13 {
-		t.Fatalf("expected 13 migration files in server2/migrations, got %d", len(files))
+	if len(files) != wantCount {
+		t.Fatalf("expected %d migration files in server2/migrations, got %d", wantCount, len(files))
 	}
-	for i, f := range files {
-		if f.Version != i+1 {
-			t.Errorf("position %d: version = %d, want %d (files must be contiguous and sorted)", i, f.Version, i+1)
+	for i := 1; i < len(files); i++ {
+		if files[i].Version <= files[i-1].Version {
+			t.Errorf("position %d: version = %d, must be strictly increasing after %d", i, files[i].Version, files[i-1].Version)
 		}
 	}
+}
+
+// countUpSQLFiles считает файлы `*.up.sql` напрямую в каталоге (без
+// рекурсии), не полагаясь на количество, зашитое в тест.
+func countUpSQLFiles(dir string) (int, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if strings.HasSuffix(e.Name(), ".up.sql") {
+			n++
+		}
+	}
+	return n, nil
 }
 
 // TestApply_isIdempotentAndSequential применяет реальные миграции server2 к
@@ -102,12 +126,16 @@ func TestApply_isIdempotentAndSequential(t *testing.T) {
 	}
 	defer pool.Close()
 
+	wantCount, err := countUpSQLFiles("../../migrations")
+	if err != nil {
+		t.Fatalf("countUpSQLFiles: %v", err)
+	}
 	applied, err := Apply(ctx, pool, "../../migrations")
 	if err != nil {
 		t.Fatalf("Apply (1st run): %v", err)
 	}
-	if len(applied) != 13 {
-		t.Fatalf("1st run applied %d migrations, want 13: %v", len(applied), applied)
+	if len(applied) != wantCount {
+		t.Fatalf("1st run applied %d migrations, want %d: %v", len(applied), wantCount, applied)
 	}
 
 	var tickets int

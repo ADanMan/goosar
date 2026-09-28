@@ -18,7 +18,8 @@ type TriggerOutcome struct {
 	ReasonCode string `json:"reason_code"` // queued|deferred|coalesced|already_active|self_trigger_suppressed|invocation_not_allowed|attribution_blocked|internal_error
 }
 
-// mentionRe reconoce упоминания в форме @agent:<uuid> / @squad:<uuid>.
+// mentionRe reconoce упоминания в форме @agent:<uuid> / @squad:<uuid> /
+// @member:<uuid>.
 //
 // Пробел спецификации: контракт описывает только *что* упоминание значит
 // («агент явно упомянут (@agent) в тексте»), но не конкретный синтаксис
@@ -26,10 +27,13 @@ type TriggerOutcome struct {
 // на фронте, вне списка разрешённых файлов этой сессии. Решение (см.
 // server2/docs/decisions.md): клиент вставляет упоминание как явный токен
 // "@agent:<uuid>"/"@squad:<uuid>" — однозначно, без коллизий по display name.
-var mentionRe = regexp.MustCompile(`@(agent|squad):([0-9a-fA-F-]{36})`)
+// T-027 доводка расширяет тот же приём на "@member:<uuid>" — для
+// InboxItem.type=mentioned (человеческое упоминание), которое resolveTargets
+// по-прежнему игнорирует (member не запускает агентов), но notify.go читает.
+var mentionRe = regexp.MustCompile(`@(agent|squad|member):([0-9a-fA-F-]{36})`)
 
 type mention struct {
-	kind string // agent|squad
+	kind string // agent|squad|member
 	id   string
 }
 
