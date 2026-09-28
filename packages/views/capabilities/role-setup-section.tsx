@@ -9,6 +9,14 @@ import { autopilotKeys, autopilotListOptions } from '@goosar/core/autopilots';
 import { useWorkspaceId } from '@goosar/core/hooks';
 import { runtimeListOptions } from '@goosar/core/runtimes/queries';
 import { Button } from '@goosar/ui/components/ui/button';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@goosar/ui/components/ui/empty';
 import { RuntimeConnectButton } from '../onboarding/launchers';
 import { useT } from '../i18n';
 import { roleSetupCards, type RoleSetupCard } from './role-setup-cards';
@@ -109,14 +117,24 @@ function RoleCard({
     );
   }
 
+  // No machine at all — the gate everything else on this page sits behind,
+  // so it gets the same empty-state pattern as Runtimes/Skills (icon +
+  // title + text + centered CTA) instead of the same narrow row the
+  // autopilots card above uses (T-033 §3.2 L63): a plain row didn't signal
+  // that the rest of the page can't actually do anything without a machine.
   return (
-    <Row
-      testId="role-card-runtime"
-      icon={<Monitor className="size-4" />}
-      title={t(($) => $.role_setup.runtime_title)}
-      body={t(($) => $.role_setup.runtime_body)}
-      action={<RuntimeConnectButton wsId={wsId} variant="default" />}
-    />
+    <Empty data-testid="role-card-runtime" className="border bg-card">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <Monitor />
+        </EmptyMedia>
+        <EmptyTitle>{t(($) => $.role_setup.runtime_title)}</EmptyTitle>
+        <EmptyDescription>{t(($) => $.role_setup.runtime_body)}</EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <RuntimeConnectButton wsId={wsId} variant="default" />
+      </EmptyContent>
+    </Empty>
   );
 }
 

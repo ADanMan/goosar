@@ -285,12 +285,23 @@ function ServiceBadges({ status }: { status: ServiceCredentialStatus }) {
       ) : null}
       {personalLabel !== null ? (
         <span
+          // "filled" only means the value is saved, not that it works — the
+          // code tracks no separate "verified" state (nothing here calls a
+          // service to check), so a plain success/green badge would claim
+          // more than is known. A dashed border marks it as provisional
+          // instead, and the tooltip carries the same caveat the page's
+          // footnote gives, right where the badge is (T-033 §3.2 L71).
+          title={
+            status.personal === 'filled'
+              ? t(($) => $.capabilities.badge_you_filled_hint)
+              : undefined
+          }
           className={cn(
             'rounded-full px-2 py-0.5 text-[11px] font-medium',
             isPersonalActionable(status)
               ? 'bg-warning/10 text-warning'
               : status.personal === 'filled'
-                ? 'bg-success/10 text-success'
+                ? 'border border-dashed border-muted-foreground/40 bg-muted/60 text-muted-foreground'
                 : 'bg-muted text-muted-foreground',
           )}
         >

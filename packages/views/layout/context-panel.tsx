@@ -149,6 +149,13 @@ function SettingsSection({ billingEnabled }: { billingEnabled?: boolean }) {
           <PanelLink href={p.skills()} isActive={pathname === p.skills()}>
             <span>{t(($) => $.nav.skills)}</span>
           </PanelLink>
+          {/* T-033 §3.2 L64 — capabilities had no subpanel entry and no
+              "Settings" breadcrumb at all, unlike its runtimes/skills/usage
+              neighbours (nav-sections.ts already routes it into 'settings';
+              this was the missing link in the panel itself). */}
+          <PanelLink href={p.capabilities()} isActive={pathname === p.capabilities()}>
+            <span>{t(($) => $.nav.capabilities)}</span>
+          </PanelLink>
           <PanelLink href={p.usage()} isActive={pathname === p.usage()}>
             <span>{t(($) => $.nav.usage)}</span>
           </PanelLink>

@@ -29,6 +29,7 @@ vi.mock('@goosar/core/paths', () => ({
     skills: () => '/acme/skills',
     usage: () => '/acme/usage',
     settings: () => '/acme/settings',
+    capabilities: () => '/acme/capabilities',
     issueDetail: (id: string) => `/acme/issues/${id}`,
     projectDetail: (id: string) => `/acme/projects/${id}`,
   }),
@@ -142,5 +143,14 @@ describe('ContextPanel settings section billing item (T-032 §3.2)', () => {
     render(<ContextPanel activeSection="settings" billingEnabled />);
     const billingLink = screen.getByText(ruLayout.nav.billing).closest('a');
     expect(billingLink).toHaveAttribute('href', '/acme/billing');
+  });
+});
+
+describe('ContextPanel settings section capabilities item (T-033 §3.2 L64)', () => {
+  it('always shows the capabilities item, linked under the workspace', async () => {
+    const { ContextPanel } = await import('./context-panel');
+    render(<ContextPanel activeSection="settings" />);
+    const capabilitiesLink = screen.getByText(ruLayout.nav.capabilities).closest('a');
+    expect(capabilitiesLink).toHaveAttribute('href', '/acme/capabilities');
   });
 });

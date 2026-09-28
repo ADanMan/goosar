@@ -68,6 +68,7 @@ export function navSectionForPath(p: WorkspacePaths, pathname: string): NavSecti
     isUnder(p.runtimes()) ||
     isUnder(p.skills()) ||
     isUnder(p.usage()) ||
+    isUnder(p.capabilities()) ||
     isUnder(workspaceBillingPath(p))
   )
     return 'settings';

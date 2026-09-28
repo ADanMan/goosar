@@ -73,6 +73,7 @@
     "badge_admin_off": "관리자가 지금은 꺼 둠",
     "badge_you_missing": "회원님의 키가 필요합니다",
     "badge_you_filled": "키 입력됨",
+    "badge_you_filled_hint": "저장되었지만 키가 실제로 작동하는지는 아직 확인하지 않았습니다.",
     "badge_you_none": "키가 필요 없습니다",
     "saved_not_verified": "\"키 입력됨\"은 값이 저장되었다는 뜻입니다. 실제로 작동하는지는 서비스 카드에서 \"이용 방법\"을 펼쳐 \"작동 확인 방법\"을 확인하세요.",
     "open_setup": "키를 입력하는 곳",

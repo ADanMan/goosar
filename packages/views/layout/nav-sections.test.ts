@@ -14,6 +14,12 @@ describe('workspaceBillingPath (T-032 §3.2)', () => {
   });
 });
 
+describe('capabilities in the settings section (T-033 §3.2 L64)', () => {
+  it('is recognized as the settings section, same as /usage and /runtimes', () => {
+    expect(navSectionForPath(p, p.capabilities())).toBe('settings');
+  });
+});
+
 describe('navBreadcrumbLabelKey (T-032 §3.2)', () => {
   it('labels the agents page with the shared crew section label', () => {
     expect(navSectionForPath(p, p.agents())).toBe('crew');

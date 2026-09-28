@@ -73,6 +73,7 @@
     "badge_admin_off": "管理员暂时关闭",
     "badge_you_missing": "需要你的密钥",
     "badge_you_filled": "已填写密钥",
+    "badge_you_filled_hint": "已保存，但尚未验证该密钥是否真的可用。",
     "badge_you_none": "不需要密钥",
     "saved_not_verified": "「已填写密钥」只表示值已保存。要确认它是否真的可用，请在服务卡片上展开「如何获取访问权限」，查看其中的「如何确认可用」。",
     "open_setup": "在哪里填写密钥",

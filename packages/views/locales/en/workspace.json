@@ -74,6 +74,7 @@
     "badge_admin_off": "Switched off by an administrator for now",
     "badge_you_missing": "Needs your key",
     "badge_you_filled": "Key entered",
+    "badge_you_filled_hint": "Saved, but we haven't checked that the key actually works.",
     "badge_you_none": "No key needed",
     "saved_not_verified": "\"Key entered\" means the value was saved. To find out whether it actually works, open \"How to get access\" on the service card and read the \"How to check it works\" part.",
     "open_setup": "Where to enter the key",
