@@ -87,12 +87,12 @@ func (s *Store) ContactLeadCountLastHourByEmail(ctx context.Context, email strin
 // --- client-usage ------------------------------------------------------------------
 
 type ClientUsageInput struct {
-	AccountID      string
-	InstallID      string
-	Platform       string
-	ClientVersion  string
-	ClientOS       string
-	RuntimeProbe   map[string]any // nil, если платформа не desktop
+	AccountID     string
+	InstallID     string
+	Platform      string
+	ClientVersion string
+	ClientOS      string
+	RuntimeProbe  map[string]any // nil, если платформа не desktop
 }
 
 func (s *Store) UpsertClientUsage(ctx context.Context, in ClientUsageInput) error {
@@ -190,10 +190,10 @@ func (s *Store) WorkspaceMcpServers(ctx context.Context, workspaceID string) ([]
 }
 
 type LLMConfig struct {
-	BaseURL  *string
-	Model    *string
-	HasKey   bool
-	Origin   string // "workspace" | "none"
+	BaseURL *string
+	Model   *string
+	HasKey  bool
+	Origin  string // "workspace" | "none"
 }
 
 func (s *Store) WorkspaceLLMConfig(ctx context.Context, workspaceID string) (LLMConfig, error) {

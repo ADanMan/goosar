@@ -340,6 +340,31 @@ func (d *Deps) oidc() *oidcClient {
 	return d.oidcInstance
 }
 
+// checkOIDCCallbackState читает и стирает state-cookie, затем сверяет её
+// state с query-параметром ?state= callback'а — оба шага, которые
+// handleOidcCallback обязан сделать до чего-либо ещё (contract: state —
+// CSRF-защита самого редиректа). Возвращает client ("web"/"desktop", для
+// последующих редиректов — даже при ошибке, чтобы редирект на failure ушёл
+// туда же, откуда пришёл запрос) и nonce (для resolveOIDCIdentity); errCode
+// пусто, если state в порядке.
+func (d *Deps) checkOIDCCallbackState(w http.ResponseWriter, r *http.Request) (client, nonce, errCode string) {
+	client = "web"
+	var wantState string
+	var stateOK bool
+	if cookie, err := r.Cookie(oidcStateCookie); err == nil {
+		if s, c, n, ok := verifyOIDCState(d.Config.JWTSecret, cookie.Value); ok {
+			wantState, client, nonce, stateOK = s, c, n, true
+		}
+	}
+	clearOIDCStateCookie(w)
+
+	state, code := r.URL.Query().Get("state"), r.URL.Query().Get("code")
+	if !stateOK || state == "" || state != wantState || code == "" {
+		return client, nonce, "invalid_state"
+	}
+	return client, nonce, ""
+}
+
 // resolveOIDCIdentity — весь путь от "code" из query-параметра callback до
 // проверенной identity: обмен на id_token, проверка подписи/claim'ов, сверка
 // nonce с тем, что было в state-cookie, разбор sub/email/name. failCode —

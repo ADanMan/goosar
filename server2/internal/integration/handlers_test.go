@@ -107,8 +107,8 @@ func TestGitHubSetupCallbackAndConnectURL(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", connectRec.Code, connectRec.Body.String())
 	}
 	var connectBody struct {
-		URL       string `json:"url"`
-		Configured bool  `json:"configured"`
+		URL        string `json:"url"`
+		Configured bool   `json:"configured"`
 	}
 	if err := json.Unmarshal(connectRec.Body.Bytes(), &connectBody); err != nil {
 		t.Fatalf("decode: %v", err)

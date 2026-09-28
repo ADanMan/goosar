@@ -1,8 +1,8 @@
 package misc
 
 import (
-	"log/slog"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"

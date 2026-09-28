@@ -370,12 +370,12 @@ func (s *Store) DeleteSlackInstallation(ctx context.Context, workspaceID, id str
 // этого контракта (см. server2/docs/decisions.md, раздел T-029, "Пробелы
 // спецификации" — контракт документирует только redeem, не выпуск).
 type SlackBindingToken struct {
-	ID              string
-	InstallationID  string
-	WorkspaceID     string
-	SlackUserID     string
-	Status          string
-	ExpiresAt       time.Time
+	ID             string
+	InstallationID string
+	WorkspaceID    string
+	SlackUserID    string
+	Status         string
+	ExpiresAt      time.Time
 }
 
 func (s *Store) RedeemSlackBindingToken(ctx context.Context, tokenHash string) (SlackBindingToken, bool, error) {

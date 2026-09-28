@@ -65,6 +65,12 @@ PORT=8080 \
 | `GOOSAR_PUBLIC_URL` | нет | базовый публичный адрес сервера (T-028: `webhook_url` автопилотов); без него строится из заголовков запроса |
 | `GOOSAR_CLOUDRUNTIME_BASE_URL` | нет | адрес облачного fleet-сервиса (T-028, `internal/cloudruntime`); пусто — вся группа `/api/cloud-runtime/**` отвечает `503` |
 | `GOOSAR_CLOUDRUNTIME_API_KEY` | нет | `Authorization: Bearer` к fleet-сервису, если он его требует |
+| `GITHUB_WEBHOOK_SECRET`/`GITHUB_APP_SLUG`/`GITHUB_APP_ID`/`GITHUB_APP_PRIVATE_KEY` | нет | GitHub App (T-029, `internal/integration`); без `GITHUB_WEBHOOK_SECRET` — `503` на `/api/webhooks/github`, без `GITHUB_APP_SLUG` — `configured:false` на `github/connect` |
+| `GOOSAR_VCS_INTEGRATION_ENABLED`(`true`)/`GOOSAR_VCS_SECRET_KEY`(`_PREVIOUS`) | нет | self-hosted VCS (T-029); без ключа шифрования — `503` на `vcs/connections` |
+| `COMPOSIO_API_KEY`/`COMPOSIO_STATE_SECRET`/`COMPOSIO_CALLBACK_BASE_URL` | нет | Composio (T-029); без ключа — `503` на всю группу |
+| `GOOSAR_SLACK_SECRET_KEY`(`_PREVIOUS`) | нет | Slack BYO-установка (T-029); без ключа — `configured:false` |
+| `GOOSAR_GITHUB_API_BASE_URL`/`GOOSAR_SLACK_API_BASE_URL`/`GOOSAR_COMPOSIO_API_BASE_URL` | нет | базовые URL внешних API интеграций — переопределяются в юнит-тестах (`httptest.Server`), в проде пусто = реальный хост |
+| `RATE_LIMIT_CONTACT_SALES`/`RATE_LIMIT_EXPORT` | нет | см. таблицу T-029 в `server2/docs/decisions.md` |
 
 ### Раскладка (`internal/`)
 
@@ -107,6 +113,22 @@ PORT=8080 \
 - `cloudruntime` — `/api/cloud-runtime/**`: прозрачный HTTP-прокси во внешний
   облачный fleet-сервис (`GOOSAR_CLOUDRUNTIME_BASE_URL`/`_API_KEY`); без
   них — `503` на все маршруты группы.
+- `integration` — интеграции воркспейса (T-029): GitHub App
+  (`/api/workspaces/{id}/github/**`, `/api/github/setup`,
+  `POST /api/webhooks/github`), self-hosted VCS (`/api/workspaces/{id}/vcs/**`,
+  `POST /api/webhooks/vcs/{connectionId}`), Slack (`/api/workspaces/{id}/slack/**`,
+  `/api/slack/binding/redeem`), Composio (`/api/integrations/composio/**`).
+  Внешние API — через клиенты с настраиваемым базовым URL (см. переменные
+  выше), подписанные redirect-билеты и AES-GCM для секретов (`seal.go`).
+- `billing` — `/api/cloud-billing/**` + `POST /api/webhooks/stripe` (T-029):
+  прозрачный прокси в тот же облачный сервис, что `cloudruntime`
+  (`GOOSAR_CLOUDRUNTIME_BASE_URL`/`_API_KEY`).
+- `export` — `/api/workspaces/{id}/export/**` (асинхронный job,
+  `space_export_jobs`) и `GET /api/me/export` (синхронный поток) — T-029;
+  `.tar.gz` архив через `internal/asset.Storage`.
+- `misc` — последние одиночные ручки без отдельного домена (T-029):
+  `POST /api/feedback`, `POST /api/contact-sales`, `POST /api/client-usage`,
+  `GET /api/status`.
 
 ### Добавить новый домен
 

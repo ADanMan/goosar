@@ -103,9 +103,9 @@ func (d *Deps) handleGitHubInstallationEvent(r *http.Request, body []byte) {
 }
 
 type githubPullRequestPayload struct {
-	Action      string `json:"action"`
-	Number      int    `json:"number"`
-	Repository  struct {
+	Action     string `json:"action"`
+	Number     int    `json:"number"`
+	Repository struct {
 		FullName string `json:"full_name"`
 	} `json:"repository"`
 	Installation struct {
@@ -206,11 +206,11 @@ func (d *Deps) handleVCSWebhook(w http.ResponseWriter, r *http.Request) {
 
 type vcsMergeRequestPayload struct {
 	ObjectAttributes struct {
-		URL         string `json:"url"`
-		IID         int    `json:"iid"`
-		Title       string `json:"title"`
-		Description string `json:"description"`
-		State       string `json:"state"`
+		URL          string `json:"url"`
+		IID          int    `json:"iid"`
+		Title        string `json:"title"`
+		Description  string `json:"description"`
+		State        string `json:"state"`
 		SourceBranch string `json:"source_branch"`
 	} `json:"object_attributes"`
 }

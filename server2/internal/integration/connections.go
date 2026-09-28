@@ -36,10 +36,10 @@ func (d *Deps) handleListGitHubInstallations(w http.ResponseWriter, r *http.Requ
 		installations = append(installations, githubInstallationJSON(g, canManage))
 	}
 	httpapi.WriteJSON(w, http.StatusOK, map[string]any{
-		"installations":              installations,
-		"configured":                 d.GitHub.Configured(),
+		"installations":                installations,
+		"configured":                   d.GitHub.Configured(),
 		"repository_browse_configured": d.GitHub.Configured(),
-		"can_manage":                 canManage,
+		"can_manage":                   canManage,
 	})
 }
 
@@ -49,13 +49,13 @@ func githubInstallationJSON(g GitHubInstallation, canManage bool) map[string]any
 		installationID = *g.InstallationID
 	}
 	return map[string]any{
-		"id":              g.ID,
-		"workspace_id":    g.WorkspaceID,
-		"installation_id": installationID,
-		"account_login":   g.AccountLogin,
-		"account_type":    g.AccountType,
+		"id":                 g.ID,
+		"workspace_id":       g.WorkspaceID,
+		"installation_id":    installationID,
+		"account_login":      g.AccountLogin,
+		"account_type":       g.AccountType,
 		"account_avatar_url": g.AccountAvatar,
-		"created_at":      g.CreatedAt,
+		"created_at":         g.CreatedAt,
 	}
 }
 
@@ -213,7 +213,6 @@ func queryInt(r *http.Request, name string, def int) int {
 	}
 	return n
 }
-
 
 // --- self-hosted VCS (GitLab/Bitbucket/etc, distinct from the GitHub App flow above) ---
 

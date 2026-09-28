@@ -15,18 +15,7 @@ import (
 // Хвост, общий с будущими редирект-based провайдерами (MFA-гейт → сессия/
 // редирект) — oidc.go, finishExternalLogin.
 func (d *Deps) handleOidcCallback(w http.ResponseWriter, r *http.Request) {
-	client := "web"
-	var (
-		wantState, nonce string
-		stateOK          bool
-	)
-	if cookie, err := r.Cookie(oidcStateCookie); err == nil {
-		if s, c, n, ok := verifyOIDCState(d.Config.JWTSecret, cookie.Value); ok {
-			wantState, client, nonce, stateOK = s, c, n, true
-		}
-	}
-	clearOIDCStateCookie(w)
-
+	client, nonce, stateErr := d.checkOIDCCallbackState(w, r)
 	if d.Config.OIDC.IssuerURL == "" {
 		httpapi.WriteError(w, http.StatusNotFound, "OIDC not enabled on this server", "oidc_not_enabled")
 		return
@@ -40,25 +29,28 @@ func (d *Deps) handleOidcCallback(w http.ResponseWriter, r *http.Request) {
 		d.oidcFailRedirect(w, r, client, "oidc_"+errParam)
 		return
 	}
-	state := r.URL.Query().Get("state")
-	code := r.URL.Query().Get("code")
-	if !stateOK || state == "" || state != wantState || code == "" {
-		d.oidcFailRedirect(w, r, client, "invalid_state")
+	if stateErr != "" {
+		d.oidcFailRedirect(w, r, client, stateErr)
 		return
 	}
 
-	sub, email, name, failCode, err := d.resolveOIDCIdentity(r.Context(), code, nonce)
+	sub, email, name, failCode, err := d.resolveOIDCIdentity(r.Context(), r.URL.Query().Get("code"), nonce)
 	if err != nil {
-		d.Logger.Error("auth: oidc: обмен кода/идентификация", "err", err)
-		d.oidcFailRedirect(w, r, client, failCode)
+		d.oidcAbort(w, r, client, "обмен кода/идентификация", failCode, err)
 		return
 	}
-
 	acct, err := d.loginOrLinkExternal(r, "oidc", sub, email, name)
 	if err != nil {
-		d.Logger.Error("auth: oidc: вход/создание аккаунта", "err", err)
-		d.oidcFailRedirect(w, r, client, "internal_error")
+		d.oidcAbort(w, r, client, "вход/создание аккаунта", "internal_error", err)
 		return
 	}
 	d.finishExternalLogin(w, r, client, acct)
+}
+
+// oidcAbort логирует причину неудачи одной строкой и уводит редиректом на
+// /login#auth_error=<failCode> — общий финал для обоих шагов после
+// checkOIDCCallbackState, которым нужно и то, и другое.
+func (d *Deps) oidcAbort(w http.ResponseWriter, r *http.Request, client, step, failCode string, err error) {
+	d.Logger.Error("auth: oidc: "+step, "err", err)
+	d.oidcFailRedirect(w, r, client, failCode)
 }
