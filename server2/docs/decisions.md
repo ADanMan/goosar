@@ -1088,6 +1088,42 @@ T-025/T-027, так что эта сессия в основном писала 
     `authnDeps.SetTaskActorLookup(daemonDeps)`) и две строки регистрации
     доменов в `NewRouter`, до `RegisterStubs`.
 
+17. **Три реальных бага, найденных только живой проверкой CLI (см. отчёт,
+    «Живой CLI»), не статическим анализом:**
+    - `dispatch.Store.ClaimNext` — `RETURNING` после `UPDATE dispatch_jobs AS
+      dj ... FROM candidate` неоднозначно резолвил колонку `id` (совпадает
+      и в `dispatch_jobs`, и в CTE `candidate`) — Postgres отклонял запрос
+      `column reference "id" is ambiguous` уже на исполнении, не на
+      `go vet`/тестах на пустой БД. Настоящий claim по реальной очереди
+      никогда не проходил бы. Исправлено: `qualifiedJobColumns("dj")` —
+      явный алиас перед каждым именем колонки в этом конкретном `RETURNING`.
+    - `runtime.Store` (`usage.go`, `probes.go`) — `($N::text || '...')::interval`
+      с параметром pgx как `int`: extended-протокол pgx не мог определить
+      формат кодирования для текстового плейсхолдера без явного каста на
+      стороне Go, `failed to encode args[N]... cannot find encode plan`.
+      Ломало `GET /api/runtimes/{id}/usage*` и протухание заявок
+      (`expireStale`) — то есть каждый heartbeat. Исправлено:
+      `make_interval(days => $N)`/`make_interval(secs => $N)` вместо
+      конкатенации строки.
+    - `internal/daemon.buildAgentTask` — `attribution`/`mcp_policy` в
+      `AgentTask`: `TaskAttribution` требует `source`/`precise` безусловно
+      (пустой `{}` из `dj_attribution` по умолчанию не проходит валидацию
+      схемы), `TaskMcpPolicy` не допускает `null` (`dj_mcp_policy` — nullable
+      колонка без default, pgx отдаёт SQL NULL в `json.RawMessage` как
+      литерал `null`, 4 байта — `len(raw) > 0` этого не ловит). Оба
+      проявились только под реальным контрактным прогоном (kin-openapi
+      валидирует тело ответа по схеме), не под `go test`/`go vet`.
+      Исправлено: `attributionOrDefault` синтезирует `source`/`precise` из
+      `dj_initiator_type`, когда сохранённое значение их не несёт;
+      `hasJSONValue` отличает содержательный JSON от пустоты/литерала
+      `null`, `mcp_policy` теперь включается в ответ, только когда
+      содержателен.
+    Ни один из этих трёх багов не проявляется на пустой in-memory/тестовой
+    БД без реальных данных в очереди — оба вида проверки (юнит-тесты на
+    одноразовой БД, `go vet`) их пропустили; нашлись только на шаге 6
+    задачи («живой CLI»), что и есть причина, по которой контракт явно
+    требует этот шаг, а не только автоматические тесты.
+
 ## Прочитанные файлы (T-028, daemon/runtime, дополнительно к спискам выше)
 
 - `docs/31-backlog.md` — раздел T-028 (описание/acceptance criteria/«Затрагивает»).
