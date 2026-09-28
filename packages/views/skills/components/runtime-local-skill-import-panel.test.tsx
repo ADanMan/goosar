@@ -27,6 +27,28 @@ vi.mock('@goosar/core/hooks', () => ({
   useWorkspaceId: () => 'ws-1',
 }));
 
+vi.mock('@goosar/core/paths', () => ({
+  useWorkspacePaths: () => ({
+    skillDetail: (id: string) => `/test-workspace/skills/${id}`,
+  }),
+}));
+
+vi.mock('../../navigation', () => ({
+  AppLink: ({
+    href,
+    children,
+    ...rest
+  }: {
+    href: string;
+    children: ReactNode;
+    [k: string]: unknown;
+  }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
 vi.mock('@goosar/core/auth', () => {
   const stateUser = { id: 'user-1', email: 'u@example.com', name: 'User' };
   const useAuthStore = (selector?: (s: { user: typeof stateUser }) => unknown) => {

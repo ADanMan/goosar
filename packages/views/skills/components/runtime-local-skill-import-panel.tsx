@@ -22,6 +22,7 @@ import type {
 } from '@goosar/core/types';
 import { useAuthStore } from '@goosar/core/auth';
 import { useWorkspaceId } from '@goosar/core/hooks';
+import { useWorkspacePaths } from '@goosar/core/paths';
 import {
   runtimeDisplayLabel,
   runtimeListOptions,
@@ -54,6 +55,7 @@ import { Skeleton } from '@goosar/ui/components/ui/skeleton';
 import { useScrollFade } from '@goosar/ui/hooks/use-scroll-fade';
 import { UI_EASE_OUT, UI_MOTION_DURATION } from '@goosar/ui/lib/motion';
 import { useT } from '../../i18n';
+import { AppLink } from '../../navigation';
 import { HighlightText } from '../../search/highlight-text';
 import { ProviderLogo } from '../../runtimes/components/provider-logo';
 import { buildRuntimeMachines, runtimeRowLabel } from '../../runtimes/components/runtime-machines';
@@ -301,6 +303,7 @@ function ConflictResolutionPanel({
 }) {
   const { t } = useT('skills');
   const wsId = useWorkspaceId();
+  const wsPaths = useWorkspacePaths();
   const { data: members = [] } = useQuery(memberListOptions(wsId));
   const single = conflicts.length === 1;
   const canOverwriteAny = conflicts.some((r) => r.conflict?.can_overwrite);
@@ -368,6 +371,17 @@ function ConflictResolutionPanel({
                             creator: creatorName,
                           })
                         : t(($) => $.runtime_import.conflict_locked)}
+                      {r.conflict?.existing_skill_id && (
+                        <>
+                          {' '}
+                          <AppLink
+                            href={wsPaths.skillDetail(r.conflict.existing_skill_id)}
+                            className="underline underline-offset-2 hover:text-foreground"
+                          >
+                            {t(($) => $.runtime_import.conflict_open_skill)}
+                          </AppLink>
+                        </>
+                      )}
                     </p>
                   )}
                 </div>

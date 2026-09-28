@@ -684,11 +684,13 @@ export function SkillDetailPage({ skillId }: { skillId: string }) {
             </div>
           </div>
 
-          {/* Conflict banner */}
+          {/* Conflict banner — saving now would silently overwrite someone
+              else's edits, so this is treated as a destructive warning
+              (role="alert"), unlike the purely informational status
+              banners elsewhere on this page. */}
           {conflictPending && canEdit && (
             <div
-              role="status"
-              aria-live="polite"
+              role="alert"
               className="flex items-start gap-2 border-b border-warning/30 bg-warning/10 px-4 py-2 text-xs"
             >
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />
