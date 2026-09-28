@@ -540,16 +540,17 @@ export function InboxPage() {
       <ResizableHandle />
       <ResizablePanel id="detail" minSize="40%">
         <div className="flex flex-col min-h-0 h-full">
-          {detailContent ?? (
-            <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
-              <Inbox className="mb-3 h-10 w-10 text-muted-foreground/30" />
-              <p className="text-sm">
-                {visibleItems.length === 0
-                  ? t(($) => $.detail.empty)
-                  : t(($) => $.detail.select_prompt)}
-              </p>
-            </div>
-          )}
+          {detailContent ??
+            // The list column already carries the single Carbon empty-state
+            // (icon + text) when there is nothing at all — repeating it here
+            // read as two independent empty states side by side. This pane
+            // only prompts a choice when there is something to choose from.
+            (visibleItems.length > 0 && (
+              <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
+                <Inbox className="mb-3 h-10 w-10 text-muted-foreground/30" />
+                <p className="text-sm">{t(($) => $.detail.select_prompt)}</p>
+              </div>
+            ))}
         </div>
       </ResizablePanel>
     </ResizablePanelGroup>
