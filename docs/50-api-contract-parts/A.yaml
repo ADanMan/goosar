@@ -1363,7 +1363,7 @@ paths:
                 supported: { type: boolean }
                 mcp_servers:
                   type: array
-                  items: { type: object, additionalProperties: true }
+                  items: { $ref: "#/components/schemas/RuntimeLocalMcpServer" }
                 mcp_supported: { type: boolean }
                 error: { type: string }
       responses:
@@ -1402,7 +1402,7 @@ paths:
               required: [status]
               properties:
                 status: { type: string, enum: [completed, failed] }
-                skill: { type: object, additionalProperties: true }
+                skill: { $ref: "#/components/schemas/ReportedLocalSkill" }
                 error: { type: string }
       responses:
         "200":
@@ -2749,21 +2749,36 @@ components:
         status: { type: string, enum: [ok, runtime_gone] }
         pending_update:
           type: object
+          required: [id, target_version]
           properties:
-            id: { type: string }
-            target_version: { type: string }
+            id: { type: string, description: "id of the pending self-update request; pass it back in POST /api/daemon/runtimes/{runtimeId}/update/{id}/result" }
+            target_version: { type: string, description: "CLI version the daemon is asked to update to" }
         pending_model_list:
           type: object
-          additionalProperties: true
+          required: [id]
+          properties:
+            id: { type: string, description: "id of the pending model-list probe; pass it back in POST /api/daemon/runtimes/{runtimeId}/models/{id}/result" }
         pending_local_skills:
           type: object
-          additionalProperties: true
+          required: [id]
+          properties:
+            id: { type: string, description: "id of the pending local-skills probe; pass it back in POST /api/daemon/runtimes/{runtimeId}/local-skills/{id}/result" }
         pending_local_skill_import:
           type: object
-          additionalProperties: true
+          required: [id, skill_key]
+          description: "deprecated single-import form, superseded by pending_local_skill_imports (kept for older servers/daemons that only handle one import at a time)"
+          properties:
+            id: { type: string, description: "id of the pending import; pass it back in POST /api/daemon/runtimes/{runtimeId}/local-skills/import/{id}/result" }
+            skill_key: { type: string, description: "which local skill (by the daemon's own key) the server wants imported" }
         pending_local_skill_imports:
           type: array
-          items: { type: object, additionalProperties: true }
+          description: "current, possibly-plural form of pending_local_skill_import"
+          items:
+            type: object
+            required: [id, skill_key]
+            properties:
+              id: { type: string }
+              skill_key: { type: string }
 
     ModelEntry:
       type: object
@@ -2772,14 +2787,29 @@ components:
         id: { type: string }
         label: { type: string }
         default: { type: boolean }
-        thinking: { type: object, additionalProperties: true }
+        thinking:
+          type: object
+          required: [supported_levels]
+          properties:
+            supported_levels:
+              type: array
+              items:
+                type: object
+                required: [value, label]
+                properties:
+                  value: { type: string, description: "level identifier the caller sends back, e.g. off/low/medium/high" }
+                  label: { type: string, description: "human-readable label for this level" }
+                  description: { type: string }
+            default_level: { type: string }
         service_tiers:
           type: array
           items:
             type: object
+            required: [id, name]
             properties:
               id: { type: string }
               name: { type: string }
+              description: { type: string }
 
     RuntimeLocalSkillSummary:
       type: object
@@ -2797,15 +2827,56 @@ components:
 
     AgentSkillBundle:
       type: object
-      description: skill content resolved for a task about to run; Content/Files[].Content are base64 only when content_encoding=base64 was requested.
+      required: [id, name, content]
+      description: >
+        Skill content resolved for a task about to run
+        (POST .../skill-bundles/resolve). Content/Files[].Content are
+        base64-encoded only when content_encoding=base64 was requested;
+        otherwise they are the raw skill text/file bytes.
       properties:
         id: { type: string }
-        source: { type: string }
+        source: { type: string, description: "where this skill lives: e.g. workspace, agent, builtin" }
+        name: { type: string }
+        description: { type: string }
+        hash: { type: string, description: "content hash the caller used to ask for this bundle" }
+        size_bytes: { type: integer }
         content: { type: string }
         files:
           type: array
           items:
             type: object
+            required: [path, content]
+            properties:
+              path: { type: string }
+              content: { type: string }
+              sha256: { type: string }
+              size_bytes: { type: integer }
+
+    RuntimeLocalMcpServer:
+      type: object
+      required: [name, enabled]
+      description: one MCP server the daemon found configured locally on a runtime, reported by the local-skills probe.
+      properties:
+        name: { type: string }
+        transport: { type: string, description: "e.g. stdio, sse, http" }
+        source: { type: string, description: "which local config file/mechanism declared this server" }
+        enabled: { type: boolean }
+
+    ReportedLocalSkill:
+      type: object
+      required: [name, description, content, source_path, provider]
+      description: the full content of one local skill the daemon is importing into the workspace's skill library.
+      properties:
+        name: { type: string }
+        description: { type: string }
+        content: { type: string }
+        source_path: { type: string, description: "path on the daemon's machine the skill was read from" }
+        provider: { type: string }
+        files:
+          type: array
+          items:
+            type: object
+            required: [path, content]
             properties:
               path: { type: string }
               content: { type: string }
@@ -2876,40 +2947,296 @@ components:
     AgentTask:
       type: object
       description: >
-        The full task-queue row as handed to a daemon on claim/status-report
-        round trips (server internal name AgentTaskResponse). It is a large,
-        evolving object; only the fields a clean-room reimplementation must
-        rely on for control flow are required below — treat unlisted
-        properties as present-when-relevant and forward-compatible
-        (additionalProperties: true).
+        The task-queue row as handed to a daemon on claim/status-report round
+        trips (server internal name AgentTaskResponse). Every field the
+        reference daemon (server/internal/daemon, JSON-compatible `Task`
+        struct in types.go) actually decodes and uses is listed below with
+        its real meaning; fields whose description ends with "(демон это
+        поле не читает)" exist in the server's response but are not consumed
+        by the reference daemon/CLI at all — a reimplementation can still
+        emit them for forward compatibility with future daemon versions, but
+        omitting them does not break today's daemon. additionalProperties
+        stays true only as a safety margin for genuinely new, not-yet-listed
+        fields; it must not be relied on as a substitute for the properties
+        below.
       additionalProperties: true
       required: [id, agent_id, runtime_id, issue_id, workspace_id, status, priority, attempt, max_attempts, created_at, delivered_comment_ids, kind]
       properties:
-        id: { type: string, format: uuid }
-        agent_id: { type: string, format: uuid }
-        runtime_id: { type: string, format: uuid }
-        issue_id: { type: string, format: uuid, description: empty string when the task is not issue-backed (e.g. a chat task) }
+        id: { type: string, format: uuid, description: task id. }
+        agent_id: { type: string, format: uuid, description: the agent this task runs as. }
+        runtime_id: { type: string, format: uuid, description: the runtime (daemon-registered execution slot) the task was dispatched to. }
+        issue_id: { type: string, format: uuid, description: "the issue this task belongs to; empty string when the task is not issue-backed (e.g. a bare chat task)." }
         workspace_id: { type: string, format: uuid }
-        status: { type: string, enum: [queued, dispatched, waiting_local_directory, running, completed, failed, cancelled] }
-        priority: { type: integer }
-        dispatched_at: { type: ["string", "null"], format: date-time }
-        started_at: { type: ["string", "null"], format: date-time }
-        completed_at: { type: ["string", "null"], format: date-time }
-        result: {}
-        error: { type: ["string", "null"] }
-        failure_reason: { type: string }
-        attempt: { type: integer }
-        max_attempts: { type: integer }
-        parent_task_id: { type: string, format: uuid }
-        is_leader_task: { type: boolean }
-        kind: { type: string, description: "e.g. issue, chat, autopilot, quick_create" }
-        chat_session_id: { type: string, format: uuid }
-        autopilot_run_id: { type: string, format: uuid }
-        auth_token: { type: string, description: "short-lived mat_... agent task token, present only in the claim response" }
-        delivered_comment_ids: { type: array, items: { type: string, format: uuid } }
-        prior_session_id: { type: string }
-        work_dir: { type: string }
+        workspace_context: { type: string, description: "free-text context the workspace owner set for all agents; folded into the prompt." }
+        thread_name: { type: string, description: "display name of the source thread/channel (chat or comment thread), used for logging and, on some channels, addressing replies." }
+        status: { type: string, enum: [queued, dispatched, waiting_local_directory, running, completed, failed, cancelled], description: "lifecycle state at response time (демон это поле не читает — статус демон узнаёт из своих же вызовов start/complete/fail и из GetTaskStatus)." }
+        priority: { type: integer, description: "queue priority used by the server scheduler (демон это поле не читает)." }
+        dispatched_at: { type: ["string", "null"], format: date-time, description: "when the task left the queue (демон это поле не читает)." }
+        started_at: { type: ["string", "null"], format: date-time, description: "when StartTask was called (демон это поле не читает)." }
+        completed_at: { type: ["string", "null"], format: date-time, description: "when the task finished, success or failure (демон это поле не читает)." }
+        result:
+          description: >
+            free-form outcome payload set by CompleteTask/FailTask (its shape
+            mirrors whichever of those two request bodies the daemon last
+            sent: pr_url/output/session_id/work_dir, or
+            error/session_id/work_dir/failure_reason); only meaningful to
+            other API consumers reading a finished task back, since the
+            daemon that produced it never reads it (демон это поле не
+            читает).
+          type: ["object", "null"]
+          additionalProperties: true
+        error: { type: ["string", "null"], description: "top-level failure message once failed (демон это поле не читает)." }
+        failure_reason: { type: string, description: "machine-readable failure category (демон это поле не читает)." }
+        attempt: { type: integer, description: "1-based retry counter (демон это поле не читает)." }
+        max_attempts: { type: integer, description: "retry ceiling (демон это поле не читает)." }
+        parent_task_id: { type: ["string", "null"], format: uuid, description: "task this one was retried/rerun/delegated from, if any (демон это поле не читает)." }
+        is_leader_task: { type: boolean, description: "true for the coordinating task of a squad run; changes how the daemon picks/reuses a local working directory." }
+        agent: { $ref: "#/components/schemas/TaskAgent" }
+        connected_apps:
+          type: array
+          items: { $ref: "#/components/schemas/TaskConnectedApp" }
+          description: "Composio-style external tool connections the daemon should expose to the agent; folded into the prompt as a capability list."
+        repos:
+          type: array
+          items: { $ref: "#/components/schemas/TaskRepo" }
+          description: "repositories the daemon should have available/cloned for this task."
+        project_id: { type: string, format: uuid, description: "the project the issue belongs to, if any." }
+        project_title: { type: string }
+        project_description: { type: string }
+        project_resources:
+          type: array
+          items: { $ref: "#/components/schemas/TaskProjectResource" }
+          description: "linked resources of the project (e.g. a pinned local directory) — used, among other things, to find a per-project local working directory."
+        created_at: { type: string, format: date-time, description: "when the task row was created (демон это поле не читает)." }
+        prior_session_id: { type: string, description: "underlying agent-runtime session id to resume, from a previous run on the same issue/chat." }
+        prior_work_dir: { type: string, description: "working directory to reuse from a previous run." }
+        prior_session_resume_unavailable: { type: boolean, description: "server (or the daemon itself, once it discovers this mid-run) marks resume as not possible; the daemon then starts a fresh session instead of resuming prior_session_id." }
+        work_dir: { type: string, description: "working directory chosen for THIS run, echoed back by other API surfaces after the daemon reports it via complete/fail/session; not read back by the daemon (демон это поле не читает — рабочую директорию для текущего запуска демон выбирает сам)." }
+        relative_work_dir: { type: string, description: "work_dir expressed relative to the daemon's workspace root, for display purposes (демон это поле не читает)." }
+        trigger_comment_id: { type: ["string", "null"], format: uuid, description: "the comment that triggered this task, if triggered by a single comment." }
+        coalesced_comment_ids:
+          type: array
+          items: { type: string, format: uuid }
+          description: "ids of several comments batched into one task run (comment coalescing)."
+        coalesced_comments:
+          type: array
+          items: { $ref: "#/components/schemas/TaskCoalescedComment" }
+          description: "full text of the coalesced comments, in order, for building the prompt."
+        delivered_comment_ids:
+          type: array
+          items: { type: string, format: uuid }
+          description: "comment ids the server considers already delivered to some claim of this task, used server-side for at-least-once delivery bookkeeping (демон это поле не читает — на claim-ответе он получает актуальный список отдельно, как auth_token)."
+        trigger_thread_id: { type: string, description: "id of the comment thread the trigger comment belongs to." }
+        trigger_comment_content: { type: string, description: "text of the single triggering comment (when not using the coalesced form)." }
+        trigger_summary: { type: ["string", "null"], description: "short human summary of why the task was triggered, for logging/UI; not part of the daemon's read set." }
+        trigger_author_type: { type: string, enum: [member, agent, system] }
+        trigger_author_name: { type: string }
+        new_comment_count: { type: integer, description: "how many new comments arrived since new_comments_since." }
+        new_comments_since: { type: string, format: date-time }
+        chat_session_id: { type: string, format: uuid, description: "the chat session this task answers, for chat-kind tasks." }
+        chat_channel_type: { type: string, description: "which surface the chat is happening on, e.g. app, slack." }
+        chat_in_thread: { type: boolean, description: "whether the chat reply should stay inside an existing thread on the channel." }
+        chat_message: { type: string, description: "the user's chat message text the agent is responding to." }
+        chat_message_attachments:
+          type: array
+          items: { $ref: "#/components/schemas/TaskChatAttachment" }
+        chat_intro: { type: boolean, description: "true for the very first message of a new chat session (changes greeting behavior)." }
+        autopilot_run_id: { type: string, format: uuid, description: "present when the task was created by an Autopilot run." }
+        autopilot_id: { type: string, format: uuid }
+        autopilot_title: { type: string }
+        autopilot_description: { type: string }
+        autopilot_source: { type: string, description: "what triggered the autopilot run, e.g. webhook, schedule, manual." }
+        autopilot_trigger_payload:
+          description: "raw payload that triggered the Autopilot run (webhook body or schedule context), forwarded to the agent as-is."
+          type: ["object", "array", "null"]
+        quick_create_prompt: { type: string, description: "free-text prompt for a task created via quick-create instead of a full issue." }
+        quick_create_priority: { type: string }
+        quick_create_due_date: { type: string, format: date }
+        quick_create_attachment_ids:
+          type: array
+          items: { type: string, format: uuid }
+        handoff_note: { type: string, description: "note left by whoever handed this task off to the agent (e.g. a human reassigning work)." }
+        mcp_policy: { $ref: "#/components/schemas/TaskMcpPolicy" }
+        squad_id: { type: string, format: uuid, description: "present when the agent belongs to a squad running this task together." }
+        squad_name: { type: string }
+        parent_issue_id: { type: string, format: uuid, description: "parent of issue_id in the issue hierarchy, if any." }
+        parent_issue_identifier: { type: string, description: "human-readable identifier (e.g. PREFIX-123) of parent_issue_id." }
+        requesting_user_name: { type: string, description: "display name of the human who effectively asked for this task (initiator or issue requester)." }
+        requesting_user_profile_description: { type: string }
+        initiator_type: { type: string, enum: [member, agent, system] }
+        initiator_id: { type: string, format: uuid }
+        initiator_name: { type: string }
+        initiator_email: { type: string, format: email }
+        kind: { type: string, description: "task category, e.g. issue, chat, autopilot, quick_create (демон это поле не читает — оно определяет поведение по факту того, какие из полей выше заполнены, а не читается напрямую)." }
+        attribution:
+          description: "who/what ultimately originated this task, for audit/analytics (демон это поле не читает)."
+          allOf: [{ $ref: "#/components/schemas/TaskAttribution" }]
+        auth_token: { type: string, description: "short-lived mat_... agent task token this claim/run must use for every further /api/daemon/tasks/{id}/** call; present only in claim responses." }
+
+    TaskAgent:
+      type: object
+      required: [id, name, instructions]
+      description: the agent identity and configuration a claimed task runs with.
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        instructions: { type: string, description: "the agent's system prompt / instructions text." }
+        skills:
+          type: array
+          items: { $ref: "#/components/schemas/AgentSkillBundle" }
+          description: "full skill content, sent when the daemon has not advertised the skill-bundles-v1 capability."
+        skill_refs:
+          type: array
+          items: { $ref: "#/components/schemas/AgentSkillRef" }
+          description: "skill references (id/source/hash) instead of full content, sent when the daemon advertises skill-bundles-v1 — the daemon then resolves each one via POST .../skill-bundles/resolve, using its local cache first."
+        custom_env:
+          type: object
+          additionalProperties: { type: string }
+          description: "extra environment variables to set for the agent's process."
+        custom_args:
+          type: array
+          items: { type: string }
+          description: "extra command-line arguments to pass to the underlying CLI/runtime."
+        mcp_config:
+          description: "the agent's own MCP server configuration (arbitrary JSON in the shape the target runtime's MCP config file expects); merged with the runtime-level MCP policy/overlay before use."
+          type: ["object", "null"]
+          additionalProperties: true
+        model: { type: string, description: "model id override for this agent." }
+        thinking_level: { type: string, description: "requested reasoning/thinking effort level, matching one of ModelEntry.thinking.supported_levels." }
+        service_tier: { type: string, description: "requested service tier id, matching one of ModelEntry.service_tiers." }
+        disabled_runtime_skills:
+          type: array
+          items: { $ref: "#/components/schemas/DisabledRuntimeSkill" }
+          description: "runtime-local skills this agent has explicitly turned off, so the daemon excludes them even though they're present locally."
+        runtime_config:
+          description: "provider-specific runtime configuration blob (e.g. an OpenClaw gateway/mode selection); shape depends on runtime provider."
+          type: ["object", "null"]
+          additionalProperties: true
+
+    AgentSkillRef:
+      type: object
+      required: [id, source, name, hash, size_bytes, file_count]
+      description: a pointer to a skill's content, resolved on demand via POST .../skill-bundles/resolve.
+      properties:
+        id: { type: string }
+        source: { type: string }
+        name: { type: string }
+        description: { type: string }
+        hash: { type: string, description: "content hash; used both as a cache key on the daemon and to ask the server for exactly this version." }
+        size_bytes: { type: integer }
+        file_count: { type: integer }
+        files:
+          type: array
+          items:
+            type: object
+            required: [path, sha256, size_bytes]
+            properties:
+              path: { type: string }
+              sha256: { type: string }
+              size_bytes: { type: integer }
+
+    DisabledRuntimeSkill:
+      type: object
+      required: [runtime_id, provider, root, key]
+      properties:
+        runtime_id: { type: string, format: uuid }
+        provider: { type: string }
+        root: { type: string, description: "which local skill root/directory this belongs to." }
+        key: { type: string, description: "the runtime-local skill's own key/id." }
+        name: { type: string }
+        plugin: { type: string, description: "plugin namespace the skill came from, if any." }
+
+    TaskConnectedApp:
+      type: object
+      required: [provider, server_name, toolkit_slug]
+      properties:
+        provider: { type: string, description: "integration provider, e.g. composio." }
+        server_name: { type: string, description: "name to expose this connection under as an MCP server to the agent." }
+        toolkit_slug: { type: string }
+        toolkit_name: { type: string }
+
+    TaskRepo:
+      type: object
+      required: [url]
+      description: a repository the daemon should make available for the task; like WorkspaceRepo but can additionally pin a ref.
+      properties:
+        url: { type: string }
+        description: { type: string }
+        ref: { type: string, description: "branch/tag/commit to check out, when the task pins one; absent means the repo's default." }
+
+    TaskProjectResource:
+      type: object
+      required: [id, resource_type, resource_ref]
+      properties:
+        id: { type: string, format: uuid }
+        resource_type: { type: string, description: "e.g. local_directory — what kind of resource this is." }
+        resource_ref:
+          description: "resource-type-specific reference payload (e.g. a local directory descriptor); shape depends on resource_type."
+          type: ["object", "array", "string", "null"]
+        label: { type: string }
+
+    TaskChatAttachment:
+      type: object
+      required: [id, filename]
+      properties:
+        id: { type: string, format: uuid }
+        filename: { type: string }
+        content_type: { type: string }
+
+    TaskCoalescedComment:
+      type: object
+      required: [id, content]
+      properties:
+        id: { type: string, format: uuid }
+        thread_id: { type: string, format: uuid }
+        author_type: { type: string, enum: [member, agent, system] }
+        author_name: { type: string }
+        content: { type: string }
         created_at: { type: string, format: date-time }
+
+    TaskMcpPolicy:
+      type: object
+      description: perimeter restrictions on the MCP servers/commands this task's agent may use, merged into the agent's own mcp_config on the daemon.
+      properties:
+        allowed_hosts:
+          type: array
+          items: { type: string }
+        hosts_restricted: { type: boolean, description: "true means allowed_hosts is an allow-list to enforce, not just informational." }
+        allowed_commands:
+          type: array
+          items: { type: string }
+        commands_restricted: { type: boolean }
+
+    TaskAttribution:
+      type: object
+      required: [source, precise]
+      description: who/what this task is ultimately attributed to, for audit trails and analytics; not consumed by the reference daemon.
+      properties:
+        source: { type: string, description: "attribution category, e.g. human, autopilot, agent, system." }
+        precise: { type: boolean, description: "whether the attribution is exact rather than a best-effort guess." }
+        initiator: { $ref: "#/components/schemas/TaskAttributionUser" }
+        originator: { $ref: "#/components/schemas/TaskAttributionUser" }
+        evidence: { $ref: "#/components/schemas/TaskEvidence" }
+        rule_version_id: { type: string, format: uuid, description: "automation rule version that produced this task, if any." }
+        delegated_from_task_id: { type: string, format: uuid }
+        retry_of_task_id: { type: string, format: uuid }
+        rerun_of_task_id: { type: string, format: uuid }
+
+    TaskAttributionUser:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        avatar_url: { type: string }
+
+    TaskEvidence:
+      type: object
+      required: [kind, ref_id]
+      properties:
+        kind: { type: string, description: "what the evidence points at, e.g. comment, webhook_delivery." }
+        ref_id: { type: string, description: "id of that referenced record." }
 
 security:
   - cookieAuth: []

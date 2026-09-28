@@ -1,0 +1,732 @@
+openapi: 3.1.0
+info:
+  title: goosar API — Issues, Comments, Labels, Properties, Projects, Squads, Autopilots, Pins, Agents (part C)
+  version: "1.0.0"
+  description: >
+    Часть C контракта API: задачи (issues) и всё, что к ним привязано
+    (комментарии, реакции, вложения, подписчики, метки, свойства, вложенные
+    задачи), проекты и их ресурсы, отряды (squads), автопилоты, закреплённые
+    элементы (pins) и агенты (включая их навыки, MCP-серверы и переменные
+    окружения). Общие схемы (Error, User, Workspace, Member) и схемы
+    безопасности определены в других частях контракта и здесь только
+    используются по ссылке.
+security:
+  - cookieAuth: []
+  - bearerAuth: []
+tags:
+  - name: Issues
+  - name: IssueTable
+  - name: IssueComments
+  - name: IssueReactions
+  - name: IssueSubscribers
+  - name: IssueLabels
+  - name: IssueProperties
+  - name: IssueMetadata
+  - name: IssueTasks
+  - name: Comments
+  - name: Labels
+  - name: Properties
+  - name: Projects
+  - name: ProjectResources
+  - name: Squads
+  - name: Autopilots
+  - name: AutopilotTriggers
+  - name: AutopilotRuns
+  - name: AutopilotDeliveries
+  - name: Pins
+  - name: Attachments
+  - name: Agents
+  - name: AgentSkills
+  - name: AgentMcpServers
+  - name: AgentEnv
+paths:
+  /api/issues/table/groups:
+    post:
+      operationId: listIssueTableGroups
+      tags: [IssueTable]
+      summary: Сгруппировать задачи для табличного/канбан-представления
+      description: >
+        Возвращает список групп (по статусу, исполнителю, проекту, родителю,
+        значению кастомного свойства или составной ключ) с количеством задач
+        в каждой, для последующей постраничной загрузки строк через
+        listIssueTableRows. Выполняется в транзакции с REPEATABLE READ,
+        поэтому паджинация groups/rows остаётся согласованной в рамках одного
+        запроса пользователя.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/IssueTableGroupsRequest'}
+      responses:
+        '200':
+          description: Список групп
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IssueTableGroupsResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '504':
+          description: Запрос превысил лимит времени (8с); нужно сузить фильтры
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/issues/table/rows:
+    post:
+      operationId: listIssueTableRows
+      tags: [IssueTable]
+      summary: Постранично получить строки (задачи) внутри группы или ветки иерархии
+      description: >
+        Курсорная пагинация по одной группе (group_key) либо по дочерним
+        задачам родителя (parent_id) при включённой иерархии (hierarchy.enabled).
+        Курсор непрозрачен и привязан к query_fingerprint запроса — курсор,
+        выданный для одного набора фильтров/сортировки, не годится для другого.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/IssueTableRowsRequest'}
+      responses:
+        '200':
+          description: Страница строк
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IssueTableRowsResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '504':
+          description: Таймаут запроса
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/issues/table/facets:
+    post:
+      operationId: listIssueTableFacets
+      tags: [IssueTable]
+      summary: Получить фасеты (счётчики значений) для панели фильтров задач
+      description: >
+        Для каждого запрошенного фасета (status, priority, assignee, creator,
+        project, label, property) возвращает список встречающихся значений и
+        количество задач с этим значением при уже применённых остальных
+        фильтрах query.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/IssueTableFacetsRequest'}
+      responses:
+        '200':
+          description: Значения фасетов
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IssueTableFacetsResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+
+  /api/issues/search:
+    get:
+      operationId: searchIssues
+      tags: [Issues]
+      summary: Полнотекстовый поиск задач по заголовку, описанию и комментариям
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - name: q
+          in: query
+          required: true
+          schema: {type: string}
+          description: Поисковая фраза; поддерживается поиск по номеру/идентификатору задачи (например "ENG-42")
+        - name: limit
+          in: query
+          schema: {type: integer, default: 20, maximum: 50}
+        - name: offset
+          in: query
+          schema: {type: integer, default: 0}
+        - name: include_closed
+          in: query
+          schema: {type: boolean, default: false}
+          description: Включать задачи в статусах done/cancelled
+      responses:
+        '200':
+          description: Результаты поиска, отсортированные по релевантности и статусу
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SearchIssuesResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '503':
+          description: Поиск превысил лимит времени БД
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+
+  /api/issues/child-progress:
+    get:
+      operationId: getChildIssueProgress
+      tags: [Issues]
+      summary: Сводка прогресса дочерних задач по родителям в воркспейсе
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      responses:
+        '200':
+          description: Для каждого родителя — всего дочерних и сколько завершено (done/cancelled)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  progress:
+                    type: array
+                    items: {$ref: '#/components/schemas/ChildIssueProgressEntry'}
+
+  /api/issues/children:
+    get:
+      operationId: listIssueChildrenByParents
+      tags: [Issues]
+      summary: Список дочерних задач для набора родителей одним запросом
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - name: parent_ids
+          in: query
+          required: false
+          schema: {type: string}
+          description: Список ID родительских задач через запятую (максимум 200); при пустом значении возвращает пустой список
+      responses:
+        '200':
+          description: Список дочерних задач (без учёта, к какому родителю какая относится, кроме поля parent_issue_id внутри Issue)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  issues:
+                    type: array
+                    items: {$ref: '#/components/schemas/Issue'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+  /api/issues/grouped:
+    get:
+      operationId: listGroupedIssues
+      tags: [Issues]
+      summary: Список задач, сгруппированных по исполнителю (устаревший упрощённый вариант IssueTable)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - name: group_by
+          in: query
+          schema: {type: string, enum: [assignee], default: assignee}
+        - name: limit
+          in: query
+          schema: {type: integer, default: 50, maximum: 100}
+        - name: offset
+          in: query
+          schema: {type: integer, default: 0}
+        - name: statuses
+          in: query
+          schema: {type: string}
+          description: Список статусов через запятую (или устаревший алиас status)
+        - name: priorities
+          in: query
+          schema: {type: string}
+        - name: assignee_types
+          in: query
+          schema: {type: string}
+          description: Подмножество {member,agent,squad} через запятую
+        - name: assignee_id
+          in: query
+          schema: {type: string, format: uuid}
+        - name: assignee_ids
+          in: query
+          schema: {type: string}
+        - name: creator_id
+          in: query
+          schema: {type: string, format: uuid}
+        - name: project_id
+          in: query
+          schema: {type: string, format: uuid}
+        - name: metadata
+          in: query
+          schema: {type: string}
+          description: JSON-объект {key:value} с примитивными значениями; фильтрует по вхождению (jsonb @>)
+        - name: properties
+          in: query
+          schema: {type: string}
+          description: JSON-объект {property_definition_id:[values]}; см. ListIssues
+        - name: involves_user_id
+          in: query
+          schema: {type: string, format: uuid}
+          description: Возвращает задачи, назначенные на агентов/отряды, которыми владеет или в которые входит указанный участник
+      responses:
+        '200':
+          description: Группы по исполнителю с общим количеством задач в каждой
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GroupedIssuesResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+
+  /api/issues:
+    get:
+      operationId: listIssues
+      tags: [Issues]
+      summary: Список задач воркспейса с фильтрами, сортировкой и пагинацией
+      description: |
+        Основной листинг задач. Без `open_only=true` пагинация — `limit`/`offset`
+        (по умолчанию limit=100, максимум 100); с `open_only=true` возвращаются
+        все открытые задачи без лимита (используется для лёгких клиентских
+        вьюх типа "мои задачи").
+
+        Сортировка (`sort`): `position` (по умолчанию, ASC), `title`,
+        `created_at`, `updated_at`, `start_date`, `due_date` (NULLS LAST),
+        `status` (по порядку канбан-колонок: backlog, todo, in_progress,
+        in_review, done, blocked, cancelled), `priority` (urgent, high, medium,
+        low, none), либо `property:<UUID определения свойства>` — сортировка
+        по значению кастомного свойства (число/дата/текст сравниваются по
+        типу свойства, NULLS LAST). `direction` (`asc`/`desc`) игнорируется
+        при сортировке по `position` (там всегда ASC).
+
+        Фильтры комбинируются через AND, кроме списков в одном параметре
+        (через запятую или JSON), которые внутри себя — OR:
+        `statuses`/`status`, `priorities`/`priority`, `assignee_id`,
+        `assignee_ids`, `assignee_types` (только member/agent/squad),
+        `assignee_filters` (список `type:id`, например `agent:<uuid>`, плюс
+        `include_no_assignee=true` — незакреплённые задачи), `creator_id`,
+        `creator_filters` (аналогично assignee_filters), `project_id`,
+        `project_ids` + `include_no_project=true`, `label_ids`, `ids` (точный
+        набор ID), `top_level_only=true` (только задачи без родителя), `q`
+        (простой посимвольный поиск по заголовку и номеру, без ранжирования
+        как в /search), `scheduled=true` (есть start_date или due_date),
+        `metadata` (JSON-объект, jsonb-containment), `properties` (JSON вида
+        `{definition_id:[value,...]}` — между определениями AND, значения
+        внутри определения — OR; значение сопоставляется и как скаляр, и как
+        элемент multi_select-массива, и как булево при "true"/"false"),
+        `date_field` (`created_at`|`updated_at`) + `date_start` + `date_end`
+        (RFC3339, все три обязательны вместе, start < end),
+        `involves_user_id` (задачи на агентах, которыми владеет пользователь,
+        либо на отрядах, где он владелец агента-участника или агента-лидера).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: limit, in: query, schema: {type: integer, default: 100, maximum: 100}}
+        - {name: offset, in: query, schema: {type: integer, default: 0}}
+        - {name: open_only, in: query, schema: {type: boolean, default: false}}
+        - {name: sort, in: query, schema: {type: string}}
+        - {name: direction, in: query, schema: {type: string, enum: [asc, desc]}}
+        - {name: statuses, in: query, schema: {type: string}}
+        - {name: status, in: query, schema: {type: string}, deprecated: true}
+        - {name: priorities, in: query, schema: {type: string}}
+        - {name: priority, in: query, schema: {type: string}, deprecated: true}
+        - {name: assignee_id, in: query, schema: {type: string, format: uuid}}
+        - {name: assignee_ids, in: query, schema: {type: string}}
+        - {name: assignee_types, in: query, schema: {type: string}}
+        - {name: assignee_filters, in: query, schema: {type: string}}
+        - {name: include_no_assignee, in: query, schema: {type: boolean}}
+        - {name: creator_id, in: query, schema: {type: string, format: uuid}}
+        - {name: creator_filters, in: query, schema: {type: string}}
+        - {name: project_id, in: query, schema: {type: string, format: uuid}}
+        - {name: project_ids, in: query, schema: {type: string}}
+        - {name: include_no_project, in: query, schema: {type: boolean}}
+        - {name: label_ids, in: query, schema: {type: string}}
+        - {name: ids, in: query, schema: {type: string}}
+        - {name: top_level_only, in: query, schema: {type: boolean}}
+        - {name: q, in: query, schema: {type: string}}
+        - {name: scheduled, in: query, schema: {type: boolean}}
+        - {name: metadata, in: query, schema: {type: string}}
+        - {name: properties, in: query, schema: {type: string}}
+        - {name: date_field, in: query, schema: {type: string, enum: [created_at, updated_at]}}
+        - {name: date_start, in: query, schema: {type: string, format: date-time}}
+        - {name: date_end, in: query, schema: {type: string, format: date-time}}
+        - {name: involves_user_id, in: query, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Страница задач
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IssueListResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+    post:
+      operationId: createIssue
+      tags: [Issues]
+      summary: Создать задачу
+      description: >
+        Номер задачи (identifier вида PREFIX-123) присваивается автоматически
+        и монотонно возрастает в пределах воркспейса. Если и правило дедупликации
+        включено, и найдена активная задача с похожим заголовком, сервер
+        возвращает 409 с телом `{code: "active_duplicate_issue", issue}`,
+        которое можно обойти повторной отправкой с `allow_duplicate: true`. При
+        назначении на агента/отряд сразу в незабэклоговом статусе создание
+        может поставить агенту задачу в очередь — см. `x-events` и раздел
+        «Назначение и авто-постановка в очередь» в C.md.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateIssueRequest'}
+      responses:
+        '201':
+          description: Задача создана
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Issue'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '409':
+          description: Найден активный дубликат (без allow_duplicate)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: {type: string, enum: [active_duplicate_issue]}
+                  error: {type: string}
+                  issue: {$ref: '#/components/schemas/Issue'}
+      x-events:
+        - name: issue:created
+          when: всегда при успешном создании
+          payload: "{ issue: Issue (с attachments и labels) }"
+        - name: task:queued
+          when: назначено на агента/отряд не в статусе backlog и агент/лидер доступен и не архивирован
+          payload: постановка задачи в очередь исполнения (см. раздел задач/агентов вне этой части контракта)
+  /api/issues/query:
+    post:
+      operationId: queryIssues
+      tags: [Issues]
+      summary: Список задач через JSON-тело вместо query-параметров
+      description: >
+        Тонкая обёртка над GET /api/issues: тело — плоский объект строк
+        `{parameter_name: value}`, который переносится в query-параметры
+        запроса и обрабатывается тем же кодом (см. listIssues). Используется
+        клиентами, которым удобнее POST + JSON, чем длинная строка запроса.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: {type: string}
+      responses:
+        '200':
+          description: Страница задач (как у GET /api/issues)
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IssueListResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+
+  /api/issues/quick-create:
+    post:
+      operationId: quickCreateIssue
+      tags: [Issues]
+      summary: Быстро создать задачу из текстового промпта и сразу поставить её агенту
+      description: >
+        Не создаёт задачу синхронно: ставит в очередь фоновую задачу
+        ("quick-create task"), которая интерпретирует `prompt` и сама создаёт
+        Issue с нужными полями и запускает на ней агента. Требует ровно одно
+        из `agent_id`/`squad_id` (при squad_id используется лидер отряда),
+        агент должен быть привязан к runtime и runtime должен быть online;
+        сервер также проверяет минимальную версию демона исполнения (иначе
+        422 `daemon_version_unsupported`), а если runtime недоступен — 422
+        `agent_unavailable`.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/QuickCreateIssueRequest'}
+      responses:
+        '202':
+          description: Фоновая задача создания поставлена в очередь
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task_id: {type: string, format: uuid}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404':
+          description: Агент, отряд, проект или родительская задача не найдены
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '422':
+          description: Агент недоступен либо версия демона недостаточна
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: {type: string, enum: [agent_unavailable, daemon_version_unsupported]}
+                  reason: {type: string}
+                  current_version: {type: string}
+                  min_version: {type: string}
+                  runtime_id: {type: string, format: uuid}
+
+  /api/issues/preview-trigger:
+    post:
+      operationId: previewIssueTrigger
+      tags: [Issues]
+      summary: Показать, каких агентов запустит создание/изменение задач, без реального запуска
+      description: >
+        Симулирует ту же логику, что решает при создании/обновлении задачи,
+        ставить ли агенту/лидеру отряда задачу в очередь (см. C.md, раздел
+        «Правило автозапуска»). Не имеет побочных эффектов и не ставит ничего
+        в очередь.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/IssueTriggerPreviewRequest'}
+      responses:
+        '200':
+          description: Список задач/агентов, которые были бы запущены
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/IssueTriggerPreviewResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+
+  /api/issues/batch-update:
+    post:
+      operationId: batchUpdateIssues
+      tags: [Issues]
+      summary: Массово применить один и тот же набор изменений к нескольким задачам
+      description: >
+        Применяет `updates` (тот же формат полей, что у PUT /api/issues/{id})
+        к каждой задаче из `issue_ids` независимо; ошибка на одной задаче
+        (не найдена, невалидный assignee, цикл в родителях и т.п.) молча
+        пропускает эту задачу и не прерывает обработку остальных. Ответ
+        содержит только количество фактически обновлённых задач, без списка
+        причин пропуска. Каждое успешное обновление публикует `issue:updated`
+        и, если применимо, может поставить задачу в очередь так же, как
+        обычный PUT (если `updates.suppress_run` не true).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BatchUpdateIssuesRequest'}
+      responses:
+        '200':
+          description: Число обновлённых задач
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated: {type: integer}
+        '400': {$ref: '#/components/responses/BadRequest'}
+      x-events:
+        - name: issue:updated
+          when: за каждую успешно обновлённую задачу
+        - name: task:queued
+          when: если обновление запускает правило автозапуска для конкретной задачи
+
+  /api/issues/batch-delete:
+    post:
+      operationId: batchDeleteIssues
+      tags: [Issues]
+      summary: Массово удалить задачи
+      description: >
+        Для каждой задачи из `issue_ids`: отменяет её активные задачи агентов,
+        помечает неудачными прогоны автопилотов, ссылавшиеся на неё, удаляет
+        вложения (включая файлы в объектном хранилище) и саму задачу. Ошибка
+        на одной задаче пропускает её без прерывания остальных; ответ
+        содержит только счётчик.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [issue_ids]
+              properties:
+                issue_ids: {type: array, items: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: Число удалённых задач
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted: {type: integer}
+        '400': {$ref: '#/components/responses/BadRequest'}
+      x-events:
+        - name: issue:deleted
+          when: за каждую успешно удалённую задачу
+          payload: "{ issue_id }"
+  /api/issues/{id}:
+    parameters:
+      - $ref: '#/components/parameters/WorkspaceSlugHeader'
+      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+    get:
+      operationId: getIssue
+      tags: [Issues]
+      summary: Получить задачу целиком (включая метки, реакции, вложения)
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      responses:
+        '200':
+          description: Задача
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Issue'}
+        '404': {$ref: '#/components/responses/NotFound'}
+    put:
+      operationId: updateIssue
+      tags: [Issues]
+      summary: Изменить поля задачи
+      description: |
+        Частичное обновление: только поля, присутствующие в JSON-теле, меняются
+        (используется различение "поле отсутствует" / "поле равно null", поэтому
+        `{"assignee_id": null}` явно снимает исполнителя, а отсутствие ключа его
+        не трогает). Перевод `parent_issue_id` проверяется на цикличность (до 10
+        уровней вверх) и не может указывать на саму задачу. Смена
+        `assignee_type`/`assignee_id` проверяется так же, как при создании —
+        см. «Правила назначения» в C.md; агент не может назначить задачу за
+        пределы своей области видимости без соответствующих прав.
+
+        Смена статуса из `backlog` в любой нетерминальный статус (при живом
+        исполнителе-агенте/лидере и без активного самозапуска — `is_self_loop`)
+        либо смена исполнителя на агента/отряд в не-backlog статусе может
+        поставить задачу в очередь на исполнение, если только `suppress_run`
+        не true. `handoff_note` передаётся агенту как дополнительный контекст
+        запуска, когда постановка в очередь происходит.
+
+        Если статус меняется на терминальный (done/cancelled) у задачи с
+        родителем, у родителя пересчитывается прогресс дочерних задач и может
+        быть создана системная активность/уведомление у родителя (см. C.md).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UpdateIssueRequest'}
+      responses:
+        '200':
+          description: Обновлённая задача
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Issue'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '403':
+          description: Актор-агент пытается назначить задачу вне своей области видимости или на приватного агента/отряд
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: issue:updated
+          when: всегда при успешном PUT
+          payload: >
+            { issue, assignee_changed, status_changed, priority_changed,
+            project_changed, start_date_changed, due_date_changed,
+            description_changed, title_changed, prev_title, prev_assignee_type,
+            prev_assignee_id, prev_status, prev_priority, prev_start_date,
+            prev_due_date, prev_description, creator_type, creator_id }
+        - name: task:queued
+          when: сработало правило автозапуска (см. описание) и suppress_run не установлен
+    delete:
+      operationId: deleteIssue
+      tags: [Issues]
+      summary: Удалить задачу
+      description: >
+        Отменяет активные задачи агентов на этой задаче, помечает неудачными
+        прогоны автопилотов, ссылавшиеся на неё, удаляет её вложения (включая
+        файлы в объектном хранилище) и саму запись.
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      responses:
+        '204': {description: Удалено}
+        '404': {$ref: '#/components/responses/NotFound'}
+      x-events:
+        - name: issue:deleted
+          payload: "{ issue_id }"
+
+  /api/issues/{id}/move:
+    post:
+      operationId: moveIssue
+      tags: [Issues]
+      summary: Переместить задачу в списке (drag-and-drop) и опционально изменить статус/исполнителя/проект
+      description: |
+        Специализированная обёртка над PUT /api/issues/{id}: принимает те же
+        поля, что и обновление (`status`, `assignee_type`, `assignee_id`,
+        `parent_issue_id`, `project_id`), плюс обязательные `before_id` и
+        `after_id` (ID соседних задач в целевой позиции, либо `null` для
+        "в начало"/"в конец"; хотя бы один из них должен быть отличен от
+        null — оба `null` означает "оставить текущую позицию"). Любое другое
+        поле в теле запроса — ошибка 400 ("unsupported move field").
+
+        Позиция вычисляется как средняя точка между `position` соседей
+        (`before.position < after.position` обязательно, иначе 409 —
+        "move anchors are stale or out of order"); если промежуток
+        схлопнулся до неотличимого числа с плавающей точкой — тоже 409
+        ("too close; refresh and retry"), и клиенту следует перечитать список
+        и повторить. Если задан `project_id`, целевой проект проверяется на
+        принадлежность воркспейсу до пересчёта позиции.
+
+        После вычисления позиции запрос выполняется как обычный PUT
+        (события и правило автозапуска — те же, что у updateIssue).
+      security: [{cookieAuth: []}, {bearerAuth: []}]
+      x-roles: [member, agent]
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceSlugHeader'
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MoveIssueRequest'}
+      responses:
+        '200':
+          description: Обновлённая (перемещённая) задача
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Issue'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: Соседи по позиции устарели или слишком близки друг к другу
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Error'}
+      x-events:
+        - name: issue:updated
+          when: как у updateIssue (move — это PUT с вычисленным position)
