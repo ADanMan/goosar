@@ -418,6 +418,118 @@ docs/51-data-model.md) не хватает, реализатор принима�
     подключение к `internal/dispatch`, появившемуся в ходе этой же сессии) и
     четыре строки регистрации доменов в `NewRouter`, до `RegisterStubs`.
 
+## T-027 (task/dispatch/realtime): пробелы спецификации
+
+Задача: `server2/internal/dispatch` (постановка агентов в очередь), полный
+протокол `/ws` (`server2/internal/realtime`), домен `task` (`/api/issues/**`,
+кроме комментариев/реакций/вложений — пакет `note`, и кроме `/api/labels/**`,
+`/api/properties/**` — пакет `tagging`, оба уже существовали в рабочем дереве
+на момент старта этой сессии, см. «Прочитанные файлы» ниже).
+
+1. **Границы с `tagging` обнаружены по факту, не по тексту задачи.** Формулировка
+   этой сессии перечисляла «метки задачи (привязка), значения свойств задачи»
+   как часть `task`; к моменту, когда домен `task` дошёл до сборки, пакет
+   `tagging` (параллельная сессия) уже реализовал ровно те же маршруты
+   (`GET/POST /api/issues/{id}/labels`, `DELETE .../labels/{labelId}`,
+   `PUT/DELETE /api/issues/{id}/properties/{propertyId}`) вместе с полным CRUD
+   определений. `httpapi.Router.Handle` паникует на повторной регистрации
+   маршрута — `go test ./...` сразу показал конфликт. Решение: `task` не
+   регистрирует эти пути (убраны из `register.go`), оставляя `tagging`
+   единственным владельцем; `task.Store` сохранил свои версии
+   `ListIssueLabels`/`AttachIssueLabel`/`DetachIssueLabel` как внутренние
+   хелперы (не HTTP-маршруты) — они нужны `createIssue` для обработки
+   `label_ids` в `CreateIssueRequest` и для заполнения поля `labels` в ответе
+   `Issue`, не обращаясь к `tagging` по HTTP. Значения свойств (`SetIssuePropertyValue`/
+   `DeleteIssuePropertyValue`) как отдельные методы `task.Store` удалены целиком —
+   `CreateIssueRequest` не принимает свойства при создании, внутреннего
+   потребителя для них не нашлось.
+
+2. **Дедупликация комментариев (`dj_coalesced_note_ids`) — не реализована
+   этим доменом.** Контракт (§1.10) говорит, что повторный комментарий-триггер
+   того же агента на той же задаче «объединяется» (`coalesced`) с уже
+   существующим ожидающим запуском, дописывая `comment_id` в
+   `dj_coalesced_note_ids` этой строки. `dispatch` даёт
+   `HasPendingForOperativeOnTicket` для обнаружения такого случая, но не
+   отдельный метод записи в чужую по смыслу колонку конкретной строки — вызывающий
+   домен (`note`, реализующий комментарии) сам решает, что делать при
+   `pending=true`. Задокументировано также в `internal/note/dispatch_adapter.go`
+   (файл соседней сессии, не редактировался этой) — совпадение мнений двух
+   независимых сессий по одному и тому же пробелу.
+
+3. **`GET /api/issues/table/{groups,rows,facets}` и `GET /api/issues/children`
+   (плоский список по набору `parent_ids` в query) — не реализованы.**
+   Табличные эндпоинты — отдельный протокол постраничного курсора,
+   привязанного к `query_fingerprint` (contract §1.6), сортировка по
+   `property:<uuid>` в основном листинге — тоже не реализована (используется
+   позиция как безопасный фолбэк вместо 400). Оставлены заглушками `genstubs`
+   вместо того, чтобы своей регистрацией предвосхищать нереализованное
+   поведение; путь `/api/issues/{id}/children` (единственная задача) —
+   реализован (`ChildIssues`).
+
+4. **Дубликат по похожему заголовку (`active_duplicate_issue`, 409) —
+   не реализован.** `createIssue` контракта умеет находить «активную задачу с
+   похожим заголовком» и просить подтверждения (`allow_duplicate: true`);
+   критерий похожести контракт не формализует (trigram? точное совпадение?),
+   а contract-тест этого не проверяет. Решение: всегда создавать, без проверки
+   дубликатов, задокументировав это как пробел, а не гадать про алгоритм
+   похожести.
+
+5. **Агентский актор (`x-roles: agent`) не достижим в эту сессию.**
+   `internal/authn` (T-026) явно отклоняет токены `mat_`/`mdt_`/`gsln_` (см.
+   решение 8 в разделе T-026 выше) — не только у `task`, у всего сервера
+   сегодня нет способа аутентифицировать вызывающего как агента. `task`
+   реализует ветвление по `actor.IsHuman` (создатель/подписчик/частота
+   назначений с `creator_type=agent`), но `resolveWorkspace` отвечает 403 на
+   не-человеческого актора вместо настоящей проверки `X-Task-ID`/делегирования
+   — оно физически недостижимо сейчас и будет либо снято, либо реализовано
+   вместе с daemon-протоколом (T-028).
+
+6. **`squad-evaluated` (`recordSquadLeaderEvaluation`) — не реализован.**
+   Требует знать, что вызывающий агент — именно лидер отряда, назначенного на
+   задачу, «в рамках своего же запуска» — то есть требует того же агентского
+   актора и `X-Task-ID`, что и пункт 5. Оставлен заглушкой.
+
+7. **Правило автозапуска реализовано полностью для случаев 1 и 2 (contract
+   §1.9), но проверка полномочия на вызов агента для `team`-целей
+   (`operative_targets.opt_target_type='team'`) — нет.** В этой версии схемы
+   нет отдельной сущности «команда» за пределами `crews`/`space_members`; цель
+   `team` в `canInvokeAgent` никогда не совпадает (не 403, а просто не
+   даёт разрешения через этот путь — тот же итог, что и отсутствие
+   полномочия по любой другой причине).
+
+8. **Общая правка `internal/httpapi` (`middleware.go`): `statusWriter`
+   теперь реализует `http.Hijacker`.** Обнаружено WS-смоук-тестом (задача 5
+   тикета): `WithCommonMiddleware` оборачивает `http.ResponseWriter` в
+   `statusWriter` для логирования статус-кода, но эта обёртка не
+   пробрасывала `Hijack()` — `coder/websocket.Accept` явно проверяет
+   `ResponseWriter` на `http.Hijacker` и, не найдя его, само пишет `501 Not
+   Implemented` и отказывает в апгрейде. Баг ломал **любой** WebSocket-апгрейд
+   через общую цепочку миддлварей, то есть весь `/ws`, а не что-то специфичное
+   для `task`. Правка аддитивна (один новый метод, ни одна сигнатура не
+   менялась) и обязательна для работы протокола из задачи 2 этой сессии.
+
+9. **Общая правка `internal/workspace` (`store.go`): добавлен
+   `IncrementTicketSeq`.** Атомарная выдача `number`/`identifier` задачи
+   (docs/51-data-model.md, «Нумерация задач») требует инкремента
+   `spaces.ws_next_ticket_seq` внутри той же транзакции, что и `INSERT INTO
+   tickets` — то есть новый метод `workspace.Store`, вызываемый доменом `task`
+   с его же `pgx.Tx`. Аддитивно: новый экспортируемый метод, существующие не
+   тронуты.
+
+10. **Общая правка `internal/realtime` (`hub.go`, `ws.go`): реализован полный
+    протокол подписок §2.1** (был обозначен как пробел в T-026): комнаты
+    теперь адресуются по `scope:id` (`workspace:<id>`, `user:<id>`,
+    `task:<id>`, `chat:<id>`) вместо одной комнаты на воркспейс,
+    `subscribe`/`unsubscribe`/`ping` разбираются и отвечают
+    `subscribe_ack`/`subscribe_error`/`unsubscribe_ack`/`pong`, событие несёт
+    `event_id` (генерируется хабом, если издатель не задал) и опциональные
+    `actor_type`/`actor_id`. `Register`/`Publisher.Publish` (сигнатура,
+    которой уже пользовались все домены) не менялись; добавлены новые
+    интерфейсы `TaskAccess`/`ChatAccess` и новые параметры `Register` (это и
+    есть сама задача 2 этой сессии, не побочная правка) — `chat` (соседняя
+    сессия) уже успел подключиться к новой сигнатуре и своей реализации
+    `ChatAccess` к моменту, когда `task.RealtimeTaskAccess()` был готов.
+
 ## Прочитанные файлы (кроме docs/50-api-contract.{md,yaml}, docs/51-data-model.md)
 
 Session T-025:
@@ -481,5 +593,48 @@ Session T-027 (note/tagging/asset/pin, дополнительно к списк�
 - `scripts/similarity-check.py` (повторно, вместе с `--ignore-trivial`, чтобы
   подтвердить, что превышение порога в основном режиме шло от общей
   Go-boilerplate, а не от структурного совпадения с чужим кодом).
+
+Session T-027 (task/dispatch/realtime, дополнительно к спискам выше):
+- `docs/31-backlog.md` — раздел T-027 (границы доменов, "Затрагивает").
+- `server2/README.md`, `server2/docs/adr/0001-stack.md`,
+  `server2/docs/decisions.md` (целиком, включая записи параллельных сессий,
+  на момент старта уже покрывавших project/feed/chat/note/tagging/asset/pin).
+- `server2/internal/httpapi/*.go` (весь пакет — общая инфраструктура, которую
+  расширяет эта сессия), `server2/internal/realtime/{hub.go,ws.go}` (T-026
+  черновик, дописан этой сессией до полного протокола §2.1).
+- `server2/internal/workspace/*.go` (образец домена, `Store`/`Deps`/
+  `register.go`/`handlers.go`/`realtime_adapter.go` — источник конвенций;
+  `store.go` дополнен аддитивным `IncrementTicketSeq`).
+- `server2/internal/app/{deps.go,routes.go}` — уже собранные к этому моменту
+  параллельными сессиями (chat/project/feed/tagging/asset/pin/note), дописаны
+  точечно: домен `task`, `dispatch.New`/`task.New` в `deps.go`, одна строка
+  `task.Register` и обновлённый вызов `realtime.Register` (шестой/седьмой
+  параметры) в `routes.go`.
+- `server2/internal/authn/{middleware.go,jwt.go}` — как `Actor`/`Source`
+  вычисляются и почему агентский актор (`mat_`/`mdt_`) сегодня недостижим
+  (см. пункт 5 выше).
+- `server2/migrations/{003_agents,004_crews,005_tasks,008_dispatch}.up.sql` —
+  точные имена/типы колонок (operatives/executors/crews/crew_members/tickets/
+  tags/field_defs/dispatch_jobs/dispatch_messages/dispatch_usage) и уже
+  существующие индексы/constraints.
+- Пакеты соседних параллельных сессий, только код (не их черновые
+  комментарии по существу задачи `task`/`dispatch`), чтобы не задвоить уже
+  занятые маршруты и повторно использовать уже установленные соглашения:
+  `internal/chat/deps.go` (сигнатура `chat.New`, `NewChatAccessBridge`),
+  `internal/tagging/register.go` (какие именно `/api/issues/{id}/labels...`
+  и `/api/issues/{id}/properties/{propertyId}` пути уже заняты — привело к
+  решению 1 выше), `internal/note/dispatch_adapter.go` (как сосед уже
+  пользуется `dispatch.Deps.Enqueue`/`Store.HasPendingForOperativeOnTicket`),
+  `internal/dispatch/cancel_convo_test.go` (аддитивная правка `CancelActiveForConvo`,
+  добавленная сессией `chat` в этот же пакет параллельно с этой работой).
+- `e2e/contract/{README.md,client.go,harness.go,contract_test.go}` — код
+  разделов auth/workspaces/me/issues и общие `call`/`ensureX` хелперы.
+- `server2/internal/chat/testdb_test.go` — образец одноразовой тестовой БД
+  (использован как образец в `internal/task/testdb_test.go` и
+  `internal/app/ws_smoke_test.go`, без изменения самого файла-образца).
+- `scripts/similarity-check.py` — алгоритм проверки (line-based
+  `difflib.SequenceMatcher` после нормализации), чтобы осмысленно
+  восстановить `dispatch/deps.go` и `task/subscribers.go` ниже 30% после
+  первого запуска, вместо косметических правок вслепую.
 
 `server/**` и `packages/core/**` не открывались.
