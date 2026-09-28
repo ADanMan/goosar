@@ -90,7 +90,6 @@ func (d *Deps) handleUnsubscribeIssue(w http.ResponseWriter, r *http.Request) {
 	httpapi.WriteJSON(w, http.StatusOK, map[string]any{"subscribed": false})
 }
 
-
 // ---------------------------------------------------------------------------
 // Metadata
 // ---------------------------------------------------------------------------

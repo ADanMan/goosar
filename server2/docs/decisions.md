@@ -299,6 +299,125 @@ docs/51-data-model.md) не хватает, реализатор принима�
     сессии); `taskAccess` передан `nil` с комментарием, что это зона домена
     `task`.
 
+## T-027 (note/tagging/asset/pin): пробелы спецификации
+
+Реализатор этой сессии отвечал за `internal/{note,tagging,asset,pin}`
+(обсуждение задач/реакции, метки, свойства, вложения, закрепления) —
+`internal/{task,dispatch}` и `internal/{project,feed,chat}` делали
+параллельные сессии.
+
+1. **Схема уже существовала целиком.** `tags`/`field_defs`/`ticket_tag_links`/
+   `operative_tag_links`/`capability_tag_links`/`ticket_notes`/`note_marks`/
+   `ticket_marks`/`ticket_bookmarks`/`initiative_bookmarks` (005_tasks.up.sql)
+   и `assets` (009_feed.up.sql) были спроектированы ещё в T-025 и покрывают
+   всю доменную область этой части T-027 без единой новой миграции — диапазон
+   120–139, выданный этой сессии, не понадобился.
+
+2. **Резолв воркспейса из заголовков — общий для всех четырёх доменов, но
+   ни один из них не «владеет» этой логикой.** В отличие от `workspace`
+   (резолвит пространство из `{id}` в пути), маршруты `/api/issues/{id}/comments`,
+   `/api/labels`, `/api/pins` и т.п. несут воркспейс только в
+   `X-Workspace-Slug`/`X-Workspace-ID`/query — контракт описывает это в §1.4,
+   но ни один существующий пакет (на момент начала этой сессии) не давал
+   готового резолвера. Решение: новый маленький пакет `internal/wsctx`
+   (`Resolver.RequireMember`) — тонкая, не завязанная ни на один домен обёртка
+   над `spaces`/`space_members`, которую используют все четыре пакета этой
+   сессии. Она не заменяет `workspace.Store` (у него своя, более богатая
+   модель участников с email/ролями для UI) — только даёт «воркспейс+роль»
+   по актуальному запросу.
+
+3. **`resource_labels_enabled` (флаг «ресурсные метки» контракта §3) негде
+   хранить.** `51-data-model.md` не заводит для него колонку. Решение: читается
+   из `spaces.ws_settings->>'resource_labels_enabled'` (jsonb, уже существующая
+   свободная колонка), по умолчанию `false`. У контракта нет отдельного
+   маршрута, который включал бы этот флаг через API — сейчас это фактически
+   «всегда выключено», пока кто-то не проставит значение вручную в БД;
+   `resource_type=agent/skill` в `/api/labels` поэтому всегда отвечает 404 в
+   этой реализации, что и проверяют соответствующие контрактные тесты (не
+   входящие в набор auth/workspaces/me/labels/comments, прогнанный в этой
+   сессии).
+
+4. **Синтаксис упоминания агента/отряда в тексте комментария не задан
+   контрактом.** §1.10 говорит только *что* значит упоминание («агент явно
+   упомянут (`@agent`) в тексте»), не *как* оно закодировано (просто имя?
+   id? markdown-ссылка?) — решалось бы на фронте (`packages/core`), не в
+   списке разрешённых файлов этой сессии. Решение: клиент вставляет
+   упоминание как явный токен `@agent:<uuid>`/`@squad:<uuid>` — однозначно,
+   без коллизий по отображаемому имени участника. См. `internal/note/triggers.go`,
+   `mentionRe`.
+
+5. **`conversation_continuation` (источник срабатывания из §1.10) не
+   реализован.** Требует знания, есть ли у тикета недавний активный диалог с
+   агентом — по сути то же самое состояние, которым управляет
+   `internal/dispatch` (`dispatch_jobs`), и оценивать его по времени/эвристике
+   без более точной спецификации «что считается недавним диалогом» рискованно
+   доиграть неверно. Реализованы `issue_assignee`, `mention_agent`,
+   `mention_squad_leader`, `thread_parent` — четыре из пяти источников;
+   `conversation_continuation` — задокументированный пробел.
+
+6. **`suppress_agent_ids` трактуется как «не включать этот таргет в
+   `trigger_outcomes` вовсе»**, а не как отдельный статус `blocked` — контракт
+   говорит только «исключает из авто-запуска», не уточняя форму ответа;
+   решение реализовано как `status: blocked, reason_code: self_trigger_suppressed`
+   (см. `evaluateTargets`), чтобы `trigger_outcomes` оставался полным списком
+   целей с понятной причиной, а не тихо терял запись.
+
+7. **`coalesced` не дописывает `dj_coalesced_note_ids` существующей строки
+   dispatch_jobs.** `internal/dispatch` (пакет соседней сессии) не даёт под
+   это отдельного метода записи; собирать SQL по чужой таблице в обход её
+   пакета — не наша область. `note.dispatchAdapter.EnqueueCommentTrigger`
+   правильно определяет `coalesced` (не создаёт вторую строку в очереди для
+   уже занятого агента), но не мутирует найденную существующую задачу —
+   задокументированный, узкий пробел.
+
+8. **Права вызова агента (§1.8, «Полномочие на вызов агента») не проверяют
+   `target_type=team`.** Модель данных T-027 не заводит отдельную таблицу
+   рабочих команд (team) — участники есть только как `space_members`; ветка
+   `team` в `canInvokeOperative` поэтому никогда не совпадает, пока команды не
+   появятся отдельным доменом. `workspace`/`member` — реализованы полностью.
+
+9. **`fold=true` листинга комментариев — упрощение.** Контракт: «показывает
+   только корень и его комментарий-резолюцию (если разрешён явным ответом)»;
+   без отдельной колонки, помечающей «каким именно сообщением был разрешён
+   тред» (в схеме есть только `tn_resolved_by_type/id` у самого корня, не у
+   сообщения-разрешения), эта версия сворачивает решённый тред до одного
+   корня с `folded_count`, не пытаясь угадать/показать конкретное
+   сообщение-резолюцию.
+
+10. **Инлайн-превью вложения (`getAttachmentContent`) — лимит размера не
+    зафиксирован контрактом** (только «малого размера, зависит от типа»).
+    Решение: единый лимит 256 КБ для всех текстоподобных типов — контракт не
+    дифференцирует лимит по конкретному content-type.
+
+11. **Токен-скачивание вложения (`attachmentDownloadTicket`,
+    `GET /api/attachments/{id}/download?token=`) не реализовано.** Контракт
+    описывает его как alternative auth (одноразовый подписанный токен на
+    attachment_id+user_id), но не задаёт формат подписи. Эта версия
+    поддерживает только обычную сессию/PAT + членство в воркспейсе вложения;
+    `?token=` не проверяется. `as_download_ticket_uri`/`markdown_url` поэтому
+    ссылаются на обычный (не токенный) путь скачивания.
+
+12. **S3-backend хранилища вложений — интерфейс без реализации.** По прямому
+    указанию задачи: `internal/asset.NewS3Storage()` возвращает `Storage`,
+    каждый метод которого явно отказывает `ErrStorageNotImplemented`;
+    `NewStorageFromConfig` выбирает его, если задан `S3_BUCKET`, но
+    `LOCAL_UPLOAD_DIR` — нет. Если не задано ни то, ни другое — `Storage ==
+    nil`, обработчики отвечают 503 `storage_not_configured`, как и требует
+    контракт для `POST /api/upload-file`/`getAttachmentContent`.
+
+13. **Общая правка `internal/config` (`config.go`):** добавлены поля
+    `LocalUploadDir`/`S3Bucket`/`AttachmentDownloadMode`/`AttachmentDownloadTTL`
+    (env `LOCAL_UPLOAD_DIR`/`S3_BUCKET`/`ATTACHMENT_DOWNLOAD_MODE`/
+    `ATTACHMENT_DOWNLOAD_URL_TTL`, ровно имена из `docs/50-api-contract.md`
+    §1.9) и хелпер `getInt` — аддитивно, без изменения существующих полей/
+    сигнатур.
+
+14. **Общая правка `internal/app` (`deps.go`, `routes.go`):** заведены поля
+    `Note`/`Tagging`/`Asset`/`Pin`, их сборка в `New` (включая
+    `noteDeps.SetDispatcher(note.NewDispatchAdapter(dispatchDeps, db))` —
+    подключение к `internal/dispatch`, появившемуся в ходе этой же сессии) и
+    четыре строки регистрации доменов в `NewRouter`, до `RegisterStubs`.
+
 ## Прочитанные файлы (кроме docs/50-api-contract.{md,yaml}, docs/51-data-model.md)
 
 Session T-025:
@@ -335,5 +454,32 @@ Session T-027 (project/feed/chat, дополнительно к спискам �
 - `server2/internal/importer/integration_test.go`,
   `internal/migrate/migrate_test.go` — образец интеграционного теста на
   одноразовой БД (использован в `project`/`feed`/`chat`/`dispatch` тестах).
+
+Session T-027 (note/tagging/asset/pin, дополнительно к спискам выше):
+- `docs/31-backlog.md` — раздел T-027 (границы доменов, "Затрагивает").
+- `server2/README.md`, `server2/docs/adr/0001-stack.md`,
+  `server2/docs/decisions.md` (целиком, включая записи параллельных сессий).
+- `server2/internal/app/{deps.go,routes.go}` (много раз, по мере того как
+  параллельные сессии дописывали свои домены).
+- `server2/internal/httpapi/{router.go,respond.go,actor.go,workspace.go,middleware.go}`,
+  `internal/realtime/hub.go`, `internal/store/store.go`, `internal/config/config.go`.
+- `server2/internal/workspace/*.go` (образец домена с {id} в пути) —
+  `deps.go`, `register.go`, `store.go`, `handlers.go`, `handlers_test.go`.
+- `server2/migrations/005_tasks.up.sql`, `009_feed.up.sql` (полностью — вся
+  схема этой части T-027) и заголовки/структура `003_agents.up.sql`,
+  `004_crews.up.sql`, `008_dispatch.up.sql` (operatives/operative_targets,
+  crews/crew_members, dispatch_jobs — для триггеров комментариев).
+- Пакет соседней параллельной сессии `internal/dispatch/*.go` (`deps.go`,
+  `store.go`) — только для интеграции через `Deps.Enqueue`/
+  `Store.HasPendingForOperativeOnTicket`, без изменения этих файлов.
+- `e2e/contract/{README.md,client.go,harness.go,contract_test.go}` — код
+  разделов auth/workspaces/me/labels/comments и общие `call`/`ensureX`
+  хелперы.
+- `server2/internal/migrate/migrate_test.go`,
+  `internal/importer/integration_test.go` — образец интеграционного теста на
+  одноразовой БД (использован в `note`/`tagging`/`asset`/`pin`).
+- `scripts/similarity-check.py` (повторно, вместе с `--ignore-trivial`, чтобы
+  подтвердить, что превышение порога в основном режиме шло от общей
+  Go-boilerplate, а не от структурного совпадения с чужим кодом).
 
 `server/**` и `packages/core/**` не открывались.

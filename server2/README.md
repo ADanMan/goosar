@@ -80,6 +80,19 @@ PORT=8080 \
 - `app` — сборка всех доменных `Deps`, регистрация маршрутов (`routes.go`),
   health/readiness/`/api/config`, генерируемые заглушки (`stubs_gen.go`).
 - `migrate`, `importer` — без изменений, T-024/T-025.
+- `wsctx` — резолв воркспейса из `X-Workspace-Slug`/`X-Workspace-ID` +
+  проверка членства, для доменов T-027+, у которых воркспейс не в пути.
+- `note` — комментарии задач и их реакции/резолюция/треды
+  (`/api/issues/{id}/comments/**`, `/api/comments/{commentId}/**`,
+  `/api/issues/{id}/reactions`), включая определение целей автозапуска
+  агентов по правилам контракта (§1.9/§1.10).
+- `tagging` — метки и кастомные свойства задач (`/api/labels/**`,
+  `/api/properties/**`, `/api/issues/{id}/labels`,
+  `/api/issues/{id}/properties/{propertyId}`).
+- `asset` — вложения (`/api/upload-file`, `/api/attachments/**`,
+  `/api/issues/{id}/attachments`, `GET /uploads/{key}` при локальном
+  хранилище); интерфейс `Storage` с реализациями на диск и заглушкой S3.
+- `pin` — личные закладки на задачи/проекты (`/api/pins/**`).
 
 ### Добавить новый домен
 

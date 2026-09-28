@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/adanman/goosar/server2/internal/asset"
 	"github.com/adanman/goosar/server2/internal/httpapi"
 	"github.com/adanman/goosar/server2/internal/realtime"
 )
@@ -22,14 +23,23 @@ func commentEventPayload(c Comment, t TicketInfo) map[string]any {
 	}
 }
 
+// attachExtras заполняет реакции/вложения комментария; контракт требует
+// непустые (не null) массивы даже когда список пуст, поэтому nil от Store
+// нормализуется здесь в одном месте, а не в каждом обработчике по отдельности.
 func (d *Deps) attachExtras(ctx context.Context, c *Comment) {
 	if reactions, err := d.Store.ListCommentReactions(ctx, c.ID); err == nil {
 		c.Reactions = reactions
+	}
+	if c.Reactions == nil {
+		c.Reactions = []Reaction{}
 	}
 	if d.Assets != nil {
 		if atts, err := d.Assets.ListForComment(ctx, c.ID); err == nil {
 			c.Attachments = atts
 		}
+	}
+	if c.Attachments == nil {
+		c.Attachments = []asset.Attachment{}
 	}
 }
 

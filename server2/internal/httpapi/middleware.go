@@ -1,9 +1,12 @@
 package httpapi
 
 import (
+	"bufio"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 )
@@ -48,6 +51,23 @@ type statusWriter struct {
 func (w *statusWriter) WriteHeader(status int) {
 	w.status = status
 	w.ResponseWriter.WriteHeader(status)
+}
+
+// Hijack пробрасывает http.Hijacker к обёрнутому ResponseWriter. Без этого
+// метода statusWriter (embedding даёт его только "по имени", не по
+// интерфейсу — http.ResponseWriter в интерфейсе Hijacker не участвует)
+// маскирует Hijacker нижнего ResponseWriter, и любой апгрейд поверх этого
+// соединения (в частности /ws — WithCommonMiddleware стоит в цепочке перед
+// роутером для всех маршрутов, включая realtime.Register) получает от
+// coder/websocket.Accept `501 Not Implemented` вместо апгрейда, потому что
+// оно явно проверяет ResponseWriter на http.Hijacker и вслепую сдаётся, если
+// его нет.
+func (w *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hj, ok := w.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("httpapi: нижний http.ResponseWriter не поддерживает Hijack")
+	}
+	return hj.Hijack()
 }
 
 func newRequestID() string {

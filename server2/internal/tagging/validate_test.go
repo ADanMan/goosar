@@ -19,9 +19,9 @@ func TestValidLabelName(t *testing.T) {
 
 func TestNormalizeColor(t *testing.T) {
 	cases := map[string]string{
-		"336699":  "#336699",
-		"#336699": "#336699",
-		"ABCDEF":  "#abcdef",
+		"336699":    "#336699",
+		"#336699":   "#336699",
+		"ABCDEF":    "#abcdef",
 		" #fff000 ": "#fff000",
 	}
 	for in, want := range cases {

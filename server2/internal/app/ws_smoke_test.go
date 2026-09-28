@@ -64,9 +64,10 @@ func newAppTestStore(t *testing.T) *store.Store {
 // wsSmokeClient — тонкая обёртка над httptest.Server для этого файла: несёт
 // bearer-токен между вызовами post(), не через глобальную переменную пакета.
 type wsSmokeClient struct {
-	t     *testing.T
-	srv   *httptest.Server
-	token string
+	t           *testing.T
+	srv         *httptest.Server
+	token       string
+	workspaceID string // если задан, шлётся как X-Workspace-ID (issues резолвит воркспейс из заголовка, не из пути)
 }
 
 func (c *wsSmokeClient) post(path string, body any) map[string]any {
@@ -79,6 +80,9 @@ func (c *wsSmokeClient) post(path string, body any) map[string]any {
 	req.Header.Set("Content-Type", "application/json")
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+	if c.workspaceID != "" {
+		req.Header.Set("X-Workspace-ID", c.workspaceID)
 	}
 	resp, err := c.srv.Client().Do(req)
 	if err != nil {
@@ -127,12 +131,17 @@ func TestWebSocketIssueCreatedEvent(t *testing.T) {
 	if workspaceID == "" {
 		t.Fatal("create workspace did not return an id")
 	}
+	c.workspaceID = workspaceID
 
 	wsURL := "ws" + srv.URL[len("http"):] + "/ws?workspace_id=" + workspaceID
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn, _, err := websocket.Dial(ctx, wsURL, nil)
+	conn, dialResp, err := websocket.Dial(ctx, wsURL, nil)
 	if err != nil {
+		if dialResp != nil {
+			body, _ := io.ReadAll(dialResp.Body)
+			t.Fatalf("websocket.Dial: %v (status=%d body=%s)", err, dialResp.StatusCode, body)
+		}
 		t.Fatalf("websocket.Dial: %v", err)
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "")
