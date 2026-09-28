@@ -96,6 +96,7 @@
     "add_trigger": "Add trigger",
     "no_triggers": "No triggers configured. Add a schedule to run automatically.",
     "no_runs": "No runs yet. Click \"Run now\" to trigger manually.",
+    "load_more_runs": "Show more",
     "delete_button": "Delete autopilot",
     "toast_deleted": "Autopilot deleted",
     "toast_delete_failed": "Failed to delete autopilot",
@@ -344,6 +345,7 @@
     "cron_hint": "Standard 5-field cron (min hour dom month dow)",
     "cron_invalid": "This cron expression isn't valid.",
     "timezone_invalid": "This timezone isn't recognized by the server.",
+    "rejection_hint": "Check the schedule format.",
     "advanced_hint": "This expression uses features the visual editor can't represent. Edit the cron text directly, or simplify it to re-enable the controls.",
     "advanced_unverified": "The server couldn't be reached to check this expression, so the controls stay off. Make sure the cron text is right before saving.",
     "advanced_checking": "Checking this expression with the server. The controls stay off until it answers.",
@@ -444,7 +446,9 @@
       "warning": "This action cannot be undone.",
       "cancel": "Cancel",
       "confirm": "Delete permanently",
-      "deleting": "Deleting…"
+      "deleting": "Deleting…",
+      "deleted_toast": "Deleted {{count}} of {{total}}",
+      "delete_partial_failure": "Could not delete: {{names}}"
     }
   }
 }

@@ -39,11 +39,17 @@ export function toastScheduleRejection(
   t: ReturnType<typeof useT<'autopilots'>>['t'],
   rejection: ScheduleRejection,
 ): void {
+  // rejection.detail — сырой текст ошибки от бэкенда, не переведён и не
+  // рассчитан на пользователя; в тост идёт только понятная подсказка,
+  // сырое сообщение остаётся в консоли для диагностики (NN/g 9).
+  if (rejection.detail) {
+    console.warn('[schedule_editor] rejection detail:', rejection.detail);
+  }
   toast.error(
     rejection.code === 'invalid_timezone'
       ? t(($) => $.schedule_editor.timezone_invalid)
       : t(($) => $.schedule_editor.cron_invalid),
-    { description: rejection.detail },
+    { description: t(($) => $.schedule_editor.rejection_hint) },
   );
 }
 

@@ -84,6 +84,11 @@ import { useT } from '../../i18n';
 
 type RunStatus = 'issue_created' | 'running' | 'skipped' | 'completed' | 'failed';
 
+// Сколько запусков запрашивать за раз — API поддерживает limit/offset
+// (packages/core/api/client.ts:listAutopilotRuns), поэтому «Показать ещё»
+// просто увеличивает лимит и переспрашивает сервер.
+const RUN_HISTORY_PAGE_SIZE = 20;
+
 const RUN_VISUAL: Record<RunStatus, { color: string; icon: typeof CheckCircle2; spin?: boolean }> =
   {
     issue_created: { color: 'text-accent-beak', icon: Clock },
@@ -198,11 +203,18 @@ function RunHistoryList({
   runs,
   agentId,
   agentName,
+  hasMore,
+  loadingMore,
+  onLoadMore,
 }: {
   runs: AutopilotRun[];
   agentId: string;
   agentName: string;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
 }) {
+  const { t } = useT('autopilots');
   const visibleRuns = runs.filter((run) => run.status !== 'skipped');
   const skippedRuns = runs.filter((run) => run.status === 'skipped');
 
@@ -213,6 +225,21 @@ function RunHistoryList({
       ))}
       {skippedRuns.length > 0 && (
         <SkippedRunsGroup runs={skippedRuns} agentId={agentId} agentName={agentName} />
+      )}
+      {hasMore && (
+        <button
+          type="button"
+          onClick={onLoadMore}
+          disabled={loadingMore}
+          className="flex w-full items-center justify-center gap-1.5 border-t bg-muted/20 px-4 py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent/30 hover:text-foreground disabled:pointer-events-none disabled:opacity-60"
+        >
+          {loadingMore ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5" />
+          )}
+          {t(($) => $.detail.load_more_runs)}
+        </button>
       )}
     </div>
   );
@@ -659,10 +686,21 @@ export function AutopilotDetailPage({ autopilotId }: { autopilotId: string }) {
 
   const runsPollingInterval = useRealtimePollingInterval();
   const { data, isLoading } = useQuery(autopilotDetailOptions(wsId, autopilotId));
-  const { data: runs = [], isLoading: runsLoading } = useQuery({
-    ...autopilotRunsOptions(wsId, autopilotId),
+  // Журнал запусков грузится постранично: API поддерживает limit, поэтому
+  // «Показать ещё» увеличивает лимит и переспрашивает сервер, а не режет
+  // уже загруженный список на клиенте (Carbon data-table pagination).
+  const [runsLimit, setRunsLimit] = useState(RUN_HISTORY_PAGE_SIZE);
+  const {
+    data: runsData,
+    isLoading: runsLoading,
+    isFetching: runsFetching,
+  } = useQuery({
+    ...autopilotRunsOptions(wsId, autopilotId, { limit: runsLimit }),
     refetchInterval: runsPollingInterval,
   });
+  const runs = runsData?.runs ?? [];
+  const runsTotal = runsData?.total ?? runs.length;
+  const hasMoreRuns = runs.length < runsTotal;
   const updateAutopilot = useUpdateAutopilot();
   const deleteAutopilot = useDeleteAutopilot();
   const triggerAutopilot = useTriggerAutopilot();
@@ -1002,6 +1040,9 @@ export function AutopilotDetailPage({ autopilotId }: { autopilotId: string }) {
                 runs={runs}
                 agentId={autopilot.assignee_id}
                 agentName={getActorName(autopilot.assignee_type, autopilot.assignee_id)}
+                hasMore={hasMoreRuns}
+                loadingMore={runsFetching}
+                onLoadMore={() => setRunsLimit((limit) => limit + RUN_HISTORY_PAGE_SIZE)}
               />
             )}
           </section>

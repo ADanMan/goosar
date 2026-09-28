@@ -30,11 +30,16 @@ export function autopilotDetailOptions(wsId: string, id: string) {
   });
 }
 
-export function autopilotRunsOptions(wsId: string, id: string) {
+export function autopilotRunsOptions(
+  wsId: string,
+  id: string,
+  params?: { limit?: number },
+) {
   return queryOptions({
-    queryKey: autopilotKeys.runs(wsId, id),
-    queryFn: () => api.listAutopilotRuns(id),
-    select: (data) => data.runs,
+    // limit входит в ключ, чтобы «Показать ещё» запрашивало у API более
+    // длинную страницу, а не резало уже загруженный список на клиенте.
+    queryKey: [...autopilotKeys.runs(wsId, id), params?.limit ?? null] as const,
+    queryFn: () => api.listAutopilotRuns(id, params?.limit ? { limit: params.limit } : undefined),
   });
 }
 

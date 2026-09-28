@@ -96,6 +96,7 @@
     "add_trigger": "트리거 추가",
     "no_triggers": "설정된 트리거가 없습니다. 자동으로 실행할 일정을 추가하세요.",
     "no_runs": "아직 실행 기록이 없습니다. 수동으로 실행하려면 \"지금 실행\"을 클릭하세요.",
+    "load_more_runs": "더 보기",
     "delete_button": "오토파일럿 삭제",
     "toast_deleted": "오토파일럿을 삭제했습니다",
     "toast_delete_failed": "오토파일럿을 삭제하지 못했습니다",
@@ -344,6 +345,7 @@
     "cron_hint": "표준 5필드 cron (분 시 일 월 요일)",
     "cron_invalid": "이 cron 표현식은 유효하지 않습니다.",
     "timezone_invalid": "서버가 이 시간대를 인식하지 못합니다.",
+    "rejection_hint": "일정 형식을 확인하세요.",
     "advanced_hint": "이 표현식에는 시각적 편집기에서 표현할 수 없는 기능이 포함되어 있습니다. cron 텍스트를 직접 편집하거나 표현식을 단순화하세요.",
     "advanced_unverified": "서버에 연결할 수 없어 이 표현식을 검증하지 못했습니다. 컨트롤은 비활성 상태로 유지됩니다. 저장하기 전에 cron 텍스트를 확인하세요.",
     "advanced_checking": "이 표현식을 서버에서 검증하는 중입니다. 결과가 올 때까지 컨트롤은 비활성 상태입니다.",
@@ -441,7 +443,9 @@
       "warning": "이 작업은 되돌릴 수 없습니다.",
       "cancel": "취소",
       "confirm": "영구 삭제",
-      "deleting": "삭제 중…"
+      "deleting": "삭제 중…",
+      "deleted_toast": "{{total}}개 중 {{count}}개 삭제됨",
+      "delete_partial_failure": "삭제하지 못함: {{names}}"
     }
   }
 }

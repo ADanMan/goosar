@@ -96,6 +96,7 @@
     "add_trigger": "添加触发器",
     "no_triggers": "未配置触发器。添加一个时间表让它自动运行。",
     "no_runs": "暂无运行记录。点击\"立即运行\"手动触发。",
+    "load_more_runs": "显示更多",
     "delete_button": "删除自动化",
     "toast_deleted": "已删除自动化",
     "toast_delete_failed": "删除自动化失败",
@@ -344,6 +345,7 @@
     "cron_hint": "标准 5 字段 cron（分 时 日 月 星期）",
     "cron_invalid": "该 cron 表达式无效。",
     "timezone_invalid": "服务端无法识别该时区。",
+    "rejection_hint": "请检查排期格式。",
     "advanced_hint": "该表达式包含可视化编辑器暂不支持的特性。可直接编辑 cron 文本，或简化表达式以恢复可视化编辑。",
     "advanced_unverified": "暂时无法连接服务器校验该表达式，可视化控件保持停用。保存前请确认 cron 文本无误。",
     "advanced_checking": "正在向服务器校验该表达式，结果返回前可视化控件保持停用。",
@@ -441,7 +443,9 @@
       "warning": "此操作无法撤销。",
       "cancel": "取消",
       "confirm": "永久删除",
-      "deleting": "删除中…"
+      "deleting": "删除中…",
+      "deleted_toast": "已删除 {{count}} / {{total}}",
+      "delete_partial_failure": "未能删除：{{names}}"
     }
   }
 }

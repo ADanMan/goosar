@@ -40,17 +40,39 @@ export function DeleteAutopilotsDialog({
 
   const handleDelete = async () => {
     setDeleting(true);
-    try {
-      for (const row of rows) {
-        await deleteAutopilot.mutateAsync(row.id);
-      }
-      onOpenChange(false);
-      onDeleted?.();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : String(err));
-    } finally {
-      setDeleting(false);
+    // Каждый автопилот удаляется независимо (Promise.allSettled), чтобы
+    // сбой на одном из них не скрывал результат по остальным — тост
+    // показывает, сколько из скольких удалено, а при частичном сбое ещё и
+    // какие именно не удалились (NN/g 9 — диагностика ошибок).
+    const results = await Promise.allSettled(rows.map((row) => deleteAutopilot.mutateAsync(row.id)));
+    setDeleting(false);
+    onOpenChange(false);
+
+    const failedRows = rows.filter((_, i) => results[i]?.status === 'rejected');
+    const succeededCount = rows.length - failedRows.length;
+
+    if (failedRows.length === 0) {
+      toast.success(
+        t(($) => $.actions.delete_dialog.deleted_toast, {
+          count: succeededCount,
+          total: rows.length,
+        }),
+      );
+    } else {
+      toast.error(
+        t(($) => $.actions.delete_dialog.deleted_toast, {
+          count: succeededCount,
+          total: rows.length,
+        }),
+        {
+          description: t(($) => $.actions.delete_dialog.delete_partial_failure, {
+            names: failedRows.map((row) => row.title).join(', '),
+          }),
+        },
+      );
     }
+
+    onDeleted?.();
   };
 
   return (

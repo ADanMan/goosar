@@ -96,6 +96,7 @@
     "add_trigger": "トリガーを追加",
     "no_triggers": "設定されたトリガーがありません。自動で実行するスケジュールを追加してください。",
     "no_runs": "まだ実行履歴がありません。手動で実行するには「今すぐ実行」をクリックしてください。",
+    "load_more_runs": "もっと見る",
     "delete_button": "オートパイロットを削除",
     "toast_deleted": "オートパイロットを削除しました",
     "toast_delete_failed": "オートパイロットを削除できませんでした",
@@ -344,6 +345,7 @@
     "cron_hint": "標準 5 フィールド cron（分 時 日 月 曜日）",
     "cron_invalid": "この cron 式は無効です。",
     "timezone_invalid": "このタイムゾーンはサーバーで認識できません。",
+    "rejection_hint": "スケジュールの形式を確認してください。",
     "advanced_hint": "この式にはビジュアルエディタで表現できない機能が含まれています。cron テキストを直接編集するか、式を簡略化してください。",
     "advanced_unverified": "サーバーに接続できず、この式を検証できませんでした。コントロールは無効のままです。保存する前に cron テキストを確認してください。",
     "advanced_checking": "この式をサーバーで検証しています。結果が返るまでコントロールは無効のままです。",
@@ -441,7 +443,9 @@
       "warning": "この操作は取り消せません。",
       "cancel": "キャンセル",
       "confirm": "完全に削除",
-      "deleting": "削除中…"
+      "deleting": "削除中…",
+      "deleted_toast": "{{total}} 件中 {{count}} 件を削除しました",
+      "delete_partial_failure": "削除できませんでした: {{names}}"
     }
   }
 }
