@@ -109,6 +109,28 @@ func (s *Store) ConsumeRecoveryCode(ctx context.Context, accountID, code string)
 	return tag.RowsAffected() > 0, nil
 }
 
+// ConsumeTOTPStep — атомарная защита от повторного использования TOTP-кода
+// в пределах разрешённого окна ±1 шаг (T-029 доводка, миграция 401, см.
+// server2/docs/decisions.md, раздел «T-029 доводка»): код математически
+// валиден на протяжении ~90 секунд (RFC 6238, три соседних 30-секундных
+// шага), поэтому один лишь validateTOTPStep не мешает предъявить один и тот
+// же код дважды. Store сравнивает-и-присваивает mfa_last_accepted_step одной
+// SQL-командой (WHERE ... < $2), не read-then-write в Go — конкурентные
+// попытки одним и тем же кодом (например, два параллельных запроса)
+// корректно принимают шаг ровно один раз. ok=false — этот шаг (или более
+// поздний) уже был принят раньше, код отклоняется, даже если математически
+// верен.
+func (s *Store) ConsumeTOTPStep(ctx context.Context, accountID string, step int64) (bool, error) {
+	tag, err := s.db.Pool.Exec(ctx, `
+		UPDATE mfa_factors SET mfa_last_accepted_step = $2, updated_at = now()
+		WHERE account_id = $1 AND (mfa_last_accepted_step IS NULL OR mfa_last_accepted_step < $2)`,
+		accountID, step)
+	if err != nil {
+		return false, fmt.Errorf("authn: фиксация принятого TOTP-шага: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
 // DisableFactor удаляет MFA-фактор и все recovery-коды аккаунта — contract
 // authDisableTotp: "выключает MFA и удаляет recovery-коды". ok=false, если
 // фактора не было (400 "not enrolled" у вызывающего handler'а).

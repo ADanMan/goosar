@@ -146,7 +146,7 @@ func New(cfg config.Config, db *store.Store, logger *slog.Logger) *Deps {
 	noteDeps.SetDispatcher(note.NewDispatchAdapter(dispatchDeps, db))
 
 	autopilotDeps := autopilot.New(db, workspaceDeps.Store, taskDeps.Store, dispatchDeps, hub,
-		cfg.McpSecretKey, cfg.PublicURL, logger)
+		cfg.McpSecretKey, cfg.McpSecretKeyPrevious, cfg.PublicURL, logger)
 	cloudRuntimeDeps := cloudruntime.New(db, cfg.CloudRuntimeBaseURL, cfg.CloudRuntimeAPIKey, logger)
 
 	runtimeDeps := runtime.New(db, dispatchDeps, hub, logger)

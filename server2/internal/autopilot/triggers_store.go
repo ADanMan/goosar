@@ -22,15 +22,21 @@ var ErrTriggerNotFound = errors.New("autopilot: триггер не найден
 // чей kind != webhook.
 var ErrNotWebhookTrigger = errors.New("autopilot: триггер не является webhook-триггером")
 
+// strig_webhook_path (открытый токен) удалена миграцией 400 (T-029 доводка,
+// см. server2/docs/decisions.md): маршрутизация входящего вебхука теперь по
+// strig_webhook_token_digest, поэтому колонка не читается ни здесь, ни в
+// triggerByWebhookToken ниже — Trigger.WebhookPath заполняется только
+// вручную, в CreateTrigger/RotateWebhookToken, тем же секретом, что и
+// PlainToken (тот же принцип: виден только в ответе create/rotate).
 const triggerColumns = `id, sentinel_id, strig_kind, strig_enabled, strig_cron_expression, strig_timezone,
-	strig_next_run_at, strig_webhook_path, strig_provider, strig_signing_secret_sealed IS NOT NULL,
+	strig_next_run_at, strig_provider, strig_signing_secret_sealed IS NOT NULL,
 	strig_label, strig_last_fired_at, strig_event_filters, created_at, updated_at`
 
 func scanTrigger(row pgx.Row) (Trigger, error) {
 	var t Trigger
 	var filters []byte
 	if err := row.Scan(&t.ID, &t.AutopilotID, &t.Kind, &t.Enabled, &t.CronExpression, &t.Timezone,
-		&t.NextRunAt, &t.WebhookPath, &t.Provider, &t.HasSigningSecret,
+		&t.NextRunAt, &t.Provider, &t.HasSigningSecret,
 		&t.Label, &t.LastFiredAt, &filters, &t.CreatedAt, &t.UpdatedAt); err != nil {
 		return Trigger{}, err
 	}
@@ -90,11 +96,10 @@ func (s *Store) CreateTrigger(ctx context.Context, autopilotID string, p CreateT
 		}
 	}
 
-	// strig_webhook_token_digest хранится вместе с strig_webhook_path (плоским
-	// текстом) для схемы/аудита, но не участвует в поиске триггера по
-	// входящему запросу — см. server2/docs/decisions.md, раздел T-028, за
-	// обоснование (без plaintext-пути сервер не смог бы ни найти строку по
-	// одному лишь токену в URL, ни повторно показать webhook_url владельцу).
+	// strig_webhook_token_digest — единственное, что попадает в БД (T-029
+	// доводка, миграция 400): маршрутизация входящего вебхука и уникальность
+	// — по нему, открытый токен (path) нигде не сохраняется, только
+	// возвращается вызывающему один раз (см. ниже, t.WebhookPath/PlainToken).
 	const maxAttempts = 3
 	var id string
 	var err error
@@ -102,10 +107,10 @@ func (s *Store) CreateTrigger(ctx context.Context, autopilotID string, p CreateT
 		row := s.db.Pool.QueryRow(ctx, `
 			INSERT INTO sentinel_triggers (
 				sentinel_id, strig_kind, strig_cron_expression, strig_timezone, strig_next_run_at,
-				strig_webhook_path, strig_webhook_token_digest, strig_provider, strig_label, strig_event_filters
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+				strig_webhook_token_digest, strig_provider, strig_label, strig_event_filters
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
 			autopilotID, p.Kind, p.CronExpression, p.Timezone, nextRun,
-			nullableString(path), nullableDigest(digest), p.Provider, p.Label, filters)
+			nullableDigest(digest), p.Provider, p.Label, filters)
 		if err = row.Scan(&id); err == nil {
 			break
 		}
@@ -119,7 +124,7 @@ func (s *Store) CreateTrigger(ctx context.Context, autopilotID string, p CreateT
 		return Trigger{}, fmt.Errorf("autopilot: создание триггера: %w", err)
 	}
 	if err != nil {
-		return Trigger{}, fmt.Errorf("autopilot: создание триггера (webhook_path коллизия): %w", err)
+		return Trigger{}, fmt.Errorf("autopilot: создание триггера (коллизия дайджеста токена): %w", err)
 	}
 
 	t, err := s.GetTrigger(ctx, autopilotID, id)
@@ -128,6 +133,7 @@ func (s *Store) CreateTrigger(ctx context.Context, autopilotID string, p CreateT
 	}
 	if token != "" {
 		t.PlainToken = token
+		t.WebhookPath = &path
 	}
 	return t, nil
 }
@@ -293,9 +299,11 @@ func (s *Store) DeleteTrigger(ctx context.Context, autopilotID, triggerID string
 	return nil
 }
 
-// RotateWebhookToken перевыпускает strig_webhook_path (старый сразу
-// недействителен — уникальный индекс не позволяет двум строкам делить один
-// path, и старое значение просто перезаписывается).
+// RotateWebhookToken перевыпускает strig_webhook_token_digest (старый токен
+// сразу недействителен — уникальный индекс не позволяет двум строкам делить
+// один дайджест, и старое значение просто перезаписывается); открытый
+// токен, как и при создании (T-029 доводка, миграция 400), в БД не попадает
+// вовсе — возвращается вызывающему только этим ответом.
 func (s *Store) RotateWebhookToken(ctx context.Context, autopilotID, triggerID string) (Trigger, error) {
 	current, err := s.GetTrigger(ctx, autopilotID, triggerID)
 	if err != nil {
@@ -305,9 +313,8 @@ func (s *Store) RotateWebhookToken(ctx context.Context, autopilotID, triggerID s
 		return Trigger{}, ErrNotWebhookTrigger
 	}
 	const maxAttempts = 3
-	var token string
+	var token, path string
 	for attempt := 0; attempt < maxAttempts; attempt++ {
-		var path string
 		var digest []byte
 		var genErr error
 		token, path, digest, genErr = generateWebhookToken()
@@ -315,8 +322,8 @@ func (s *Store) RotateWebhookToken(ctx context.Context, autopilotID, triggerID s
 			return Trigger{}, genErr
 		}
 		tag, err := s.db.Pool.Exec(ctx, `
-			UPDATE sentinel_triggers SET strig_webhook_path = $3, strig_webhook_token_digest = $4, updated_at = now()
-			WHERE sentinel_id = $1 AND id = $2`, autopilotID, triggerID, path, nullableDigest(digest))
+			UPDATE sentinel_triggers SET strig_webhook_token_digest = $3, updated_at = now()
+			WHERE sentinel_id = $1 AND id = $2`, autopilotID, triggerID, nullableDigest(digest))
 		if err == nil {
 			if tag.RowsAffected() == 0 {
 				return Trigger{}, ErrTriggerNotFound
@@ -332,6 +339,7 @@ func (s *Store) RotateWebhookToken(ctx context.Context, autopilotID, triggerID s
 		return Trigger{}, err
 	}
 	t.PlainToken = token
+	t.WebhookPath = &path
 	return t, nil
 }
 
@@ -367,7 +375,10 @@ func (s *Store) SetSigningSecret(ctx context.Context, autopilotID, triggerID, mc
 
 // signingSecretFor возвращает расшифрованный секрет подписи триггера, если
 // он задан (для проверки HMAC входящего вебхука, см. handlers_webhook.go).
-func (s *Store) signingSecretFor(ctx context.Context, triggerID, mcpKey string) (string, bool, error) {
+// mcpKeyPrev — GOOSAR_MCP_SECRET_KEY_PREVIOUS: секрет, запечатанный ещё
+// старым ключом (до `goosar_admin rotate-secrets`), должен по-прежнему
+// проверяться, не отказывать всем входящим вебхукам сразу после ротации.
+func (s *Store) signingSecretFor(ctx context.Context, triggerID, mcpKey, mcpKeyPrev string) (string, bool, error) {
 	var sealed []byte
 	err := s.db.Pool.QueryRow(ctx, `SELECT strig_signing_secret_sealed FROM sentinel_triggers WHERE id = $1`, triggerID).Scan(&sealed)
 	if err != nil {
@@ -376,7 +387,7 @@ func (s *Store) signingSecretFor(ctx context.Context, triggerID, mcpKey string) 
 	if len(sealed) == 0 {
 		return "", false, nil
 	}
-	secret, err := openSecret(mcpKey, sealed)
+	secret, err := openSecret(mcpKey, mcpKeyPrev, sealed)
 	if err != nil {
 		return "", false, err
 	}
@@ -391,15 +402,19 @@ type resolvedTrigger struct {
 	SentinelStatus      string
 }
 
-func (s *Store) triggerByWebhookPath(ctx context.Context, token string) (resolvedTrigger, error) {
+// triggerByWebhookToken резолвит входящий публичный {token} на строку
+// триггера по sha256-дайджесту (T-029 доводка, миграция 400) — сервер больше
+// не хранит и не ищет по открытому токену.
+func (s *Store) triggerByWebhookToken(ctx context.Context, token string) (resolvedTrigger, error) {
+	digest := sha256.Sum256([]byte(token))
 	row := s.db.Pool.QueryRow(ctx, `
 		SELECT `+prefixColumns("st", triggerColumns)+`, s.workspace_id, s.sen_status
 		FROM sentinel_triggers st JOIN sentinels s ON s.id = st.sentinel_id
-		WHERE st.strig_webhook_path = $1 AND st.strig_kind = 'webhook'`, token)
+		WHERE st.strig_webhook_token_digest = $1 AND st.strig_kind = 'webhook'`, hex.EncodeToString(digest[:]))
 	var rt resolvedTrigger
 	var filters []byte
 	if err := row.Scan(&rt.ID, &rt.AutopilotID, &rt.Kind, &rt.Enabled, &rt.CronExpression, &rt.Timezone,
-		&rt.NextRunAt, &rt.WebhookPath, &rt.Provider, &rt.HasSigningSecret,
+		&rt.NextRunAt, &rt.Provider, &rt.HasSigningSecret,
 		&rt.Label, &rt.LastFiredAt, &filters, &rt.CreatedAt, &rt.UpdatedAt,
 		&rt.SentinelWorkspaceID, &rt.SentinelStatus); err != nil {
 		if store.IsNoRows(err) {

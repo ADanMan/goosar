@@ -100,8 +100,12 @@ func (d *Deps) handleConfirmTotp(w http.ResponseWriter, r *http.Request) {
 		httpapi.WriteError(w, http.StatusConflict, "already enrolled", "mfa_already_enabled")
 		return
 	}
-	secret, err := unsealSecret(d.Config.McpSecretKey, d.Config.McpSecretKeyPrevious, factor.SealedSecret)
-	if err != nil || !validateTOTP(secret, req.Code) {
+	ok2, err := d.verifyTOTPCode(r.Context(), actor.UserID, factor.SealedSecret, req.Code)
+	if err != nil {
+		httpapi.WriteError(w, http.StatusInternalServerError, "internal error", "internal_error")
+		return
+	}
+	if !ok2 {
 		httpapi.WriteError(w, http.StatusBadRequest, "code invalid", "mfa_code_invalid")
 		return
 	}
@@ -244,8 +248,10 @@ func (d *Deps) handleVerifyMfaChallenge(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		if found && factor.EnabledAt != nil {
-			if secret, serr := unsealSecret(d.Config.McpSecretKey, d.Config.McpSecretKeyPrevious, factor.SealedSecret); serr == nil {
-				ok = validateTOTP(secret, req.Code)
+			ok, err = d.verifyTOTPCode(r.Context(), accountID, factor.SealedSecret, req.Code)
+			if err != nil {
+				httpapi.WriteError(w, http.StatusInternalServerError, "internal error", "internal_error")
+				return
 			}
 		}
 	case req.RecoveryCode != "":
@@ -289,12 +295,28 @@ func (d *Deps) verifyCurrentFactor(ctx context.Context, accountID, code string) 
 	if !found || factor.EnabledAt == nil {
 		return false, errMFANotEnrolled
 	}
-	if secret, serr := unsealSecret(d.Config.McpSecretKey, d.Config.McpSecretKeyPrevious, factor.SealedSecret); serr == nil {
-		if validateTOTP(secret, code) {
-			return true, nil
-		}
+	if ok, err := d.verifyTOTPCode(ctx, accountID, factor.SealedSecret, code); err == nil && ok {
+		return true, nil
 	}
 	return d.Store.ConsumeRecoveryCode(ctx, accountID, code)
+}
+
+// verifyTOTPCode расшифровывает секрет (пробуя текущий/предыдущий ключ) и
+// проверяет code с защитой от повторного использования в пределах окна ±1
+// шаг (T-029 доводка, Store.ConsumeTOTPStep — см. server2/docs/decisions.md,
+// раздел «T-029 доводка»): код математически верен ~90 секунд, поэтому
+// одного validateTOTP недостаточно. err!=nil — внутренняя ошибка (БД), не
+// "код неверный" (для этого — ok=false, err=nil).
+func (d *Deps) verifyTOTPCode(ctx context.Context, accountID string, sealedSecret []byte, code string) (bool, error) {
+	secret, err := unsealSecret(d.Config.McpSecretKey, d.Config.McpSecretKeyPrevious, sealedSecret)
+	if err != nil {
+		return false, nil
+	}
+	step, ok := validateTOTPStep(secret, code)
+	if !ok {
+		return false, nil
+	}
+	return d.Store.ConsumeTOTPStep(ctx, accountID, step)
 }
 
 // generateRecoveryCodes выпускает recoveryCodeCount кодов и параллельный

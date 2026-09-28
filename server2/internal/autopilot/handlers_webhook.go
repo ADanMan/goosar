@@ -33,7 +33,7 @@ type webhookRequest struct {
 
 func (d *Deps) handleWebhookAutopilotTrigger(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
-	resolved, err := d.Store.triggerByWebhookPath(r.Context(), token)
+	resolved, err := d.Store.triggerByWebhookToken(r.Context(), token)
 	if err == ErrTriggerNotFound {
 		httpapi.NotFound(w, "unknown webhook token")
 		return
@@ -189,7 +189,7 @@ func (d *Deps) verifyWebhookSignature(r *http.Request, t resolvedTrigger, body [
 	if !t.HasSigningSecret {
 		return "not_required", ""
 	}
-	secret, ok, err := d.Store.signingSecretFor(r.Context(), t.ID, d.McpSecretKey)
+	secret, ok, err := d.Store.signingSecretFor(r.Context(), t.ID, d.McpSecretKey, d.McpSecretKeyPrevious)
 	if err != nil || !ok {
 		// секрет помечен как заданный, но расшифровать не удалось (например
 		// GOOSAR_MCP_SECRET_KEY сменился без ротации) — по контракту это тот

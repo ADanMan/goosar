@@ -98,10 +98,14 @@ type Subscriber struct {
 }
 
 // Trigger — components/schemas/AutopilotTrigger (sentinel_triggers).
-// PlainToken несёт секрет вебхука в открытом виде — заполняется только сразу
-// после создания/ротации (см. server2/docs/decisions.md, раздел T-028): БД
-// хранит лишь strig_webhook_token_digest, так что на последующих чтениях
-// PlainToken всегда пуст и в JSON превращается в null.
+// PlainToken/WebhookPath несут секрет вебхука в открытом виде — заполняются
+// только сразу после создания/ротации, в Go-коде CreateTrigger/
+// RotateWebhookToken, не из БД (T-029 доводка, миграция 400, см.
+// server2/docs/decisions.md, раздел «T-029 доводка»): БД хранит только
+// strig_webhook_token_digest (sha256 токена, маршрутизация входящего вебхука
+// по нему), открытый токен/путь не сохраняется нигде — так что на любом
+// последующем чтении (GetTrigger/ListTriggers) оба поля всегда nil/"" и в
+// JSON превращаются в null.
 type Trigger struct {
 	ID                string
 	AutopilotID       string
@@ -148,10 +152,13 @@ type triggerJSON struct {
 	EventFilters      json.RawMessage `json:"event_filters"`
 }
 
-// ToJSON сериализует t для ответа write-access-у: webhook_token — только
-// если t.PlainToken непуст (create/rotate), webhook_path/webhook_url — из
-// сохранённого strig_webhook_path (baseURL пуст, если сервер не знает
-// публичного адреса — см. internal/config.Config.PublicURL).
+// ToJSON сериализует t для ответа write-access-у: webhook_token/webhook_path/
+// webhook_url — только если t.WebhookPath/t.PlainToken заполнены, то есть
+// только в самом ответе create/rotate (T-029 доводка, миграция 400: открытый
+// токен нигде в БД не хранится, поэтому на последующих чтениях сервер
+// физически не может ни то, ни другое восстановить — см.
+// server2/docs/decisions.md, раздел «T-029 доводка»; baseURL пуст, если
+// сервер не знает публичного адреса — см. internal/config.Config.PublicURL).
 func (t Trigger) ToJSON(baseURL string) triggerJSON {
 	out := t.toBaseJSON()
 	if t.WebhookPath != nil {

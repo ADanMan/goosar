@@ -24,6 +24,11 @@ type Deps struct {
 	// (запечатывание секрета, см. crypto.go) и проверке подписи входящего
 	// вебхука (handlers_webhook.go).
 	McpSecretKey string
+	// McpSecretKeyPrevious — GOOSAR_MCP_SECRET_KEY_PREVIOUS (ротация ключа,
+	// T-029 доводка): позволяет проверить подпись вебхука секретом,
+	// запечатанным ещё старым ключом, до того как `goosar_admin rotate-secrets`
+	// перешифрует его новым.
+	McpSecretKeyPrevious string
 	// PublicURL — GOOSAR_PUBLIC_URL, для построения webhook_url; пусто —
 	// строится из Host входящего запроса (см. handlers_triggers.go).
 	PublicURL string
@@ -40,13 +45,14 @@ type Deps struct {
 // нумерации), а не через их HTTP-обработчики — тот же приём, что
 // internal/note использует internal/asset.Store.
 func New(db *store.Store, wsStore *workspace.Store, taskStore *task.Store, dispatchDeps *dispatch.Deps,
-	pub realtime.Publisher, mcpSecretKey, publicURL string, logger *slog.Logger) *Deps {
+	pub realtime.Publisher, mcpSecretKey, mcpSecretKeyPrevious, publicURL string, logger *slog.Logger) *Deps {
 	st := NewStore(db)
 	disp := &Dispatcher{Store: st, Dispatch: dispatchDeps, Tasks: taskStore, Workspace: wsStore, DB: db}
 	sched := &Scheduler{Store: st, Dispatcher: disp, Clock: RealClock{}, Logger: logger}
 	return &Deps{
 		Store: st, Dispatcher: disp, Resolver: wsctx.New(db), Publisher: pub, Logger: logger,
-		McpSecretKey: mcpSecretKey, PublicURL: publicURL, Scheduler: sched,
+		McpSecretKey: mcpSecretKey, McpSecretKeyPrevious: mcpSecretKeyPrevious,
+		PublicURL: publicURL, Scheduler: sched,
 	}
 }
 

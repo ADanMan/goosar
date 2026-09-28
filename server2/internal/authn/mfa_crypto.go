@@ -1,28 +1,29 @@
-// MFA TOTP (RFC 6238) на crypto/hmac + запечатывание секрета AES-256-GCM на
-// GOOSAR_MCP_SECRET_KEY (contract §1.9, "MFA": "тот же ключ шифрует и
-// MCP-конфиги агентов, и TOTP-секреты"). Секрет TOTP всегда обязан быть
-// зашифрован (в отличие от internal/agent, где ключ может отсутствовать и
-// поле остаётся plaintext) — GOOSAR_MCP_SECRET_KEY отсутствует означает
-// 503 mfa_unavailable ещё на входе в handleEnrollTotp, до вызова sealSecret.
+// MFA TOTP (RFC 6238) на crypto/hmac + запечатывание секрета через
+// internal/seal (GOOSAR_MCP_SECRET_KEY — contract §1.9, "MFA": "тот же ключ
+// шифрует и MCP-конфиги агентов, и TOTP-секреты"). Секрет TOTP всегда обязан
+// быть зашифрован (в отличие от internal/agent, где ключ может отсутствовать
+// и поле остаётся plaintext) — GOOSAR_MCP_SECRET_KEY отсутствует означает 503
+// mfa_unavailable ещё на входе в handleEnrollTotp, до вызова sealSecret. До
+// доводки T-029 этот файл реализовывал AES-256-GCM сам (независимо от
+// internal/agent/internal/autopilot/internal/seal) — доводка сводит все
+// четыре к internal/seal; формат байт-в-байт совместим с тем, что этот файл
+// писал раньше (internal/seal читает и исторический формат без маркера — см.
+// его пакет), так что перевод не требует миграции уже сохранённых секретов.
 package authn
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/hmac"
-	"crypto/rand"
 	"crypto/sha1" //nolint:gosec // алгоритм фиксирован контрактом (MFAEnrollResponse.algorithm = "SHA1")
-	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base32"
 	"encoding/binary"
-	"errors"
 	"fmt"
-	"io"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/adanman/goosar/server2/internal/seal"
 )
 
 const (
@@ -31,57 +32,21 @@ const (
 	totpSkew   = 1 // ±1 шаг (±30с) на рассинхронизацию часов клиента
 )
 
-// sealSecret шифрует случайный TOTP-секрет AES-256-GCM на key (nonce впереди
-// шифротекста). key пуст — вызывающий код уже отверг запрос 503 раньше, сюда
-// он попасть не должен (errSealKeyEmpty на этот случай всё равно есть).
+// sealSecret шифрует случайный TOTP-секрет ключом key (ErrUnavailable, если
+// пуст — вызывающий код уже отверг запрос 503 раньше, сюда он попасть не
+// должен).
 func sealSecret(key string, plaintext []byte) ([]byte, error) {
-	gcm, err := gcmFor(key)
-	if err != nil {
-		return nil, err
-	}
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, fmt.Errorf("authn: mfa: генерация nonce: %w", err)
-	}
-	return gcm.Seal(nonce, nonce, plaintext, nil), nil
+	return seal.Seal(key, plaintext)
 }
 
 // unsealSecret — обратная операция; пробует key, затем prevKey (ротация
-// GOOSAR_MCP_SECRET_KEY_PREVIOUS), тем же порядком, что internal/agent.
-func unsealSecret(key, prevKey string, sealed []byte) ([]byte, error) {
-	if gcm, err := gcmFor(key); err == nil {
-		if pt, err := openGCM(gcm, sealed); err == nil {
-			return pt, nil
-		}
+// GOOSAR_MCP_SECRET_KEY_PREVIOUS).
+func unsealSecret(key, prevKey string, sealed_ []byte) ([]byte, error) {
+	pt, ok := seal.Open(key, prevKey, sealed_)
+	if !ok {
+		return nil, fmt.Errorf("authn: mfa: секрет не расшифровывается ни текущим, ни предыдущим ключом")
 	}
-	if prevKey != "" {
-		if gcm, err := gcmFor(prevKey); err == nil {
-			if pt, err := openGCM(gcm, sealed); err == nil {
-				return pt, nil
-			}
-		}
-	}
-	return nil, errors.New("authn: mfa: секрет не расшифровывается ни текущим, ни предыдущим ключом")
-}
-
-func gcmFor(key string) (cipher.AEAD, error) {
-	if key == "" {
-		return nil, errors.New("authn: mfa: ключ шифрования пуст")
-	}
-	sum := sha256.Sum256([]byte(key))
-	block, err := aes.NewCipher(sum[:])
-	if err != nil {
-		return nil, err
-	}
-	return cipher.NewGCM(block)
-}
-
-func openGCM(gcm cipher.AEAD, sealed []byte) ([]byte, error) {
-	if len(sealed) < gcm.NonceSize() {
-		return nil, errors.New("authn: mfa: шифротекст короче nonce")
-	}
-	nonce, ct := sealed[:gcm.NonceSize()], sealed[gcm.NonceSize():]
-	return gcm.Open(nil, nonce, ct, nil)
+	return pt, nil
 }
 
 // --- TOTP (RFC 6238 поверх HOTP, RFC 4226) -----------------------------------
@@ -117,20 +82,33 @@ func totpCounter(t time.Time) uint64 {
 }
 
 // validateTOTP сверяет code с ±totpSkew шагами вокруг "сейчас" — обычная
-// терпимость к рассинхронизации часов клиента у TOTP-реализаций.
+// терпимость к рассинхронизации часов клиента у TOTP-реализаций. Не проверяет
+// anti-replay (см. validateTOTPStep/Store.ConsumeTOTPStep) — используется там,
+// где повторное предъявление того же кода не имеет значения (тестовый образец).
 func validateTOTP(secret []byte, code string) bool {
+	_, ok := validateTOTPStep(secret, code)
+	return ok
+}
+
+// validateTOTPStep — как validateTOTP, но дополнительно возвращает номер
+// HOTP-шага (RFC 4226 §5.3 counter), на котором код совпал — вызывающий код
+// передаёт его в Store.ConsumeTOTPStep для защиты от повторного использования
+// в пределах разрешённого окна ±1 шаг (T-029 доводка, см.
+// server2/docs/decisions.md, раздел «T-029 доводка»).
+func validateTOTPStep(secret []byte, code string) (step int64, ok bool) {
 	code = strings.TrimSpace(code)
 	if len(code) != totpDigits {
-		return false
+		return 0, false
 	}
 	now := totpCounter(time.Now())
 	for skew := -totpSkew; skew <= totpSkew; skew++ {
-		want := hotp(secret, uint64(int64(now)+int64(skew)))
+		candidate := int64(now) + int64(skew)
+		want := hotp(secret, uint64(candidate))
 		if subtle.ConstantTimeCompare([]byte(want), []byte(code)) == 1 {
-			return true
+			return candidate, true
 		}
 	}
-	return false
+	return 0, false
 }
 
 // otpauthURI строит otpauth://totp/... для приложений-аутентификаторов

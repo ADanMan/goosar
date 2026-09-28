@@ -194,12 +194,12 @@ func TestAutopilot_TriggerCRUD_ScheduleAndWebhook(t *testing.T) {
 		t.Error("GetTrigger: PlainToken should be empty on read (only the create/rotate response carries it)")
 	}
 
-	byPath, err := s.triggerByWebhookPath(ctx, *wh.WebhookPath)
+	byPath, err := s.triggerByWebhookToken(ctx, *wh.WebhookPath)
 	if err != nil {
-		t.Fatalf("triggerByWebhookPath: %v", err)
+		t.Fatalf("triggerByWebhookToken: %v", err)
 	}
 	if byPath.ID != wh.ID || byPath.SentinelWorkspaceID != wsID {
-		t.Errorf("triggerByWebhookPath = %+v", byPath)
+		t.Errorf("triggerByWebhookToken = %+v", byPath)
 	}
 
 	rotated, err := s.RotateWebhookToken(ctx, a.ID, wh.ID)
@@ -213,8 +213,8 @@ func TestAutopilot_TriggerCRUD_ScheduleAndWebhook(t *testing.T) {
 		t.Error("RotateWebhookToken: webhook_path did not change")
 	}
 	// старый путь больше не резолвится.
-	if _, err := s.triggerByWebhookPath(ctx, *wh.WebhookPath); err != ErrTriggerNotFound {
-		t.Errorf("triggerByWebhookPath (старый токен после ротации): err = %v, want ErrTriggerNotFound", err)
+	if _, err := s.triggerByWebhookToken(ctx, *wh.WebhookPath); err != ErrTriggerNotFound {
+		t.Errorf("triggerByWebhookToken (старый токен после ротации): err = %v, want ErrTriggerNotFound", err)
 	}
 
 	// signing secret: без ключа шифрования — ErrEncryptionUnavailable.
@@ -228,7 +228,7 @@ func TestAutopilot_TriggerCRUD_ScheduleAndWebhook(t *testing.T) {
 	if !withSecret.HasSigningSecret || withSecret.SigningSecretHint == nil {
 		t.Errorf("SetSigningSecret: has_signing_secret/hint not set: %+v", withSecret)
 	}
-	secret, ok, err := s.signingSecretFor(ctx, wh.ID, "test-mcp-secret-key")
+	secret, ok, err := s.signingSecretFor(ctx, wh.ID, "test-mcp-secret-key", "")
 	if err != nil || !ok || secret != "at-least-16-characters-secret" {
 		t.Errorf("signingSecretFor = %q, %v, %v", secret, ok, err)
 	}

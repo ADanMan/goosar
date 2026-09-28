@@ -36,10 +36,11 @@ type Router struct {
 
 	mu    sync.Mutex
 	taken map[Route]bool
+	stubs map[Route]bool
 }
 
 func New() *Router {
-	return &Router{mux: http.NewServeMux(), taken: make(map[Route]bool)}
+	return &Router{mux: http.NewServeMux(), taken: make(map[Route]bool), stubs: make(map[Route]bool)}
 }
 
 func routeOf(method, pattern string) Route { return Route(method + " " + pattern) }
@@ -56,6 +57,9 @@ func (r *Router) register(mode registerMode, method, pattern string, h http.Hand
 		panic("httpapi: маршрут уже зарегистрирован: " + string(rt))
 	}
 	r.taken[rt] = true
+	if mode == modeYield {
+		r.stubs[rt] = true
+	}
 	r.mux.HandleFunc(string(rt), h)
 }
 
@@ -87,6 +91,21 @@ func (r *Router) Registered() []string {
 	defer r.mu.Unlock()
 	out := make([]string, 0, len(r.taken))
 	for rt := range r.taken {
+		out = append(out, string(rt))
+	}
+	sort.Strings(out)
+	return out
+}
+
+// StubbedRoutes — отсортированный снимок маршрутов, которые фактически
+// обслуживает 501-заглушка (RegisterStubs через HandleStub), потому что ни
+// один домен их не занял через Handle. Используется TestNoStubsLeft
+// (internal/app) — критерий приёмки «0 операций на заглушке».
+func (r *Router) StubbedRoutes() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]string, 0, len(r.stubs))
+	for rt := range r.stubs {
 		out = append(out, string(rt))
 	}
 	sort.Strings(out)
